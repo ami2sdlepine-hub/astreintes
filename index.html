@@ -1196,6 +1196,61 @@ body { font-size: 15px; line-height: 1.5; }
 .stat-card.accent .stat-value { color: var(--accent); }
 
 /* ============================================================================
+   SEQUENCE TIMELINE
+============================================================================ */
+.sequence-timeline {
+  position: relative;
+  padding-left: 8px;
+}
+.seq-step {
+  position: relative;
+  padding-left: 32px;
+  padding-bottom: 16px;
+}
+.seq-step:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 11px;
+  top: 24px;
+  bottom: -4px;
+  width: 2px;
+  background: var(--border);
+}
+.seq-step-dot {
+  position: absolute;
+  left: 5px;
+  top: 6px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 3px solid var(--bg);
+  z-index: 1;
+  box-shadow: 0 0 0 2px var(--border);
+}
+.seq-step-content {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.seq-step-content:active {
+  transform: scale(0.98);
+  background: var(--bg-subtle);
+}
+.seq-chain-arrow {
+  position: relative;
+  left: -18px;
+  margin: -4px 0 0 0;
+  padding: 4px 8px;
+  color: var(--status-chain);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+}
+
+/* ============================================================================
    TOAST
 ============================================================================ */
 .toast-container {
@@ -1803,6 +1858,7 @@ function render() {
     case 'export': app.innerHTML = renderExport(); break;
     case 'settings': app.innerHTML = renderSettings(); break;
     case 'stats': app.innerHTML = renderStats(); break;
+    case 'sequence': app.innerHTML = renderSequence(); break;
   }
   attachListeners();
   
@@ -2609,7 +2665,7 @@ function renderSettings() {
       </div>
       
       <div class="text-center" style="padding:24px 0;font-size:11px;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace">
-        Astreintes AMI2S v2.8<br>
+        Astreintes AMI2S v2.9<br>
         ${state.dossiers.length} dossier(s) • ${new Date().toISOString().substring(0,10)}
       </div>
     </div>
@@ -2623,12 +2679,79 @@ function renderStats() {
   const week = getAstreinteWeek();
   const weekDossiers = getWeekDossiers(0);
   const totalKm = weekDossiers.reduce((s, d) => s + (parseFloat(d.km) || 0), 0);
+  
+  // V2.9 — Calcul correct des temps payés, gère les chaînages
+  // Regrouper les dossiers en "groupes de chaînage" et calculer un total par groupe
   let totalMs = 0;
-  weekDossiers.forEach(d => {
-    if (d.departDomicile && d.retourDomicile) totalMs += diffMs(d.departDomicile, d.retourDomicile);
-  });
+  let totalMsPartiel = 0; // Compté à part : séquences ouvertes
+  let nbSeqOuvertes = 0;
+  
+  // Tri par date pour grouper
+  const sortedWeek = [...weekDossiers].sort((a, b) => new Date(a.dateAppel) - new Date(b.dateAppel));
+  
+  // Parcours pour construire les "groupes de chaînage"
+  let currentGroup = null;
+  const groups = [];
+  
+  for (const d of sortedWeek) {
+    if (d.type !== 'deplacement') continue;
+    
+    if (d.departDomicile && d.departDomicile !== 'X') {
+      // Début d'un nouveau groupe
+      if (currentGroup) groups.push(currentGroup);
+      currentGroup = { dossiers: [d], firstDepart: d.departDomicile, lastRetour: null };
+    } else if (d.departDomicile === 'X' && currentGroup) {
+      // Continuation du groupe (chaînage entrant)
+      currentGroup.dossiers.push(d);
+    } else if (d.departDomicile === 'X' && !currentGroup) {
+      // Chaînage entrant sans groupe ouvert : isolé
+      currentGroup = { dossiers: [d], firstDepart: null, lastRetour: null };
+    }
+    
+    if (d.retourDomicile && d.retourDomicile !== 'X' && currentGroup) {
+      currentGroup.lastRetour = d.retourDomicile;
+      groups.push(currentGroup);
+      currentGroup = null;
+    }
+  }
+  if (currentGroup) groups.push(currentGroup);
+  
+  // Calculer total par groupe
+  for (const g of groups) {
+    if (g.firstDepart && g.lastRetour) {
+      totalMs += diffMs(g.firstDepart, g.lastRetour);
+    } else if (g.firstDepart && !g.lastRetour) {
+      // Séquence ouverte : estime depuis le début jusqu'à maintenant
+      totalMsPartiel += diffMs(g.firstDepart, new Date());
+      nbSeqOuvertes++;
+    }
+  }
+  
   const interventions = weekDossiers.filter(d => d.type === 'deplacement').length;
   const appels = weekDossiers.filter(d => d.type === 'telephone').length;
+  
+  // Helper pour afficher le bon temps par dossier dans la liste
+  function tempsAffiche(d, idx, arr) {
+    // Si dossier isolé (départ et retour normaux)
+    if (d.departDomicile && d.departDomicile !== 'X' && d.retourDomicile && d.retourDomicile !== 'X') {
+      return fmtDuration(diffMs(d.departDomicile, d.retourDomicile));
+    }
+    // Si premier d'une séquence chaînée
+    if (d.departDomicile && d.departDomicile !== 'X' && d.retourDomicile === 'X') {
+      return '🔗 début';
+    }
+    // Si milieu d'une séquence
+    if (d.departDomicile === 'X' && d.retourDomicile === 'X') {
+      return '🔗 milieu';
+    }
+    // Si fin d'une séquence
+    if (d.departDomicile === 'X' && d.retourDomicile && d.retourDomicile !== 'X') {
+      return '🔗 fin';
+    }
+    // Téléphone ou bureau
+    if (d.type === 'telephone') return '☎';
+    return '—';
+  }
   
   return `
     <header class="app-header">
@@ -2643,8 +2766,8 @@ function renderStats() {
     <div class="form-screen">
       <div class="stats-grid">
         <div class="stat-card accent">
-          <div class="stat-value">${fmtDuration(totalMs)}</div>
-          <div class="stat-label">Total payé</div>
+          <div class="stat-value">${totalMs ? fmtDuration(totalMs) : '—'}</div>
+          <div class="stat-label">Total payé (clos)</div>
         </div>
         <div class="stat-card">
           <div class="stat-value">${weekDossiers.length}</div>
@@ -2668,25 +2791,177 @@ function renderStats() {
         </div>
       </div>
       
+      ${nbSeqOuvertes > 0 ? `
+        <div class="section" style="background:var(--status-chain-bg);border-left:3px solid var(--status-chain);padding:12px 14px">
+          <div style="font-size:13px;color:var(--text);font-weight:600;margin-bottom:4px">⚠ ${nbSeqOuvertes} séquence${nbSeqOuvertes > 1 ? 's' : ''} en cours non clôturée${nbSeqOuvertes > 1 ? 's' : ''}</div>
+          <div style="font-size:12px;color:var(--text-secondary)">Temps estimé en cours : <b style="color:var(--status-chain)">${fmtDuration(totalMsPartiel)}</b> (depuis le départ initial)</div>
+          <div style="font-size:11px;color:var(--text-tertiary);margin-top:6px">💡 Saisis ton heure de retour domicile pour clôturer et figer le total.</div>
+        </div>
+      ` : ''}
+      
       <div class="section">
         <div class="section-title">Dossiers de la semaine</div>
         ${weekDossiers.length === 0 ? `
           <div style="padding:24px;text-align:center;color:var(--text-tertiary);font-size:13px">
             Aucun dossier cette semaine
           </div>
-        ` : weekDossiers.sort((a,b) => new Date(b.dateAppel)-new Date(a.dateAppel)).map(d => `
+        ` : sortedWeek.slice().reverse().map((d, idx, arr) => `
           <div class="detail-row">
             <div style="flex:1;min-width:0">
               <div style="font-weight:600;color:var(--text);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(d.etablissement)}</div>
               <div style="font-size:11px;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace;margin-top:2px">${fmtDateShort(d.dateAppel)} ${fmtTime(d.dateAppel)}</div>
             </div>
-            <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent);font-weight:700">
-              ${d.departDomicile && d.retourDomicile ? fmtDuration(diffMs(d.departDomicile, d.retourDomicile)) : '—'}
+            <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent);font-weight:700;white-space:nowrap">
+              ${tempsAffiche(d, idx, arr)}
             </div>
           </div>
         `).join('')}
       </div>
     </div>
+    
+    ${renderBottomNav()}
+  `;
+}
+
+// ----------------------------------------------------------------------------
+// VUE SÉQUENCE — Timeline d'une séquence ouverte (V2.9)
+// ----------------------------------------------------------------------------
+function renderSequence() {
+  const openSeq = findOpenSequence();
+  
+  if (!openSeq || openSeq.dossiers.length === 0) {
+    return `
+      <header class="app-header">
+        <div class="header-top">
+          <div style="display:flex;align-items:center;gap:10px">
+            <button class="icon-btn" data-action="back-list">←</button>
+            <div>
+              <div class="header-title">Séquence</div>
+              <div class="header-subtitle">Aucune séquence ouverte</div>
+            </div>
+          </div>
+        </div>
+      </header>
+      <main class="main-content">
+        <div class="empty-state" style="padding:60px 20px">
+          <div class="empty-state-icon">✅</div>
+          <div class="empty-state-title">Pas de séquence ouverte</div>
+          <div class="empty-state-desc">Toutes tes interventions sont clôturées avec retour domicile.</div>
+        </div>
+      </main>
+      ${renderBottomNav()}
+    `;
+  }
+  
+  const dossiers = [...openSeq.dossiers].sort((a, b) => new Date(a.dateAppel) - new Date(b.dateAppel));
+  
+  // Calculs récap
+  let totalKm = 0;
+  let totalTimeSiteMs = 0;
+  let totalTimeTrajetMs = 0;
+  
+  // Premier départ domicile (le vrai, pas X)
+  const firstDepart = dossiers.find(d => d.departDomicile && d.departDomicile !== 'X');
+  // Dernier retour domicile (s'il existe et n'est pas X)
+  const lastRetour = [...dossiers].reverse().find(d => d.retourDomicile && d.retourDomicile !== 'X');
+  
+  if (firstDepart && lastRetour) {
+    totalTimeTrajetMs = diffMs(firstDepart.departDomicile, lastRetour.retourDomicile);
+  } else if (firstDepart) {
+    // Séquence en cours : estime depuis le départ jusqu'à maintenant
+    totalTimeTrajetMs = diffMs(firstDepart.departDomicile, new Date());
+  }
+  
+  dossiers.forEach(d => {
+    if (d.km) totalKm += parseFloat(d.km) || 0;
+    if (d.tempsSiteMs) totalTimeSiteMs += d.tempsSiteMs;
+  });
+  
+  return `
+    <header class="app-header">
+      <div class="header-top">
+        <div style="display:flex;align-items:center;gap:10px">
+          <button class="icon-btn" data-action="back-list">←</button>
+          <div>
+            <div class="header-title">Séquence ouverte</div>
+            <div class="header-subtitle">${dossiers.length} dossier(s) enchaîné(s)</div>
+          </div>
+        </div>
+      </div>
+    </header>
+    
+    <main class="main-content">
+      <!-- Récap global -->
+      <div class="section" style="margin-top:16px">
+        <div class="section-title">📊 Récapitulatif</div>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:8px">
+          <div class="stat-card">
+            <div class="stat-value">${dossiers.length}</div>
+            <div class="stat-label">Dossiers</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${totalKm.toFixed(1)}</div>
+            <div class="stat-label">Km parcourus</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${fmtDuration(totalTimeSiteMs)}</div>
+            <div class="stat-label">Sur site (total)</div>
+          </div>
+          <div class="stat-card accent">
+            <div class="stat-value">${totalTimeTrajetMs ? fmtDuration(totalTimeTrajetMs) : '—'}</div>
+            <div class="stat-label">${lastRetour ? 'Total payé' : 'Estimé (en cours)'}</div>
+          </div>
+        </div>
+        ${firstDepart ? `
+          <div style="margin-top:12px;padding:12px;background:var(--bg-subtle);border-radius:var(--radius);font-size:13px;color:var(--text-secondary)">
+            <div>🏠 <b>Départ :</b> ${fmtDate(firstDepart.departDomicile)} à ${fmtTime(firstDepart.departDomicile)}</div>
+            ${lastRetour ? `
+              <div style="margin-top:4px">🏠 <b>Retour :</b> ${fmtDate(lastRetour.retourDomicile)} à ${fmtTime(lastRetour.retourDomicile)}</div>
+            ` : `
+              <div style="margin-top:4px;color:var(--status-chain)">🔗 <b>Pas encore rentré</b> (séquence en cours)</div>
+            `}
+          </div>
+        ` : ''}
+      </div>
+      
+      <!-- Timeline des dossiers -->
+      <div class="section">
+        <div class="section-title">🔗 Timeline d'enchaînement</div>
+        <div class="sequence-timeline">
+          ${dossiers.map((d, idx) => {
+            const isLast = idx === dossiers.length - 1;
+            const next = dossiers[idx + 1];
+            const isChainOut = d.retourDomicile === 'X' && !isLast;
+            
+            return `
+              <div class="seq-step">
+                <div class="seq-step-dot" style="background:${d.statut === 'cloture' ? 'var(--status-success)' : 'var(--status-warning)'}"></div>
+                <div class="seq-step-content" data-action="detail" data-id="${d.id}">
+                  <div style="display:flex;justify-content:space-between;align-items:start;gap:8px;margin-bottom:6px">
+                    <div style="font-weight:600;font-size:15px">${escapeHtml(d.etablissement)}</div>
+                    <div style="font-size:11px;color:var(--text-secondary);font-family:'JetBrains Mono',monospace;white-space:nowrap">${fmtDateShort(d.dateAppel)} ${fmtTime(d.dateAppel)}</div>
+                  </div>
+                  ${d.adresseSite ? `<div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px">📍 ${escapeHtml(d.adresseSite)}</div>` : ''}
+                  <div style="display:flex;gap:12px;font-size:12px;color:var(--text-secondary);flex-wrap:wrap">
+                    ${d.departDomicile === 'X' ? '<span style="color:var(--status-chain)">🔗 Chaînage entrant</span>' : 
+                      d.departDomicile ? '<span>🏠→ ' + fmtTime(d.departDomicile) + '</span>' : ''}
+                    ${d.tempsSiteCalcule ? '<span>⏱ ' + d.tempsSiteCalcule + '</span>' : ''}
+                    ${d.km ? '<span>📏 ' + d.km + ' km</span>' : ''}
+                    ${d.retourDomicile === 'X' ? '<span style="color:var(--status-chain)">→🔗 Chaînage sortant</span>' :
+                      d.retourDomicile ? '<span>→🏠 ' + fmtTime(d.retourDomicile) + '</span>' : ''}
+                  </div>
+                </div>
+                ${isChainOut ? `<div class="seq-chain-arrow">↓ chaînage vers le site suivant</div>` : ''}
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+      
+      <div style="padding:20px;text-align:center;color:var(--text-secondary);font-size:12px">
+        💡 Clique sur un dossier pour le modifier
+      </div>
+    </main>
     
     ${renderBottomNav()}
   `;
@@ -2759,6 +3034,10 @@ async function handleAction(e) {
       break;
     case 'cancel-new':
       tempDossier = null;
+      view.current = 'list';
+      render();
+      break;
+    case 'back-list':
       view.current = 'list';
       render();
       break;
@@ -2878,8 +3157,8 @@ async function handleAction(e) {
       await resetAllData();
       break;
     case 'show-sequence':
-      // TODO: ouvrir vue séquence
-      toast('Vue séquence à venir', 'warning');
+      view.current = 'sequence';
+      render();
       break;
     case 'calc-distance':
       await calculateDistance();
@@ -3034,7 +3313,37 @@ async function editTimestamp(field) {
   const current = d[field] ? new Date(d[field]) : new Date();
   const newDate = await showTimePicker(current, `${field}`);
   if (!newDate) return;
-  d[field] = roundTo5(newDate).toISOString();
+  let finalDate = roundTo5(newDate);
+  
+  // V2.9 — Protection passage minuit
+  // Si on modifie un timestamp qui doit être APRÈS un autre, on vérifie
+  const checkAfterField = {
+    'arriveeSite': 'departDomicile',
+    'departSite': 'arriveeSite',
+    'retourDomicile': 'departSite'
+  };
+  
+  const previousField = checkAfterField[field];
+  if (previousField && d[previousField] && d[previousField] !== 'X') {
+    const previousDate = new Date(d[previousField]);
+    if (finalDate < previousDate) {
+      // L'heure saisie est AVANT le timestamp précédent → bascule probable au jour suivant
+      const nextDayDate = new Date(finalDate);
+      nextDayDate.setDate(nextDayDate.getDate() + 1);
+      
+      const confirmed = await showConfirm(
+        '🌙 Passage minuit ?',
+        `L'heure saisie (${fmtTime(finalDate)}) est avant ${fmtTime(previousDate)} (${labelField(previousField)}). ` +
+        `Tu veux dire le lendemain à ${fmtTime(finalDate)} ? Total estimé : ${fmtDuration(diffMs(previousDate, nextDayDate))}.`
+      );
+      
+      if (confirmed) {
+        finalDate = nextDayDate;
+      }
+    }
+  }
+  
+  d[field] = finalDate.toISOString();
   recalcDurations(d);
   
   // Auto-clôture quand on saisit/modifie le retour domicile
@@ -3049,6 +3358,16 @@ async function editTimestamp(field) {
   
   await saveDossier(d);
   render();
+}
+
+function labelField(field) {
+  return {
+    'departDomicile': 'Départ domicile',
+    'arriveeSite': 'Arrivée site',
+    'departSite': 'Départ site',
+    'retourDomicile': 'Retour domicile',
+    'dateAppel': 'Heure d\'appel'
+  }[field] || field;
 }
 
 async function pickDate(field) {
@@ -3683,10 +4002,10 @@ async function showChainOriginModal(destination, dossier, isExisting, currentDos
   }
   
   const subtitle = candidates.length > 1 
-    ? `${candidates.length} sites possibles. Choisis depuis lequel tu pars :`
+    ? `${candidates.length} sites précédents possibles. Choisis depuis lequel tu pars :`
     : candidates.length === 1
     ? 'Tu es en mode chaînage. D\'où viens-tu exactement ?'
-    : 'Aucun site précédent avec adresse dans les dernières 24h. Choisis une autre option :';
+    : 'Aucun site précédent enregistré. Choisis une autre option :';
   
   overlay.innerHTML = `
     <div class="modal" onclick="event.stopPropagation()">
@@ -3805,40 +4124,27 @@ async function showOtherLocationModal(destination, dossier, isExisting) {
   document.body.appendChild(overlay);
 }
 
-// V2.8 — Logique plus tolérante : tous les dossiers récents (24h) avec adresse
-// sont candidats "site précédent", indépendamment du sequenceId
-// (utile pour la saisie rétroactive où chaque dossier a son propre sequenceId)
-
+// V2.9 — Tous les déplacements avec adresse sont candidats
+// Triés par récence, limite 10 pour pas saturer la modale
 function findPreviousSitesInSequence(excludeId = null, referenceDossier = null) {
-  // Si on a un dossier de référence, on cherche dans les 24h AVANT sa date d'appel
-  // Sinon, on cherche dans les 24h avant maintenant
-  let referenceDate;
-  if (referenceDossier && referenceDossier.dateAppel) {
-    referenceDate = new Date(referenceDossier.dateAppel);
-  } else {
-    referenceDate = new Date();
-  }
+  // Référence : date d'appel du dossier en cours (ou maintenant si pas de référence)
+  const referenceDate = (referenceDossier && referenceDossier.dateAppel) 
+    ? new Date(referenceDossier.dateAppel) 
+    : new Date();
   
-  const windowMs = 24 * 3600 * 1000; // 24 heures
-  const earliestDate = new Date(referenceDate.getTime() - windowMs);
-  
-  // Candidats : déplacement, avec adresse, dans la fenêtre 24h, hors dossier en cours
+  // Candidats : déplacement, avec adresse, ANTÉRIEUR au dossier en cours, hors dossier en cours
   const candidates = state.dossiers
     .filter(d => d.id !== excludeId)
     .filter(d => d.type === 'deplacement')
     .filter(d => d.adresseSite && d.adresseSite.trim())
-    .filter(d => {
-      const dateD = new Date(d.dateAppel);
-      // Le dossier doit être ANTÉRIEUR au dossier de référence (ou égal)
-      // ET dans la fenêtre des 24h
-      return dateD <= referenceDate && dateD >= earliestDate;
-    })
-    .sort((a, b) => new Date(b.dateAppel) - new Date(a.dateAppel));
+    .filter(d => new Date(d.dateAppel) <= referenceDate)
+    .sort((a, b) => new Date(b.dateAppel) - new Date(a.dateAppel))
+    .slice(0, 10); // Limite 10 pour pas saturer la modale
   
   return candidates;
 }
 
-// Le site précédent le plus probable (le plus récent dans la fenêtre)
+// Le site précédent le plus probable (le plus récent)
 function findPreviousSiteInSequence(excludeId = null, referenceDossier = null) {
   const candidates = findPreviousSitesInSequence(excludeId, referenceDossier);
   return candidates.length > 0 ? candidates[0] : null;
