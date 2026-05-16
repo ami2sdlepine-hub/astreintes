@@ -1442,6 +1442,7 @@ const DEFAULT_SETTINGS = {
   rappelHeure: '08:00',
   rappelActif: true,
   theme: 'auto',
+  googleMapsApiKey: '',
   syncUrl: '',
   syncToken: '',
   syncEnabled: false,
@@ -1769,10 +1770,10 @@ function renderDossierCard(d) {
       </div>
       <div class="dossier-etablissement">${escapeHtml(d.etablissement || 'Sans nom')}</div>
       ${d.motif ? `<div class="dossier-motif">${escapeHtml(d.motif)}</div>` : ''}
-      ${(d.codeAstreinte || d.demandeur || d.tempsSiteCalcule || d.km) ? `
+      ${(d.codeAstreinte || d.tempsSiteCalcule || d.km || d.bureau) ? `
         <div class="dossier-meta">
           ${d.codeAstreinte ? `<span>🔑 ${escapeHtml(d.codeAstreinte)}</span>` : ''}
-          ${d.demandeur ? `<span>👤 ${escapeHtml(d.demandeur)}</span>` : ''}
+          ${d.bureau ? `<span>📞 Bureau</span>` : ''}
           ${d.tempsSiteCalcule ? `<span>⏱ ${d.tempsSiteCalcule}</span>` : ''}
           ${d.km ? `<span>📏 ${d.km} km</span>` : ''}
         </div>
@@ -1788,6 +1789,7 @@ function renderNewDossier() {
     tempDossier = {
       id: uid(),
       dateAppel: new Date().toISOString(),
+      bureau: false,
       etablissement: '', demandeur: '', codeAstreinte: '', motif: '',
       type: null,
       pointDepart: openSeq ? 'autre-site' : 'domicile',
@@ -1831,26 +1833,38 @@ function renderNewDossier() {
           </div>
           <div class="form-group">
             <label class="form-label">Heure</label>
-            <button class="picker-btn" data-action="pick-time" data-field="dateAppel">
-              <span>${fmtTime(dateApRounded)}${showRound ? '<span class="rounded-pill">5\'</span>' : ''}</span>
-              <span class="picker-btn-icon">🕐</span>
-            </button>
+            ${d.bureau ? `
+              <button class="picker-btn" data-action="toggle-bureau" style="background:var(--accent-subtle);border-color:var(--accent);color:var(--accent);font-weight:700">
+                <span>📞 BUREAU</span>
+                <span class="picker-btn-icon">✕</span>
+              </button>
+            ` : `
+              <button class="picker-btn" data-action="pick-time" data-field="dateAppel">
+                <span>${fmtTime(dateApRounded)}${showRound ? '<span class="rounded-pill">5\'</span>' : ''}</span>
+                <span class="picker-btn-icon">🕐</span>
+              </button>
+            `}
           </div>
         </div>
+        ${!d.bureau ? `
+          <button class="btn btn-ghost btn-block" data-action="toggle-bureau" style="margin-top:8px;font-size:12px">
+            📞 C'est le bureau qui m'a transmis (pas un appel client)
+          </button>
+        ` : `
+          <div class="help-text" style="margin-top:8px">
+            💡 Astreinte transmise par le bureau (pas d'heure d'appel à noter)
+          </div>
+        `}
       </div>
       
       <div class="section">
         <div class="section-title">📋 Informations</div>
         <div class="form-group">
-          <label class="form-label">Établissement <span class="required">*</span></label>
+          <label class="form-label">Établissement / Demandeur <span class="required">*</span></label>
           <input type="text" class="form-input" data-bind="etablissement" value="${escapeHtml(d.etablissement)}" placeholder="Ex: EHPAD Les Tilleuls" autocomplete="off">
         </div>
         <div class="form-group">
-          <label class="form-label">Nom du demandeur</label>
-          <input type="text" class="form-input" data-bind="demandeur" value="${escapeHtml(d.demandeur)}" placeholder="Personne qui appelle" autocomplete="off">
-        </div>
-        <div class="form-group">
-          <label class="form-label">N° abonné / Code astreinte</label>
+          <label class="form-label">Code astreinte / N° abonné</label>
           <input type="text" class="form-input" data-bind="codeAstreinte" value="${escapeHtml(d.codeAstreinte)}" placeholder="Ex: AST-0847" autocomplete="off">
         </div>
         <div class="form-group">
@@ -1926,12 +1940,23 @@ function renderDeplacement(d) {
       <div class="section-title">📏 Site & distance</div>
       <div class="form-group">
         <label class="form-label">Adresse du site</label>
-        <input type="text" class="form-input" data-bind="adresseSite" value="${escapeHtml(d.adresseSite)}" placeholder="Adresse de l'établissement" autocomplete="off">
+        <input type="text" class="form-input" data-bind="adresseSite" value="${escapeHtml(d.adresseSite)}" placeholder="Adresse complète de l'établissement" autocomplete="off">
       </div>
       <div class="form-group">
         <label class="form-label">Distance parcourue (km)</label>
-        <input type="number" class="form-input" data-bind="km" value="${escapeHtml(d.km)}" placeholder="Ex: 8.4" step="0.1" inputmode="decimal">
-        <div class="help-text">💡 Saisie manuelle pour l'instant. Calcul auto Google Maps en V2.1.</div>
+        <div style="display:flex;gap:8px;align-items:stretch">
+          <input type="number" class="form-input" data-bind="km" value="${escapeHtml(d.km)}" placeholder="Ex: 8.4" step="0.1" inputmode="decimal" style="flex:1">
+          <button class="btn btn-primary" data-action="calc-distance" style="white-space:nowrap;padding:0 14px" ${!state.settings.googleMapsApiKey || !state.settings.adresseDomicile ? 'disabled title="Configure ton adresse domicile et ta clé Google Maps API dans Réglages"' : ''}>
+            📍 Calculer
+          </button>
+        </div>
+        ${!state.settings.googleMapsApiKey ? `
+          <div class="help-text">💡 Pour le calcul auto : Réglages → Google Maps API Key</div>
+        ` : !state.settings.adresseDomicile ? `
+          <div class="help-text">💡 Pour le calcul auto : Réglages → Adresse domicile</div>
+        ` : `
+          <div class="help-text">📍 Calcul auto depuis ${state.settings.adresseDomicile}</div>
+        `}
       </div>
     </div>
     
@@ -1978,8 +2003,11 @@ function renderDetail() {
           <span class="detail-label">Établissement</span>
           <span class="detail-value">${escapeHtml(d.etablissement)}</span>
         </div>
-        ${d.demandeur ? `<div class="detail-row"><span class="detail-label">Demandeur</span><span class="detail-value">${escapeHtml(d.demandeur)}</span></div>` : ''}
-        ${d.codeAstreinte ? `<div class="detail-row"><span class="detail-label">Code</span><span class="detail-value mono">${escapeHtml(d.codeAstreinte)}</span></div>` : ''}
+        ${d.codeAstreinte ? `<div class="detail-row"><span class="detail-label">Code astreinte</span><span class="detail-value mono">${escapeHtml(d.codeAstreinte)}</span></div>` : ''}
+        <div class="detail-row">
+          <span class="detail-label">Heure d'appel</span>
+          <span class="detail-value">${d.bureau ? '📞 Bureau' : fmtDateTime(d.dateAppel)}</span>
+        </div>
         <div class="detail-row">
           <span class="detail-label">Type</span>
           <span class="detail-value">${d.type === 'telephone' ? '☎ Téléphone' : '🚗 Déplacement'}</span>
@@ -2269,6 +2297,14 @@ function renderSettings() {
             </div>
             <span class="settings-row-chevron">›</span>
           </div>
+          <div class="settings-row" data-action="edit-setting" data-field="googleMapsApiKey">
+            <div class="settings-row-icon">📍</div>
+            <div class="settings-row-content">
+              <div class="settings-row-title">Clé Google Maps API</div>
+              <div class="settings-row-value">${s.googleMapsApiKey ? '✓ Configurée (' + s.googleMapsApiKey.substring(0, 8) + '...)' : 'Non configurée'}</div>
+            </div>
+            <span class="settings-row-chevron">›</span>
+          </div>
           <div class="settings-row" data-action="edit-setting" data-field="rappelHeure">
             <div class="settings-row-icon">🔔</div>
             <div class="settings-row-content">
@@ -2333,7 +2369,7 @@ function renderSettings() {
       </div>
       
       <div class="text-center" style="padding:24px 0;font-size:11px;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace">
-        Astreintes AMI2S v2.0<br>
+        Astreintes AMI2S v2.1<br>
         ${state.dossiers.length} dossier(s) • ${new Date().toISOString().substring(0,10)}
       </div>
     </div>
@@ -2468,6 +2504,9 @@ async function handleAction(e) {
     case 'set-type':
       if (tempDossier) { tempDossier.type = t.dataset.type; render(); }
       break;
+    case 'toggle-bureau':
+      if (tempDossier) { tempDossier.bureau = !tempDossier.bureau; render(); }
+      break;
     case 'set-depart':
       if (tempDossier) { tempDossier.pointDepart = t.dataset.depart; render(); }
       break;
@@ -2560,6 +2599,9 @@ async function handleAction(e) {
       // TODO: ouvrir vue séquence
       toast('Vue séquence à venir', 'warning');
       break;
+    case 'calc-distance':
+      await calculateDistance();
+      break;
   }
 }
 
@@ -2605,6 +2647,17 @@ async function setTimestampNow(field) {
   if (!d) return;
   d[field] = roundTo5(new Date()).toISOString();
   recalcDurations(d);
+  
+  // Auto-clôture quand on saisit le retour domicile
+  if (field === 'retourDomicile' && d.statut === 'intervention') {
+    d.statut = 'cloture';
+    await saveDossier(d);
+    haptic('success');
+    toast(`Clôturé • ${d.totalTrajetCalcule || '—'} payés`, 'success');
+    render();
+    return;
+  }
+  
   await saveDossier(d);
   haptic('medium');
   toast(`${field} : ${fmtTime(d[field])}`, 'success');
@@ -2619,6 +2672,17 @@ async function editTimestamp(field) {
   if (!newDate) return;
   d[field] = roundTo5(newDate).toISOString();
   recalcDurations(d);
+  
+  // Auto-clôture quand on saisit/modifie le retour domicile
+  if (field === 'retourDomicile' && d.statut === 'intervention') {
+    d.statut = 'cloture';
+    await saveDossier(d);
+    haptic('success');
+    toast(`Clôturé • ${d.totalTrajetCalcule || '—'} payés`, 'success');
+    render();
+    return;
+  }
+  
   await saveDossier(d);
   render();
 }
@@ -2646,92 +2710,70 @@ async function pickTime(field) {
 // ----------------------------------------------------------------------------
 function showTimePicker(initialDate, title = 'Choisir l\'heure') {
   return new Promise((resolve) => {
-    let h = initialDate.getHours();
-    let m = roundTo5(initialDate).getMinutes();
+    const rounded = roundTo5(initialDate);
+    const initialValue = `${rounded.getHours().toString().padStart(2,'0')}:${rounded.getMinutes().toString().padStart(2,'0')}`;
     
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
-    
-    function renderPicker() {
-      overlay.innerHTML = `
-        <div class="modal" onclick="event.stopPropagation()">
-          <div class="modal-handle"></div>
-          <div class="modal-title">${title}</div>
-          
-          <div class="time-picker-display">
-            <div class="time-segment" id="tp-h">${h.toString().padStart(2,'0')}</div>
-            <div class="time-colon">:</div>
-            <div class="time-segment" id="tp-m">${m.toString().padStart(2,'0')}</div>
-          </div>
-          
-          <div class="time-picker-controls">
-            <div class="time-control-column">
-              <div class="time-control-label">Heures</div>
-              <div class="time-control-btns">
-                <button class="time-ctrl-btn" data-tp="h-1">−1</button>
-                <button class="time-ctrl-btn" data-tp="h+1">+1</button>
-              </div>
-            </div>
-            <div class="time-control-column">
-              <div class="time-control-label">Minutes (par 5)</div>
-              <div class="time-control-btns">
-                <button class="time-ctrl-btn" data-tp="m-5">−5</button>
-                <button class="time-ctrl-btn" data-tp="m+5">+5</button>
-              </div>
-            </div>
-          </div>
-          
-          <div class="time-quick-options">
-            <button class="time-quick" data-tp="now">Maintenant</button>
-            <button class="time-quick" data-tp="hour-back">Il y a 1h</button>
-            <button class="time-quick" data-tp="reset">Réinit.</button>
-          </div>
-          
-          <div style="display:flex;gap:8px">
-            <button class="btn btn-secondary" style="flex:1" data-tp="cancel">Annuler</button>
-            <button class="btn btn-primary" style="flex:1" data-tp="ok">Valider</button>
-          </div>
+    overlay.innerHTML = `
+      <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-handle"></div>
+        <div class="modal-title">${title}</div>
+        <div class="modal-subtitle">Sélectionne l'heure avec les roulettes</div>
+        
+        <input type="time" id="native-time-picker" value="${initialValue}" step="300"
+               style="width:100%;font-size:32px;text-align:center;padding:20px;background:var(--bg-subtle);
+                      border:2px solid var(--accent);border-radius:var(--radius-lg);margin-bottom:16px;
+                      color:var(--text);font-family:'JetBrains Mono',monospace;font-weight:800;
+                      font-variant-numeric:tabular-nums;letter-spacing:-0.02em;">
+        
+        <div class="time-quick-options">
+          <button class="time-quick" data-tp="now">⏱ Maintenant</button>
+          <button class="time-quick" data-tp="hour-back">↩ −1h</button>
+          <button class="time-quick" data-tp="hour-forward">→ +1h</button>
         </div>
-      `;
-      
-      overlay.querySelectorAll('[data-tp]').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          const action = e.currentTarget.dataset.tp;
-          haptic('light');
-          switch (action) {
-            case 'h+1': h = (h + 1) % 24; break;
-            case 'h-1': h = (h - 1 + 24) % 24; break;
-            case 'm+5': m += 5; if (m >= 60) { m -= 60; h = (h + 1) % 24; } break;
-            case 'm-5': m -= 5; if (m < 0) { m += 60; h = (h - 1 + 24) % 24; } break;
-            case 'now':
-              const now = roundTo5(new Date());
-              h = now.getHours(); m = now.getMinutes();
-              break;
-            case 'hour-back':
-              const back = new Date(); back.setHours(back.getHours() - 1);
-              const r = roundTo5(back);
-              h = r.getHours(); m = r.getMinutes();
-              break;
-            case 'reset':
-              h = initialDate.getHours(); m = roundTo5(initialDate).getMinutes();
-              break;
-            case 'cancel':
-              overlay.remove(); resolve(null); return;
-            case 'ok':
-              const result = new Date(initialDate);
-              result.setHours(h, m, 0, 0);
-              overlay.remove();
-              resolve(result);
-              return;
-          }
-          renderPicker();
-        });
+        
+        <div style="display:flex;gap:8px;margin-top:16px">
+          <button class="btn btn-secondary" style="flex:1" data-tp="cancel">Annuler</button>
+          <button class="btn btn-primary" style="flex:1" data-tp="ok">Valider</button>
+        </div>
+      </div>
+    `;
+    
+    const input = overlay.querySelector('#native-time-picker');
+    
+    overlay.querySelectorAll('[data-tp]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const action = e.currentTarget.dataset.tp;
+        haptic('light');
+        if (action === 'now') {
+          const now = roundTo5(new Date());
+          input.value = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+        } else if (action === 'hour-back') {
+          const [hh, mm] = input.value.split(':').map(Number);
+          let newH = (hh - 1 + 24) % 24;
+          input.value = `${newH.toString().padStart(2,'0')}:${mm.toString().padStart(2,'0')}`;
+        } else if (action === 'hour-forward') {
+          const [hh, mm] = input.value.split(':').map(Number);
+          let newH = (hh + 1) % 24;
+          input.value = `${newH.toString().padStart(2,'0')}:${mm.toString().padStart(2,'0')}`;
+        } else if (action === 'cancel') {
+          overlay.remove(); resolve(null);
+        } else if (action === 'ok') {
+          const [hh, mm] = input.value.split(':').map(Number);
+          const result = new Date(initialDate);
+          result.setHours(hh, mm, 0, 0);
+          overlay.remove();
+          resolve(roundTo5(result));
+        }
       });
-    }
+    });
     
     overlay.addEventListener('click', () => { overlay.remove(); resolve(null); });
     document.body.appendChild(overlay);
-    renderPicker();
+    
+    setTimeout(() => input.focus(), 100);
   });
 }
 
@@ -2845,14 +2887,14 @@ function showClotureModal() {
             <div class="modal-choice-icon">🏠</div>
             <div class="modal-choice-content">
               <div class="modal-choice-title">Je rentre au domicile</div>
-              <div class="modal-choice-desc">Saisir l'heure de retour et clôturer le dossier.</div>
+              <div class="modal-choice-desc">Le dossier reste ouvert. Tu cliqueras sur "Maintenant" sur la ligne Retour domicile dès que tu seras rentré.</div>
             </div>
           </button>
           <button class="modal-choice" data-cl="autre-site">
             <div class="modal-choice-icon">🔗</div>
             <div class="modal-choice-content">
               <div class="modal-choice-title">Je vais sur un autre site</div>
-              <div class="modal-choice-desc">Le prochain dossier sera chaîné. Pas de retour domicile noté.</div>
+              <div class="modal-choice-desc">Clôture immédiate avec chaînage. Le prochain dossier sera chaîné, pas de retour domicile noté.</div>
             </div>
           </button>
           <button class="modal-choice" data-cl="cancel">
@@ -2874,14 +2916,11 @@ function showClotureModal() {
         if (choice === 'cancel') { resolve(); return; }
         
         if (choice === 'domicile') {
-          const retour = await showTimePicker(new Date(), 'Heure de retour au domicile');
-          if (!retour) { resolve(); return; }
-          d.retourDomicile = roundTo5(retour).toISOString();
-          d.statut = 'cloture';
-          recalcDurations(d);
-          await saveDossier(d);
-          haptic('success');
-          toast(`Clôturé • ${d.totalTrajetCalcule} payés`, 'success');
+          // On NE demande PLUS d'heure prévisionnelle
+          // Le dossier reste en "intervention" jusqu'à ce que l'utilisateur clique "Maintenant" sur Retour domicile
+          haptic('medium');
+          toast('💡 Clique sur "Maintenant" sur la ligne Retour domicile quand tu seras rentré', 'success');
+          // On garde le statut "intervention" (pas de clôture immédiate)
         } else if (choice === 'autre-site') {
           d.statut = 'cloture';
           recalcDurations(d);
@@ -3024,6 +3063,7 @@ async function editSetting(field) {
     email: 'Mon email',
     emailDestinataire: 'Email destinataire (CR astreinte)',
     adresseDomicile: 'Adresse de domicile',
+    googleMapsApiKey: 'Clé Google Maps API',
     rappelHeure: 'Heure de rappel (HH:MM)'
   };
   const val = await showPrompt(labels[field] || field, '', state.settings[field] || '');
@@ -3102,6 +3142,58 @@ function showSyncModal() {
 }
 
 // ----------------------------------------------------------------------------
+// GOOGLE MAPS DISTANCE
+// ----------------------------------------------------------------------------
+async function calculateDistance() {
+  if (!tempDossier) return;
+  
+  const apiKey = state.settings.googleMapsApiKey;
+  const origin = state.settings.adresseDomicile;
+  const destination = tempDossier.adresseSite;
+  
+  if (!apiKey) { toast('Configure ta clé Google Maps API dans Réglages', 'error'); return; }
+  if (!origin) { toast('Configure ton adresse domicile dans Réglages', 'error'); return; }
+  if (!destination) { toast('Saisis d\'abord l\'adresse du site', 'error'); return; }
+  
+  toast('Calcul en cours...', 'warning');
+  
+  try {
+    const url = `https://maps.googleapis.com/maps/api/distancematrix/json?` +
+      `origins=${encodeURIComponent(origin)}&` +
+      `destinations=${encodeURIComponent(destination)}&` +
+      `units=metric&` +
+      `key=${apiKey}`;
+    
+    const response = await fetch(url);
+    const data = await response.json();
+    
+    if (data.status !== 'OK') {
+      toast('Erreur API : ' + (data.error_message || data.status), 'error');
+      return;
+    }
+    
+    const element = data.rows[0]?.elements[0];
+    if (!element || element.status !== 'OK') {
+      toast('Itinéraire introuvable. Vérifie les adresses.', 'error');
+      return;
+    }
+    
+    const distanceMeters = element.distance.value;
+    const distanceKm = (distanceMeters / 1000).toFixed(1);
+    
+    tempDossier.km = distanceKm;
+    haptic('success');
+    toast(`📍 ${distanceKm} km calculés (${element.distance.text})`, 'success');
+    render();
+  } catch (err) {
+    console.error(err);
+    toast('Erreur réseau. Vérifie ta connexion.', 'error');
+  }
+}
+
+// ----------------------------------------------------------------------------
+
+// ----------------------------------------------------------------------------
 // PDF G1-0-8
 // ----------------------------------------------------------------------------
 function generatePDF() {
@@ -3173,6 +3265,7 @@ function generatePDF() {
     
     weekDossiers.forEach((d, idx) => {
       const isPhone = d.type === 'telephone';
+      const isBureau = d.bureau;
       let departDom = d.departDomicile ? fmtTime(d.departDomicile) : '—';
       let retourDom = d.retourDomicile ? fmtTime(d.retourDomicile) : '—';
       let totalTrajet = '—';
@@ -3202,10 +3295,10 @@ function generatePDF() {
         idx + 1,
         fmtDateShort(d.dateAppel),
         d.codeAstreinte || '',
-        d.demandeur || '',
-        fmtTime(d.dateAppel),
-        isPhone ? '✓' : '',
-        !isPhone ? '✓' : '',
+        d.etablissement || '',
+        isBureau ? 'BUREAU' : fmtTime(d.dateAppel),
+        isPhone ? 'X' : '',
+        !isPhone ? 'X' : '',
         d.rapportN || (isPhone ? '—' : ''),
         d.arriveeSite ? fmtTime(d.arriveeSite) : (isPhone ? '—' : ''),
         d.departSite ? fmtTime(d.departSite) : (isPhone ? '—' : ''),
@@ -3315,42 +3408,41 @@ async function generateEmailCustom() {
 function buildEmail(dossiers, subject) {
   if (dossiers.length === 0) { toast('Aucun dossier sur cette période', 'error'); return; }
   
-  let body = `Bonjour,\n\nVeuillez trouver ci-dessous le compte-rendu d'astreinte.\n\n`;
-  body += `══════════════════════════════════════\n`;
+  const techName = state.settings.technicien || 'Le technicien d\'astreinte';
+  
+  let body = `Bonjour,\n\n`;
+  body += `Voici le compte-rendu des interventions de l'astreinte.\n\n`;
+  body += `──────────────────────────────────────────\n\n`;
   
   dossiers.forEach((d, i) => {
-    body += `\n[${i + 1}] ${fmtDateShort(d.dateAppel)} • ${fmtTime(d.dateAppel)} — ${d.etablissement}\n`;
-    if (d.codeAstreinte) body += `    Code : ${d.codeAstreinte}\n`;
-    if (d.demandeur) body += `    Demandeur : ${d.demandeur}\n`;
-    if (d.motif) body += `    Motif : ${d.motif}\n`;
+    body += `▸ Dossier n°${i + 1}\n`;
+    body += `   Établissement : ${d.etablissement}\n`;
+    if (d.codeAstreinte) body += `   Code astreinte : ${d.codeAstreinte}\n`;
+    body += `   Date : ${fmtDate(d.dateAppel)}${d.bureau ? ' (transmis par le bureau)' : ''}\n`;
+    if (d.motif) body += `   Motif : ${d.motif}\n`;
+    
     if (d.type === 'telephone') {
-      body += `    ✓ Résolu par téléphone\n`;
+      body += `   Traitement : ✓ Résolu par téléphone\n`;
     } else {
-      body += `    ✓ Intervention sur site\n`;
-      if (d.departDomicile) body += `    Départ domicile : ${fmtTime(d.departDomicile)}\n`;
-      if (d.arriveeSite) body += `    Arrivée site : ${fmtTime(d.arriveeSite)}\n`;
-      if (d.departSite) body += `    Départ site : ${fmtTime(d.departSite)}\n`;
-      if (d.retourDomicile) body += `    Retour domicile : ${fmtTime(d.retourDomicile)}\n`;
-      if (d.totalTrajetCalcule) body += `    ⏱ Total payé : ${d.totalTrajetCalcule}\n`;
-      if (d.km) body += `    📏 Distance : ${d.km} km\n`;
-      if (d.rapportN) body += `    📝 Rapport : ${d.rapportN}\n`;
-      if (d.compteRendu) body += `    Compte-rendu : ${d.compteRendu}\n`;
+      body += `   Traitement : ✓ Intervention sur site\n`;
+      if (d.rapportN) body += `   N° rapport : ${d.rapportN}\n`;
+      if (d.compteRendu) {
+        body += `\n   COMPTE-RENDU :\n`;
+        const lines = d.compteRendu.split('\n');
+        lines.forEach(line => body += `   ${line}\n`);
+      }
     }
+    body += `\n`;
   });
   
-  let totalMs = 0, totalKm = 0;
-  dossiers.forEach(d => {
-    if (d.departDomicile && d.retourDomicile) totalMs += diffMs(d.departDomicile, d.retourDomicile);
-    if (d.km) totalKm += parseFloat(d.km) || 0;
-  });
+  body += `──────────────────────────────────────────\n\n`;
+  body += `Récapitulatif :\n`;
+  body += `   • ${dossiers.length} dossier(s) traité(s)\n`;
+  body += `   • ${dossiers.filter(d => d.type === 'deplacement').length} intervention(s) sur site\n`;
+  body += `   • ${dossiers.filter(d => d.type === 'telephone').length} résolution(s) téléphonique(s)\n\n`;
   
-  body += `\n══════════════════════════════════════\n\n`;
-  body += `RÉCAPITULATIF :\n`;
-  body += `• ${dossiers.length} dossier(s)\n`;
-  body += `• ${dossiers.filter(d => d.type === 'deplacement').length} intervention(s)\n`;
-  body += `• Total payé : ${fmtDuration(totalMs)}\n`;
-  body += `• Distance totale : ${totalKm.toFixed(0)} km\n`;
-  body += `\nCordialement,\n${state.settings.technicien}`;
+  body += `Cordialement,\n${techName}\n`;
+  body += `Service Maintenance — AMI2S`;
   
   const mailto = `mailto:${state.settings.emailDestinataire}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   navigator.clipboard.writeText(body).then(() => toast('Texte copié + Outlook ouvert', 'success'))
