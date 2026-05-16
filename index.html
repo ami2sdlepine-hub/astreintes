@@ -2305,6 +2305,9 @@ function renderTimestamp(d, field, label, icon) {
         ${isFilled ? `
           <button class="ts-btn-icon" data-action="edit-ts" data-field="${field}">✏</button>
           <button class="ts-btn filled" data-action="edit-ts" data-field="${field}">${fmtTime(value)}</button>
+          ${(field === 'departDomicile' || field === 'retourDomicile') ? `
+            <button class="ts-btn-icon" data-action="ts-cross" data-field="${field}" title="Remplacer par ✕ (chaînage)" style="color:var(--status-chain)">✕</button>
+          ` : ''}
         ` : `
           <button class="ts-btn" data-action="ts-now" data-field="${field}" ${disabled ? 'disabled' : ''}>Maintenant</button>
           <button class="ts-btn-icon" data-action="edit-ts" data-field="${field}" ${disabled ? 'disabled' : ''}>✏</button>
@@ -2574,7 +2577,7 @@ function renderSettings() {
       </div>
       
       <div class="text-center" style="padding:24px 0;font-size:11px;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace">
-        Astreintes AMI2S v2.3<br>
+        Astreintes AMI2S v2.4<br>
         ${state.dossiers.length} dossier(s) • ${new Date().toISOString().substring(0,10)}
       </div>
     </div>
@@ -2926,9 +2929,19 @@ async function setTimestampCross(field) {
   const d = state.dossiers.find(x => x.id === view.dossierId);
   if (!d) return;
   
+  const existingValue = d[field];
+  const hadValue = existingValue && existingValue !== 'X';
+  
   if (field === 'retourDomicile') {
-    const confirmed = await showConfirm('Pas de retour domicile ?',
-      'Tu enchaînes sur un autre site ou tu termines sans rentrer. Le dossier sera clôturé en mode chaînage (pas d\'heure de retour).');
+    let title, message;
+    if (hadValue) {
+      title = 'Remplacer ' + fmtTime(existingValue) + ' par ✕ ?';
+      message = 'L\'heure de retour saisie (' + fmtTime(existingValue) + ') sera effacée et remplacée par "Pas de retour" (chaînage). Tu confirmes ?';
+    } else {
+      title = 'Pas de retour domicile ?';
+      message = 'Tu enchaînes sur un autre site ou tu termines sans rentrer. Le dossier sera clôturé en mode chaînage (pas d\'heure de retour).';
+    }
+    const confirmed = await showConfirm(title, message);
     if (!confirmed) return;
     
     d.retourDomicile = 'X';
@@ -2940,8 +2953,15 @@ async function setTimestampCross(field) {
     toast('Clôturé en mode chaînage', 'success');
     render();
   } else if (field === 'departDomicile') {
-    const confirmed = await showConfirm('Pas de départ du domicile ?',
-      'Tu viens d\'un autre site (chaînage). La case "Départ domicile" sera marquée X dans le PDF.');
+    let title, message;
+    if (hadValue) {
+      title = 'Remplacer ' + fmtTime(existingValue) + ' par ✕ ?';
+      message = 'L\'heure de départ saisie (' + fmtTime(existingValue) + ') sera effacée et remplacée par "Pas de départ" (chaînage entrant : tu viens d\'un autre site).';
+    } else {
+      title = 'Pas de départ du domicile ?';
+      message = 'Tu viens d\'un autre site (chaînage). La case "Départ domicile" sera marquée X dans le PDF.';
+    }
+    const confirmed = await showConfirm(title, message);
     if (!confirmed) return;
     
     d.departDomicile = 'X';
