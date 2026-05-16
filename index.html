@@ -2068,7 +2068,8 @@ function renderNewDossier() {
 
 function renderDeplacement(d) {
   // Exclure le dossier en cours (si édition) pour trouver le bon "site précédent"
-  const previousSite = findPreviousSiteInSequence(d.id);
+  // Et utiliser sa date d'appel comme référence pour la fenêtre 24h
+  const previousSite = findPreviousSiteInSequence(d.id, d);
   
   return `
     <div class="section">
@@ -2608,7 +2609,7 @@ function renderSettings() {
       </div>
       
       <div class="text-center" style="padding:24px 0;font-size:11px;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace">
-        Astreintes AMI2S v2.7<br>
+        Astreintes AMI2S v2.8<br>
         ${state.dossiers.length} dossier(s) • ${new Date().toISOString().substring(0,10)}
       </div>
     </div>
@@ -3661,12 +3662,8 @@ async function performDistanceCalc(origin, destination, dossier, isExisting) {
 
 // Modale pour le chaînage : choisir entre sites précédents ou GPS
 async function showChainOriginModal(destination, dossier, isExisting, currentDossierId) {
-  // Récupérer tous les sites de la séquence (hors dossier en cours d'édition)
-  const candidates = findPreviousSitesInSequence(currentDossierId);
-  
-  // Pour le cas où il n'y a aucun candidat avec adresse mais qu'il y en a au moins un sans adresse
-  const fallback = candidates.length === 0 ? findPreviousSiteInSequence(currentDossierId) : null;
-  const hasFallbackWithoutAddress = fallback && (!fallback.adresseSite || !fallback.adresseSite.trim());
+  // Récupérer tous les sites candidats (24h avant le dossier en cours, hors dossier en cours)
+  const candidates = findPreviousSitesInSequence(currentDossierId, dossier);
   
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
@@ -3683,23 +3680,13 @@ async function showChainOriginModal(destination, dossier, isExisting, currentDos
         </div>
       </button>
     `).join('');
-  } else if (hasFallbackWithoutAddress) {
-    sitesHtml = `
-      <div class="modal-choice" style="opacity:0.6;cursor:not-allowed">
-        <div class="modal-choice-icon">⚠️</div>
-        <div class="modal-choice-content">
-          <div class="modal-choice-title">${escapeHtml(fallback.etablissement)}</div>
-          <div class="modal-choice-desc">Pas d'adresse renseignée → utilise GPS ou saisie manuelle</div>
-        </div>
-      </div>
-    `;
   }
   
   const subtitle = candidates.length > 1 
     ? `${candidates.length} sites possibles. Choisis depuis lequel tu pars :`
     : candidates.length === 1
     ? 'Tu es en mode chaînage. D\'où viens-tu exactement ?'
-    : 'Aucun site précédent avec adresse trouvé. Choisis une autre option :';
+    : 'Aucun site précédent avec adresse dans les dernières 24h. Choisis une autre option :';
   
   overlay.innerHTML = `
     <div class="modal" onclick="event.stopPropagation()">
@@ -3818,33 +3805,43 @@ async function showOtherLocationModal(destination, dossier, isExisting) {
   document.body.appendChild(overlay);
 }
 
-// Trouver TOUS les sites possibles dans la séquence ouverte (pour choix manuel si plusieurs)
-// excludeId = ID du dossier en cours d'édition (à exclure de la liste)
-function findPreviousSitesInSequence(excludeId = null) {
-  const openSeq = findOpenSequence();
-  if (!openSeq || openSeq.dossiers.length === 0) return [];
+// V2.8 — Logique plus tolérante : tous les dossiers récents (24h) avec adresse
+// sont candidats "site précédent", indépendamment du sequenceId
+// (utile pour la saisie rétroactive où chaque dossier a son propre sequenceId)
+
+function findPreviousSitesInSequence(excludeId = null, referenceDossier = null) {
+  // Si on a un dossier de référence, on cherche dans les 24h AVANT sa date d'appel
+  // Sinon, on cherche dans les 24h avant maintenant
+  let referenceDate;
+  if (referenceDossier && referenceDossier.dateAppel) {
+    referenceDate = new Date(referenceDossier.dateAppel);
+  } else {
+    referenceDate = new Date();
+  }
   
-  // Exclure le dossier en cours d'édition, ne garder que les déplacements avec adresse
-  const candidates = openSeq.dossiers
+  const windowMs = 24 * 3600 * 1000; // 24 heures
+  const earliestDate = new Date(referenceDate.getTime() - windowMs);
+  
+  // Candidats : déplacement, avec adresse, dans la fenêtre 24h, hors dossier en cours
+  const candidates = state.dossiers
     .filter(d => d.id !== excludeId)
-    .filter(d => d.type === 'deplacement' && d.adresseSite && d.adresseSite.trim())
+    .filter(d => d.type === 'deplacement')
+    .filter(d => d.adresseSite && d.adresseSite.trim())
+    .filter(d => {
+      const dateD = new Date(d.dateAppel);
+      // Le dossier doit être ANTÉRIEUR au dossier de référence (ou égal)
+      // ET dans la fenêtre des 24h
+      return dateD <= referenceDate && dateD >= earliestDate;
+    })
     .sort((a, b) => new Date(b.dateAppel) - new Date(a.dateAppel));
   
   return candidates;
 }
 
-// Trouver le site précédent le plus probable (le plus récent avec adresse, hors dossier en cours)
-function findPreviousSiteInSequence(excludeId = null) {
-  const candidates = findPreviousSitesInSequence(excludeId);
-  if (candidates.length > 0) return candidates[0];
-  
-  // Fallback : retourner le plus récent sans adresse (pour info dans message)
-  const openSeq = findOpenSequence();
-  if (!openSeq) return null;
-  const allOthers = openSeq.dossiers
-    .filter(d => d.id !== excludeId)
-    .sort((a, b) => new Date(b.dateAppel) - new Date(a.dateAppel));
-  return allOthers[0] || null;
+// Le site précédent le plus probable (le plus récent dans la fenêtre)
+function findPreviousSiteInSequence(excludeId = null, referenceDossier = null) {
+  const candidates = findPreviousSitesInSequence(excludeId, referenceDossier);
+  return candidates.length > 0 ? candidates[0] : null;
 }
 
 // Géolocalisation + reverse geocoding
