@@ -1763,10 +1763,11 @@ function recalcDurations(d) {
     d.tempsSiteMs = diffMs(d.arriveeSite, d.departSite);
     d.tempsSiteCalcule = fmtDuration(d.tempsSiteMs);
   }
-  if (d.departDomicile && d.retourDomicile && d.retourDomicile !== 'X') {
+  // Calcul total trajet : seulement si les deux ne sont pas X
+  if (d.departDomicile && d.retourDomicile && d.departDomicile !== 'X' && d.retourDomicile !== 'X') {
     d.totalTrajetMs = diffMs(d.departDomicile, d.retourDomicile);
     d.totalTrajetCalcule = fmtDuration(d.totalTrajetMs);
-  } else if (d.retourDomicile === 'X') {
+  } else if (d.departDomicile === 'X' || d.retourDomicile === 'X') {
     d.totalTrajetMs = null;
     d.totalTrajetCalcule = null;
   }
@@ -2239,16 +2240,18 @@ function renderTimestamp(d, field, label, icon) {
   
   let disabled = false;
   if (field === 'arriveeSite' && !d.departDomicile && d.pointDepart === 'domicile') disabled = true;
+  // Pour le chaînage (départ domicile = X), arrivée site est OK
   if (field === 'departSite' && !d.arriveeSite) disabled = true;
   if (field === 'retourDomicile' && !d.departSite) disabled = true;
   
-  // Cas spécial : Retour domicile avec un X (chaînage)
+  // Cas spécial : timestamp avec un X (chaînage)
   if (isCrossed) {
+    const subText = field === 'departDomicile' ? '✕ Pas de départ (chaînage entrant)' : '✕ Pas de retour (chaînage)';
     return `
       <div class="timestamp-row crossed">
         <div>
           <div class="timestamp-label">${icon} ${label}</div>
-          <div class="timestamp-sub">✕ Pas de retour (chaînage)</div>
+          <div class="timestamp-sub">${subText}</div>
         </div>
         <div class="ts-actions">
           <button class="ts-btn-icon" data-action="edit-ts" data-field="${field}">✏</button>
@@ -2270,6 +2273,23 @@ function renderTimestamp(d, field, label, icon) {
           <button class="ts-btn" data-action="ts-now" data-field="${field}" ${disabled ? 'disabled' : ''} style="padding:9px 12px">Rentré</button>
           <button class="ts-btn-icon" data-action="edit-ts" data-field="${field}" ${disabled ? 'disabled' : ''} title="Modifier l'heure">✏</button>
           <button class="ts-btn-icon" data-action="ts-cross" data-field="${field}" ${disabled ? 'disabled' : ''} title="Pas de retour (chaînage)" style="color:var(--status-chain)">✕</button>
+        </div>
+      </div>
+    `;
+  }
+  
+  // Cas spécial : Départ domicile vide avec bouton "Pas de départ" (chaînage entrant)
+  if (field === 'departDomicile' && !isFilled) {
+    return `
+      <div class="timestamp-row ${disabled ? 'disabled' : 'pending'}">
+        <div>
+          <div class="timestamp-label">${icon} ${label}</div>
+          <div class="timestamp-sub">${disabled ? '—' : 'En attente'}</div>
+        </div>
+        <div class="ts-actions">
+          <button class="ts-btn" data-action="ts-now" data-field="${field}" ${disabled ? 'disabled' : ''}>Maintenant</button>
+          <button class="ts-btn-icon" data-action="edit-ts" data-field="${field}" ${disabled ? 'disabled' : ''} title="Modifier l'heure">✏</button>
+          <button class="ts-btn-icon" data-action="ts-cross" data-field="${field}" ${disabled ? 'disabled' : ''} title="Pas de départ du domicile (chaînage)" style="color:var(--status-chain)">✕</button>
         </div>
       </div>
     `;
@@ -2554,7 +2574,7 @@ function renderSettings() {
       </div>
       
       <div class="text-center" style="padding:24px 0;font-size:11px;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace">
-        Astreintes AMI2S v2.2<br>
+        Astreintes AMI2S v2.3<br>
         ${state.dossiers.length} dossier(s) • ${new Date().toISOString().substring(0,10)}
       </div>
     </div>
@@ -2918,6 +2938,17 @@ async function setTimestampCross(field) {
     await saveDossier(d);
     haptic('success');
     toast('Clôturé en mode chaînage', 'success');
+    render();
+  } else if (field === 'departDomicile') {
+    const confirmed = await showConfirm('Pas de départ du domicile ?',
+      'Tu viens d\'un autre site (chaînage). La case "Départ domicile" sera marquée X dans le PDF.');
+    if (!confirmed) return;
+    
+    d.departDomicile = 'X';
+    recalcDurations(d);
+    await saveDossier(d);
+    haptic('success');
+    toast('Marqué comme chaînage entrant', 'success');
     render();
   }
 }
@@ -3467,16 +3498,33 @@ async function quickNew() {
 async function calculateDistance() {
   if (!tempDossier) return;
   
-  const origin = state.settings.adresseDomicile;
   const destination = tempDossier.adresseSite;
   
   if (!state.settings.syncUrl || !state.settings.syncToken) {
     toast('Configure d\'abord la sync Apps Script dans Réglages', 'error');
     return;
   }
-  if (!origin) { toast('Configure ton adresse domicile dans Réglages', 'error'); return; }
   if (!destination) { toast('Saisis d\'abord l\'adresse du site', 'error'); return; }
   
+  // Déterminer le point de départ selon le contexte
+  const pointDepart = tempDossier.pointDepart || 'domicile';
+  
+  if (pointDepart === 'domicile') {
+    if (!state.settings.adresseDomicile) {
+      toast('Configure ton adresse domicile dans Réglages', 'error');
+      return;
+    }
+    await performDistanceCalc(state.settings.adresseDomicile, destination);
+  } else if (pointDepart === 'autre-site') {
+    // Chaînage : proposer le site précédent OU géolocalisation
+    await showChainOriginModal(destination);
+  } else {
+    // autre-lieu : géolocalisation ou saisie manuelle
+    await showOtherLocationModal(destination);
+  }
+}
+
+async function performDistanceCalc(origin, destination) {
   toast('Calcul en cours...', 'warning');
   
   try {
@@ -3509,6 +3557,210 @@ async function calculateDistance() {
     console.error(err);
     toast('Erreur réseau. Vérifie ta connexion.', 'error');
   }
+}
+
+// Modale pour le chaînage : choisir entre site précédent ou GPS
+async function showChainOriginModal(destination) {
+  // Chercher le dossier précédent dans la séquence
+  const previousSite = findPreviousSiteInSequence();
+  
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-handle"></div>
+      <div class="modal-title">D'où pars-tu ?</div>
+      <div class="modal-subtitle">Tu es en mode chaînage. D'où viens-tu exactement ?</div>
+      <div class="modal-choices">
+        ${previousSite ? `
+          <button class="modal-choice primary" data-co="previous">
+            <div class="modal-choice-icon">🔗</div>
+            <div class="modal-choice-content">
+              <div class="modal-choice-title">Du site précédent</div>
+              <div class="modal-choice-desc">${escapeHtml(previousSite.adresseSite || previousSite.etablissement)}</div>
+            </div>
+          </button>
+        ` : ''}
+        <button class="modal-choice" data-co="gps">
+          <div class="modal-choice-icon">📍</div>
+          <div class="modal-choice-content">
+            <div class="modal-choice-title">Ma position GPS</div>
+            <div class="modal-choice-desc">Utiliser le GPS du téléphone pour déterminer où je suis maintenant</div>
+          </div>
+        </button>
+        <button class="modal-choice" data-co="manual">
+          <div class="modal-choice-icon">✏️</div>
+          <div class="modal-choice-content">
+            <div class="modal-choice-title">Saisir manuellement</div>
+            <div class="modal-choice-desc">Taper l'adresse de départ moi-même</div>
+          </div>
+        </button>
+        <button class="modal-choice" data-co="cancel">
+          <div class="modal-choice-icon">↩</div>
+          <div class="modal-choice-content">
+            <div class="modal-choice-title">Annuler</div>
+            <div class="modal-choice-desc">Retour</div>
+          </div>
+        </button>
+      </div>
+    </div>
+  `;
+  
+  overlay.querySelectorAll('[data-co]').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const choice = e.currentTarget.dataset.co;
+      overlay.remove();
+      
+      if (choice === 'cancel') return;
+      
+      if (choice === 'previous' && previousSite) {
+        await performDistanceCalc(previousSite.adresseSite || previousSite.etablissement, destination);
+      } else if (choice === 'gps') {
+        const gpsAddress = await getCurrentLocation();
+        if (gpsAddress) {
+          await performDistanceCalc(gpsAddress, destination);
+        }
+      } else if (choice === 'manual') {
+        const manual = await showPrompt('Adresse de départ', 'Tape ton adresse de départ actuelle', '', 'Ex: 12 rue de Paris, 78000 Versailles');
+        if (manual) await performDistanceCalc(manual, destination);
+      }
+    });
+  });
+  
+  overlay.addEventListener('click', () => overlay.remove());
+  document.body.appendChild(overlay);
+}
+
+// Modale pour "autre lieu" : GPS ou saisie manuelle
+async function showOtherLocationModal(destination) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-handle"></div>
+      <div class="modal-title">D'où pars-tu ?</div>
+      <div class="modal-subtitle">Tu n'es pas à ton domicile. D'où pars-tu maintenant ?</div>
+      <div class="modal-choices">
+        <button class="modal-choice primary" data-co="gps">
+          <div class="modal-choice-icon">📍</div>
+          <div class="modal-choice-content">
+            <div class="modal-choice-title">Ma position GPS</div>
+            <div class="modal-choice-desc">Utiliser le GPS du téléphone pour déterminer où je suis</div>
+          </div>
+        </button>
+        <button class="modal-choice" data-co="manual">
+          <div class="modal-choice-icon">✏️</div>
+          <div class="modal-choice-content">
+            <div class="modal-choice-title">Saisir manuellement</div>
+            <div class="modal-choice-desc">Taper l'adresse de départ moi-même</div>
+          </div>
+        </button>
+        <button class="modal-choice" data-co="cancel">
+          <div class="modal-choice-icon">↩</div>
+          <div class="modal-choice-content">
+            <div class="modal-choice-title">Annuler</div>
+            <div class="modal-choice-desc">Retour</div>
+          </div>
+        </button>
+      </div>
+    </div>
+  `;
+  
+  overlay.querySelectorAll('[data-co]').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const choice = e.currentTarget.dataset.co;
+      overlay.remove();
+      
+      if (choice === 'cancel') return;
+      
+      if (choice === 'gps') {
+        const gpsAddress = await getCurrentLocation();
+        if (gpsAddress) await performDistanceCalc(gpsAddress, destination);
+      } else if (choice === 'manual') {
+        const manual = await showPrompt('Adresse de départ', 'Tape ton adresse de départ actuelle', '', 'Ex: 12 rue de Paris, 78000 Versailles');
+        if (manual) await performDistanceCalc(manual, destination);
+      }
+    });
+  });
+  
+  overlay.addEventListener('click', () => overlay.remove());
+  document.body.appendChild(overlay);
+}
+
+// Trouver le site précédent dans la séquence ouverte
+function findPreviousSiteInSequence() {
+  const openSeq = findOpenSequence();
+  if (!openSeq || openSeq.dossiers.length === 0) return null;
+  
+  // Trier par date, prendre le plus récent
+  const sorted = [...openSeq.dossiers].sort((a, b) => new Date(b.dateAppel) - new Date(a.dateAppel));
+  return sorted[0]; // Le dernier dossier ouvert de la séquence
+}
+
+// Géolocalisation + reverse geocoding
+async function getCurrentLocation() {
+  if (!('geolocation' in navigator)) {
+    toast('Géolocalisation non supportée sur ce téléphone', 'error');
+    return null;
+  }
+  
+  toast('📡 Récupération de ta position...', 'warning');
+  
+  try {
+    const position = await new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 60000 // accepte une position jusqu'à 1 min
+      });
+    });
+    
+    const lat = position.coords.latitude;
+    const lng = position.coords.longitude;
+    
+    // Geocoder via Apps Script
+    const response = await fetch(state.settings.syncUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        token: state.settings.syncToken,
+        action: 'geocode',
+        lat: lat,
+        lng: lng
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (data.error) {
+      toast('Geocoding : ' + data.error, 'error');
+      return null;
+    }
+    
+    haptic('success');
+    toast(`📍 Position : ${data.address.substring(0, 40)}...`, 'success');
+    return data.address;
+  } catch (err) {
+    if (err.code === 1) toast('Permission GPS refusée', 'error');
+    else if (err.code === 2) toast('Position GPS indisponible', 'error');
+    else if (err.code === 3) toast('Timeout GPS, réessaie', 'error');
+    else toast('Erreur GPS : ' + err.message, 'error');
+    return null;
+  }
+}
+
+// Demander permission GPS au lancement (1 seule fois)
+async function requestGeolocationPermission() {
+  if (!('geolocation' in navigator)) return;
+  // En appelant getCurrentPosition une fois, on déclenche la demande de permission
+  // navigator.permissions n'est pas universel donc on fait soft
+  try {
+    navigator.geolocation.getCurrentPosition(
+      () => { /* permission accordée, rien à faire */ },
+      () => { /* permission refusée, on ne fait rien */ },
+      { timeout: 1000, maximumAge: Infinity }
+    );
+  } catch(e) {}
 }
 
 // ----------------------------------------------------------------------------
@@ -3592,7 +3844,7 @@ function generatePDF() {
     weekDossiers.forEach((d, idx) => {
       const isPhone = d.type === 'telephone';
       const isBureau = d.bureau;
-      let departDom = d.departDomicile ? fmtTime(d.departDomicile) : '—';
+      let departDom = d.departDomicile === 'X' ? 'X' : (d.departDomicile ? fmtTime(d.departDomicile) : '—');
       let retourDom = d.retourDomicile === 'X' ? 'X' : (d.retourDomicile ? fmtTime(d.retourDomicile) : '—');
       let totalTrajet = '—';
       
@@ -3601,19 +3853,22 @@ function generatePDF() {
         const isFirst = seq[0].id === d.id;
         const isLast = seq[seq.length - 1].id === d.id;
         
-        if (!isFirst) departDom = 'X';
+        if (!isFirst && d.departDomicile !== 'X') departDom = 'X';
         if (!isLast) { retourDom = 'X'; totalTrajet = 'X'; }
-        else if (d.departDomicile && d.retourDomicile && d.retourDomicile !== 'X') {
-          const seqFirst = seq[0];
-          const ms = diffMs(seqFirst.departDomicile, d.retourDomicile);
-          totalTrajet = fmtDuration(ms);
-          totalTrajetMs += ms;
+        else if (d.retourDomicile && d.retourDomicile !== 'X') {
+          // Trouver le 1er dossier de la séquence avec un vrai départ domicile (pas X)
+          const seqFirstWithRealDeparture = seq.find(s => s.departDomicile && s.departDomicile !== 'X');
+          if (seqFirstWithRealDeparture) {
+            const ms = diffMs(seqFirstWithRealDeparture.departDomicile, d.retourDomicile);
+            totalTrajet = fmtDuration(ms);
+            totalTrajetMs += ms;
+          }
         }
-      } else if (d.departDomicile && d.retourDomicile && d.retourDomicile !== 'X') {
+      } else if (d.departDomicile && d.retourDomicile && d.departDomicile !== 'X' && d.retourDomicile !== 'X') {
         const ms = diffMs(d.departDomicile, d.retourDomicile);
         totalTrajet = fmtDuration(ms);
         totalTrajetMs += ms;
-      } else if (d.retourDomicile === 'X') {
+      } else if (d.retourDomicile === 'X' || d.departDomicile === 'X') {
         totalTrajet = 'X';
       }
       
@@ -3999,6 +4254,9 @@ async function init() {
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission();
     }
+    
+    // Demander permission GPS au lancement (1 seule fois)
+    requestGeolocationPermission();
     
     // Sync complète (pull+push) au démarrage si configuré
     if (state.settings.syncEnabled && state.settings.syncUrl) {
