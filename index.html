@@ -1,0 +1,3481 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff" id="theme-color-meta">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Astreintes">
+<title>Astreintes AMI2S</title>
+
+<link rel="manifest" href='data:application/manifest+json;charset=utf-8,{"name":"Astreintes AMI2S","short_name":"Astreintes","start_url":".","display":"standalone","background_color":"%23ffffff","theme_color":"%232563eb","icons":[{"src":"data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgcng9Ijk2IiBmaWxsPSIjMjU2M2ViIi8+PHRleHQgeD0iMjU2IiB5PSIzMzAiIGZvbnQtc2l6ZT0iMjQwIiBmb250LWZhbWlseT0iSW50ZXIsIEFyaWFsIiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC13ZWlnaHQ9IjgwMCI+QTwvdGV4dD48L3N2Zz4=","sizes":"512x512","type":"image/svg+xml"}]}'>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.0/jspdf.plugin.autotable.min.js"></script>
+
+<style>
+/* ============================================================================
+   DESIGN SYSTEM — Astreintes AMI2S v2.0
+   Inspirations: Linear, Stripe Dashboard, Vercel
+============================================================================ */
+
+:root {
+  /* === LIGHT MODE (par défaut) === */
+  --bg: #ffffff;
+  --bg-elevated: #ffffff;
+  --bg-subtle: #f8fafc;
+  --bg-muted: #f1f5f9;
+  --bg-hover: #e2e8f0;
+  
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  
+  --text: #0f172a;
+  --text-secondary: #475569;
+  --text-tertiary: #94a3b8;
+  --text-on-accent: #ffffff;
+  
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-subtle: #eff6ff;
+  --accent-border: #bfdbfe;
+  
+  --status-call: #0284c7;
+  --status-call-bg: #f0f9ff;
+  --status-call-border: #bae6fd;
+  
+  --status-intervention: #d97706;
+  --status-intervention-bg: #fffbeb;
+  --status-intervention-border: #fde68a;
+  
+  --status-done: #059669;
+  --status-done-bg: #ecfdf5;
+  --status-done-border: #a7f3d0;
+  
+  --status-chain: #7c3aed;
+  --status-chain-bg: #f5f3ff;
+  --status-chain-border: #ddd6fe;
+  
+  --danger: #dc2626;
+  --danger-bg: #fef2f2;
+  --danger-border: #fecaca;
+  
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-lg: 0 10px 25px rgba(15, 23, 42, 0.10), 0 4px 6px rgba(15, 23, 42, 0.05);
+  --shadow-xl: 0 20px 40px rgba(15, 23, 42, 0.15);
+  
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  
+  --transition: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+[data-theme="dark"] {
+  --bg: #0f172a;
+  --bg-elevated: #1e293b;
+  --bg-subtle: #1e293b;
+  --bg-muted: #334155;
+  --bg-hover: #475569;
+  
+  --border: #334155;
+  --border-strong: #475569;
+  
+  --text: #f1f5f9;
+  --text-secondary: #cbd5e1;
+  --text-tertiary: #94a3b8;
+  --text-on-accent: #ffffff;
+  
+  --accent: #3b82f6;
+  --accent-hover: #60a5fa;
+  --accent-subtle: rgba(59, 130, 246, 0.10);
+  --accent-border: rgba(59, 130, 246, 0.30);
+  
+  --status-call: #38bdf8;
+  --status-call-bg: rgba(56, 189, 248, 0.10);
+  --status-call-border: rgba(56, 189, 248, 0.30);
+  
+  --status-intervention: #fbbf24;
+  --status-intervention-bg: rgba(251, 191, 36, 0.10);
+  --status-intervention-border: rgba(251, 191, 36, 0.30);
+  
+  --status-done: #34d399;
+  --status-done-bg: rgba(52, 211, 153, 0.10);
+  --status-done-border: rgba(52, 211, 153, 0.30);
+  
+  --status-chain: #a78bfa;
+  --status-chain-bg: rgba(167, 139, 250, 0.10);
+  --status-chain-border: rgba(167, 139, 250, 0.30);
+  
+  --danger: #f87171;
+  --danger-bg: rgba(248, 113, 113, 0.10);
+  --danger-border: rgba(248, 113, 113, 0.30);
+  
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.4), 0 4px 6px rgba(0, 0, 0, 0.2);
+  --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.5);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  transition: background var(--transition), color var(--transition);
+}
+
+body { font-size: 15px; line-height: 1.5; }
+
+#app {
+  max-width: 500px;
+  margin: 0 auto;
+  min-height: 100vh;
+  background: var(--bg);
+  position: relative;
+  padding-bottom: 80px;
+}
+
+/* ============================================================================
+   HEADER
+============================================================================ */
+.app-header {
+  position: sticky;
+  top: 0;
+  padding: max(env(safe-area-inset-top, 0px), 12px) 20px 12px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: saturate(180%) blur(12px);
+  -webkit-backdrop-filter: saturate(180%) blur(12px);
+  border-bottom: 1px solid var(--border);
+  z-index: 50;
+}
+[data-theme="dark"] .app-header { background: rgba(15, 23, 42, 0.85); }
+
+.header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.header-title {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+.header-back {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  color: var(--text);
+  cursor: pointer;
+  margin-left: -8px;
+  font-size: 22px;
+  transition: background var(--transition);
+}
+.header-back:active { background: var(--bg-muted); }
+.header-subtitle {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-top: 1px;
+  font-weight: 500;
+}
+.header-actions { display: flex; gap: 6px; }
+.icon-btn {
+  width: 36px; height: 36px;
+  border-radius: 8px;
+  background: transparent;
+  border: none;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-secondary);
+  font-size: 18px;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+}
+.icon-btn:active { background: var(--bg-muted); }
+.icon-btn.primary { background: var(--accent); color: var(--text-on-accent); }
+.icon-btn.primary:active { background: var(--accent-hover); }
+
+/* ============================================================================
+   WEEK BANNER
+============================================================================ */
+.week-banner {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.week-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.week-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-tertiary);
+}
+.week-dates {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.week-count {
+  text-align: right;
+}
+.week-count-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1;
+}
+.week-count-label {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+/* ============================================================================
+   SEQUENCE INDICATOR (séquence ouverte)
+============================================================================ */
+.sequence-indicator {
+  margin: 12px 20px 0;
+  padding: 12px 14px;
+  background: var(--status-chain-bg);
+  border: 1px solid var(--status-chain-border);
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sequence-pulse {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--status-chain);
+  position: relative;
+  flex-shrink: 0;
+}
+.sequence-pulse::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--status-chain);
+  animation: pulse 2s ease-out infinite;
+  opacity: 0.6;
+}
+@keyframes pulse {
+  to { transform: scale(2.5); opacity: 0; }
+}
+.sequence-text {
+  flex: 1;
+  font-size: 12px;
+  color: var(--status-chain);
+  font-weight: 600;
+}
+.sequence-text strong { display: block; font-size: 13px; font-weight: 700; margin-bottom: 2px; }
+.sequence-action {
+  font-size: 11px;
+  color: var(--status-chain);
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(124, 58, 237, 0.1);
+}
+
+/* ============================================================================
+   FILTERS / SEGMENTED CONTROL
+============================================================================ */
+.filter-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 14px 20px 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.filter-tabs::-webkit-scrollbar { display: none; }
+.filter-tab {
+  padding: 7px 14px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+  font-family: inherit;
+}
+.filter-tab.active {
+  background: var(--text);
+  color: var(--bg);
+  border-color: var(--text);
+}
+.filter-tab-count {
+  display: inline-block;
+  margin-left: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  opacity: 0.7;
+  font-size: 11px;
+}
+
+/* ============================================================================
+   DOSSIER CARDS
+============================================================================ */
+.dossiers-list {
+  padding: 8px 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dossier {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  cursor: pointer;
+  transition: all var(--transition);
+  position: relative;
+  overflow: hidden;
+}
+.dossier::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--border-strong);
+}
+.dossier.status-call::before { background: var(--status-call); }
+.dossier.status-intervention::before { background: var(--status-intervention); }
+.dossier.status-done::before { background: var(--status-done); }
+.dossier.status-pending::before { background: var(--text-tertiary); }
+.dossier:active { transform: scale(0.99); background: var(--bg-subtle); }
+
+.dossier-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.dossier-time {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-weight: 600;
+}
+.dossier-badges { display: flex; gap: 4px; flex-shrink: 0; }
+.badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 3px 8px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.badge-call { background: var(--status-call-bg); color: var(--status-call); border: 1px solid var(--status-call-border); }
+.badge-intervention { background: var(--status-intervention-bg); color: var(--status-intervention); border: 1px solid var(--status-intervention-border); }
+.badge-done { background: var(--status-done-bg); color: var(--status-done); border: 1px solid var(--status-done-border); }
+.badge-pending { background: var(--bg-muted); color: var(--text-secondary); border: 1px solid var(--border); }
+.badge-chain { background: var(--status-chain-bg); color: var(--status-chain); border: 1px solid var(--status-chain-border); }
+
+.dossier-etablissement {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 3px;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.dossier-motif {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin-bottom: 8px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.dossier-meta {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+.dossier-meta span { display: flex; align-items: center; gap: 4px; font-weight: 500; }
+
+.empty-state {
+  text-align: center;
+  padding: 80px 20px;
+  color: var(--text-tertiary);
+}
+.empty-state-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.4; }
+.empty-state-title { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+.empty-state-desc { font-size: 13px; line-height: 1.5; max-width: 240px; margin: 0 auto; }
+
+/* ============================================================================
+   FAB
+============================================================================ */
+.fab {
+  position: fixed;
+  bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+  right: 20px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  font-weight: 300;
+  box-shadow: var(--shadow-lg), 0 0 0 4px var(--bg);
+  cursor: pointer;
+  z-index: 40;
+  border: none;
+  line-height: 1;
+  transition: transform var(--transition);
+}
+.fab:active { transform: scale(0.95); }
+
+/* ============================================================================
+   BOTTOM NAV
+============================================================================ */
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  max-width: 500px;
+  margin: 0 auto;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: saturate(180%) blur(12px);
+  -webkit-backdrop-filter: saturate(180%) blur(12px);
+  border-top: 1px solid var(--border);
+  display: flex;
+  z-index: 50;
+}
+[data-theme="dark"] .bottom-nav { background: rgba(15, 23, 42, 0.92); }
+.nav-item {
+  flex: 1;
+  height: 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px;
+  border: none;
+  background: transparent;
+  transition: color var(--transition);
+}
+.nav-item.active { color: var(--accent); }
+.nav-icon { font-size: 22px; line-height: 1; }
+
+/* ============================================================================
+   FORMS
+============================================================================ */
+.form-screen { padding: 16px 20px 120px; }
+
+.section {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.section-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 14px;
+}
+
+.form-group { margin-bottom: 14px; }
+.form-group:last-child { margin-bottom: 0; }
+
+.form-label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+.required { color: var(--danger); }
+
+.form-input, .form-textarea, .form-select {
+  width: 100%;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 11px 14px;
+  font-size: 15px;
+  color: var(--text);
+  font-family: inherit;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: border-color var(--transition), background var(--transition);
+}
+.form-input::placeholder, .form-textarea::placeholder { color: var(--text-tertiary); }
+.form-textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
+.form-input:focus, .form-textarea:focus, .form-select:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--bg-elevated);
+}
+
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+/* ============================================================================
+   PICKER BUTTONS (date/time custom)
+============================================================================ */
+.picker-btn {
+  width: 100%;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 11px 14px;
+  font-size: 15px;
+  color: var(--text);
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: all var(--transition);
+  font-variant-numeric: tabular-nums;
+}
+.picker-btn:active { background: var(--bg-muted); }
+.picker-btn-icon { color: var(--text-tertiary); font-size: 16px; }
+.picker-btn .rounded-pill {
+  font-size: 9px;
+  background: var(--accent);
+  color: var(--text-on-accent);
+  padding: 2px 6px;
+  border-radius: 100px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin-left: 6px;
+}
+
+/* ============================================================================
+   TYPE SELECTOR (Tel / Déplacement)
+============================================================================ */
+.type-selector {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.type-option {
+  background: var(--bg-subtle);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 12px;
+  text-align: center;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.type-option:active { transform: scale(0.97); }
+.type-option.selected.phone {
+  background: var(--status-call-bg);
+  border-color: var(--status-call);
+}
+.type-option.selected.move {
+  background: var(--status-intervention-bg);
+  border-color: var(--status-intervention);
+}
+.type-option .icon { font-size: 28px; margin-bottom: 6px; display: block; }
+.type-option .label { font-size: 13px; font-weight: 700; color: var(--text); }
+.type-option .desc { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
+
+/* ============================================================================
+   RADIO OPTIONS
+============================================================================ */
+.radio-group { display: flex; flex-direction: column; gap: 8px; }
+.radio-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.radio-option:active { transform: scale(0.98); }
+.radio-option.selected {
+  border-color: var(--accent);
+  background: var(--accent-subtle);
+}
+.radio-dot {
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  flex-shrink: 0;
+  position: relative;
+  transition: border-color var(--transition);
+}
+.radio-option.selected .radio-dot { border-color: var(--accent); }
+.radio-option.selected .radio-dot::after {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 10px; height: 10px;
+  background: var(--accent);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+.radio-icon { font-size: 20px; }
+.radio-content { flex: 1; }
+.radio-title { font-size: 14px; font-weight: 600; color: var(--text); }
+.radio-subtitle { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
+
+/* ============================================================================
+   TIMESTAMPS
+============================================================================ */
+.timestamp-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 14px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+  transition: all var(--transition);
+}
+.timestamp-row.pending {
+  border-color: var(--accent);
+  background: var(--accent-subtle);
+}
+.timestamp-row.disabled { opacity: 0.5; }
+.timestamp-row.crossed {
+  background: var(--bg-muted);
+  border-style: dashed;
+}
+.timestamp-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.timestamp-sub {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+.ts-actions { display: flex; gap: 4px; align-items: center; }
+.ts-btn {
+  background: var(--accent);
+  color: white;
+  border: none;
+  padding: 9px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: 'JetBrains Mono', monospace;
+  transition: all var(--transition);
+}
+.ts-btn:active { transform: scale(0.95); }
+.ts-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.ts-btn.filled {
+  background: var(--bg-elevated);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.ts-btn-icon {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 7px 9px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* ============================================================================
+   DURATIONS DISPLAY
+============================================================================ */
+.duration-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 14px;
+}
+.duration-card {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  text-align: center;
+}
+.duration-card.payed {
+  background: var(--status-done-bg);
+  border-color: var(--status-done-border);
+}
+.duration-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+.duration-card.payed .duration-value { color: var(--status-done); }
+.duration-label {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-top: 4px;
+  font-weight: 700;
+}
+
+/* ============================================================================
+   BUTTONS
+============================================================================ */
+.btn {
+  padding: 13px 16px;
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all var(--transition);
+  letter-spacing: -0.01em;
+}
+.btn:active { transform: scale(0.98); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-block { width: 100%; }
+.btn-primary { background: var(--accent); color: var(--text-on-accent); }
+.btn-primary:active { background: var(--accent-hover); }
+.btn-secondary { background: var(--bg-muted); color: var(--text); }
+.btn-success { background: var(--status-done); color: white; }
+.btn-danger { background: var(--danger); color: white; }
+.btn-ghost-danger { background: transparent; color: var(--danger); border: 1px solid var(--danger-border); }
+.btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
+
+.form-actions {
+  position: fixed;
+  bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+  left: 0; right: 0;
+  max-width: 500px;
+  margin: 0 auto;
+  display: flex;
+  gap: 8px;
+  padding: 12px 20px;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  z-index: 49;
+}
+.form-actions.no-nav { bottom: env(safe-area-inset-bottom, 0px); }
+.form-actions .btn { flex: 1; }
+
+/* ============================================================================
+   MODAL / BOTTOM SHEET
+============================================================================ */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: flex-end;
+  z-index: 200;
+  animation: fadeIn 0.2s;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+.modal {
+  width: 100%;
+  max-width: 500px;
+  margin: 0 auto;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  padding: 8px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+  animation: slideUp 0.3s ease-out;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.modal-handle {
+  width: 36px; height: 4px;
+  background: var(--border-strong);
+  border-radius: 2px;
+  margin: 0 auto 18px;
+}
+.modal-title { font-size: 18px; font-weight: 800; text-align: center; margin-bottom: 6px; letter-spacing: -0.01em; }
+.modal-subtitle { font-size: 13px; color: var(--text-secondary); text-align: center; margin-bottom: 20px; line-height: 1.5; }
+.modal-choices { display: flex; flex-direction: column; gap: 8px; }
+.modal-choice {
+  background: var(--bg-subtle);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  width: 100%;
+  font-family: inherit;
+  transition: all var(--transition);
+}
+.modal-choice:active { transform: scale(0.98); }
+.modal-choice.primary { border-color: var(--accent); background: var(--accent-subtle); }
+.modal-choice.danger { border-color: var(--danger); background: var(--danger-bg); }
+.modal-choice-icon { font-size: 26px; }
+.modal-choice-content { flex: 1; }
+.modal-choice-title { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 2px; }
+.modal-choice-desc { font-size: 12px; color: var(--text-secondary); line-height: 1.4; }
+
+/* ============================================================================
+   TIME PICKER (Custom roulette)
+============================================================================ */
+.time-picker-display {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  padding: 24px 0;
+  background: var(--bg-subtle);
+  border-radius: var(--radius-lg);
+  margin-bottom: 16px;
+  font-family: 'JetBrains Mono', monospace;
+}
+.time-segment {
+  font-size: 48px;
+  font-weight: 800;
+  color: var(--text);
+  min-width: 80px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+}
+.time-colon { font-size: 40px; color: var(--text-tertiary); font-weight: 300; }
+
+.time-picker-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.time-control-column { display: flex; flex-direction: column; gap: 6px; }
+.time-control-label {
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 4px;
+}
+.time-control-btns { display: flex; gap: 6px; justify-content: center; }
+.time-ctrl-btn {
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+  min-width: 44px;
+  font-family: inherit;
+}
+.time-ctrl-btn:active { background: var(--bg-hover); }
+.time-ctrl-btn.now {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border-color: var(--accent);
+  width: 100%;
+}
+
+.time-quick-options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.time-quick {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 6px;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text);
+  cursor: pointer;
+}
+.time-quick:active { background: var(--bg-muted); }
+
+/* ============================================================================
+   DATE PICKER
+============================================================================ */
+.date-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin: 16px 0;
+}
+.date-cell {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  background: transparent;
+  border: 1px solid transparent;
+}
+.date-cell.header { font-size: 10px; font-weight: 700; color: var(--text-tertiary); cursor: default; text-transform: uppercase; }
+.date-cell.other-month { color: var(--text-tertiary); opacity: 0.4; }
+.date-cell:not(.header):active { background: var(--bg-muted); }
+.date-cell.today { border-color: var(--accent); color: var(--accent); }
+.date-cell.selected { background: var(--accent); color: var(--text-on-accent); }
+.date-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.date-nav-btn {
+  background: var(--bg-muted);
+  border: none;
+  width: 36px; height: 36px;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+  color: var(--text);
+}
+.date-nav-title {
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--text);
+}
+
+/* ============================================================================
+   SETTINGS
+============================================================================ */
+.settings-section { margin-bottom: 20px; }
+.settings-section-title {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 8px;
+  padding-left: 14px;
+  font-weight: 700;
+}
+.settings-group {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+  padding: 14px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background var(--transition);
+}
+.settings-row:active { background: var(--bg-subtle); }
+.settings-row:last-child { border-bottom: none; }
+.settings-row-icon {
+  width: 32px; height: 32px;
+  background: var(--bg-subtle);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+.settings-row-content { flex: 1; min-width: 0; }
+.settings-row-title { font-size: 14px; font-weight: 600; color: var(--text); }
+.settings-row-value {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.settings-row-chevron { color: var(--text-tertiary); font-size: 18px; flex-shrink: 0; margin-left: 8px; }
+
+/* Theme selector buttons */
+.theme-selector {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 14px;
+}
+.theme-option {
+  padding: 14px 8px;
+  background: var(--bg-subtle);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  text-align: center;
+  transition: all var(--transition);
+}
+.theme-option.active { border-color: var(--accent); background: var(--accent-subtle); }
+.theme-option-icon { font-size: 22px; margin-bottom: 4px; display: block; }
+.theme-option-label { font-size: 12px; font-weight: 600; color: var(--text); }
+
+/* ============================================================================
+   EXPORT CARDS
+============================================================================ */
+.export-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.export-card:active { transform: scale(0.99); }
+.export-card.primary { border-color: var(--accent); }
+.export-card.pdf { border-color: var(--danger); }
+.export-card-header { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.export-icon-box {
+  width: 42px; height: 42px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px;
+}
+.export-title { font-size: 14px; font-weight: 700; color: var(--text); }
+.export-subtitle { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+.export-stats {
+  display: flex;
+  gap: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.export-stat { display: flex; flex-direction: column; gap: 2px; }
+.export-stat-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+.export-stat-label {
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+/* ============================================================================
+   DETAIL VIEW
+============================================================================ */
+.status-banner {
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.status-banner.intervention { background: var(--status-intervention-bg); border: 1px solid var(--status-intervention-border); }
+.status-banner.done { background: var(--status-done-bg); border: 1px solid var(--status-done-border); }
+.status-banner.call { background: var(--status-call-bg); border: 1px solid var(--status-call-border); }
+.status-banner.pending { background: var(--bg-subtle); border: 1px solid var(--border); }
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  gap: 12px;
+}
+.detail-row:last-child { border-bottom: none; }
+.detail-label { font-size: 12px; color: var(--text-secondary); font-weight: 500; flex-shrink: 0; }
+.detail-value { font-size: 13px; color: var(--text); font-weight: 600; text-align: right; flex: 1; word-break: break-word; }
+.detail-value.mono { font-family: 'JetBrains Mono', monospace; }
+.detail-block { padding: 10px 0; border-bottom: 1px solid var(--border); }
+.detail-block:last-child { border-bottom: none; }
+.detail-block-label { font-size: 12px; color: var(--text-secondary); font-weight: 600; margin-bottom: 6px; }
+.detail-block-content { font-size: 14px; color: var(--text); line-height: 1.5; }
+
+/* ============================================================================
+   STATS
+============================================================================ */
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.stat-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+.stat-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+.stat-label {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-top: 6px;
+  font-weight: 700;
+}
+.stat-card.accent { background: var(--accent-subtle); border-color: var(--accent-border); }
+.stat-card.accent .stat-value { color: var(--accent); }
+
+/* ============================================================================
+   TOAST
+============================================================================ */
+.toast-container {
+  position: fixed;
+  bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+  left: 0; right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  z-index: 1000;
+  pointer-events: none;
+}
+.toast {
+  background: var(--text);
+  color: var(--bg);
+  padding: 10px 16px;
+  border-radius: 100px;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: var(--shadow-lg);
+  max-width: 90%;
+  animation: toastIn 0.3s ease-out;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.toast.success { background: var(--status-done); color: white; }
+.toast.error { background: var(--danger); color: white; }
+.toast.warning { background: var(--status-intervention); color: white; }
+@keyframes toastIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ============================================================================
+   HELPERS
+============================================================================ */
+.hidden { display: none !important; }
+.text-center { text-align: center; }
+.help-text { font-size: 11px; color: var(--text-tertiary); margin-top: 6px; line-height: 1.4; }
+
+.warning-inline {
+  background: var(--status-intervention-bg);
+  border: 1px solid var(--status-intervention-border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--status-intervention);
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.sync-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 100px;
+}
+.sync-badge.ok { background: var(--status-done-bg); color: var(--status-done); }
+.sync-badge.pending { background: var(--status-intervention-bg); color: var(--status-intervention); }
+.sync-badge.error { background: var(--danger-bg); color: var(--danger); }
+.sync-badge.off { background: var(--bg-muted); color: var(--text-tertiary); }
+
+.sync-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.sync-badge.pending .sync-dot { animation: blink 1.2s infinite; }
+@keyframes blink { 50% { opacity: 0.3; } }
+
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="toast-container" id="toasts"></div>
+
+<script>
+'use strict';
+
+// ============================================================================
+// ASTREINTES AMI2S v2.0
+// ============================================================================
+
+// ----------------------------------------------------------------------------
+// UTILITAIRES
+// ----------------------------------------------------------------------------
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => document.querySelectorAll(s);
+
+function uid() {
+  return Date.now().toString(36) + Math.random().toString(36).substring(2, 9);
+}
+
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function roundTo5(date) {
+  const d = new Date(date);
+  const rounded = Math.round(d.getMinutes() / 5) * 5;
+  d.setMinutes(rounded); d.setSeconds(0); d.setMilliseconds(0);
+  return d;
+}
+
+function fmtDate(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+function fmtDateShort(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+}
+function fmtTime(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+}
+function fmtDateTime(d) { return fmtDate(d) + ' • ' + fmtTime(d); }
+
+function fmtDuration(ms) {
+  if (!ms || ms < 0) return '—';
+  const total = Math.round(ms / 60000);
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return `${h}h${m.toString().padStart(2, '0')}`;
+}
+
+function diffMs(start, end) {
+  if (!start || !end) return 0;
+  return new Date(end) - new Date(start);
+}
+
+function getAstreinteWeek(date = new Date()) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const hours = d.getHours();
+  let daysToMonday;
+  if (day === 1 && hours < 9) daysToMonday = -7;
+  else if (day === 0) daysToMonday = -6;
+  else daysToMonday = -(day - 1);
+  
+  const start = new Date(d);
+  start.setDate(d.getDate() + daysToMonday);
+  start.setHours(9, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 7);
+  
+  const yearStart = new Date(start.getFullYear(), 0, 1);
+  const daysSinceYearStart = Math.floor((start - yearStart) / 86400000);
+  const weekNumber = Math.ceil((daysSinceYearStart + yearStart.getDay()) / 7);
+  
+  return { start, end, weekNumber };
+}
+
+function haptic(type = 'light') {
+  if (!('vibrate' in navigator)) return;
+  const patterns = { light: 10, medium: 20, heavy: [10, 30, 10], success: [10, 30, 10, 30, 10] };
+  navigator.vibrate(patterns[type] || 10);
+}
+
+// ----------------------------------------------------------------------------
+// STORAGE — IndexedDB
+// ----------------------------------------------------------------------------
+const DB_NAME = 'astreintes_ami2s';
+const DB_VERSION = 1;
+let db = null;
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => { db = req.result; resolve(db); };
+    req.onupgradeneeded = (e) => {
+      const database = e.target.result;
+      if (!database.objectStoreNames.contains('dossiers')) {
+        const store = database.createObjectStore('dossiers', { keyPath: 'id' });
+        store.createIndex('dateAppel', 'dateAppel');
+        store.createIndex('sequenceId', 'sequenceId');
+      }
+      if (!database.objectStoreNames.contains('settings')) {
+        database.createObjectStore('settings', { keyPath: 'key' });
+      }
+    };
+  });
+}
+
+function dbGet(store, key) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(store, 'readonly');
+    const req = tx.objectStore(store).get(key);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function dbGetAll(store) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(store, 'readonly');
+    const req = tx.objectStore(store).getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function dbPut(store, value) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(store, 'readwrite');
+    const req = tx.objectStore(store).put(value);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function dbDelete(store, key) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(store, 'readwrite');
+    const req = tx.objectStore(store).delete(key);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function dbClear(store) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(store, 'readwrite');
+    const req = tx.objectStore(store).clear();
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+// ----------------------------------------------------------------------------
+// STATE
+// ----------------------------------------------------------------------------
+const DEFAULT_SETTINGS = {
+  technicien: '',
+  email: '',
+  emailDestinataire: '',
+  adresseDomicile: '',
+  statutSemaine: 'titulaire',
+  arrondi: 5,
+  rappelHeure: '08:00',
+  rappelActif: true,
+  theme: 'auto',
+  syncUrl: '',
+  syncToken: '',
+  syncEnabled: false,
+  lastSync: null
+};
+
+let state = {
+  settings: { ...DEFAULT_SETTINGS },
+  dossiers: []
+};
+
+let view = { current: 'list', filter: 'all', dossierId: null, weekOffset: 0 };
+let tempDossier = null;
+let syncStatus = 'off'; // off, ok, pending, error
+let autosaveTimer = null;
+
+async function loadState() {
+  await openDB();
+  const settingsRow = await dbGet('settings', 'main');
+  if (settingsRow) state.settings = { ...DEFAULT_SETTINGS, ...settingsRow.value };
+  state.dossiers = await dbGetAll('dossiers');
+  applyTheme();
+}
+
+async function saveSettings() {
+  await dbPut('settings', { key: 'main', value: state.settings });
+}
+
+async function saveDossier(d) {
+  d.updatedAt = new Date().toISOString();
+  await dbPut('dossiers', d);
+  // Update in memory
+  const idx = state.dossiers.findIndex(x => x.id === d.id);
+  if (idx >= 0) state.dossiers[idx] = d;
+  else state.dossiers.push(d);
+  // Trigger sync if enabled
+  scheduleSync();
+}
+
+async function deleteDossier(id) {
+  await dbDelete('dossiers', id);
+  state.dossiers = state.dossiers.filter(d => d.id !== id);
+  scheduleSync();
+}
+
+// ----------------------------------------------------------------------------
+// THEME MANAGEMENT
+// ----------------------------------------------------------------------------
+function applyTheme() {
+  const theme = state.settings.theme || 'auto';
+  let actualTheme = theme;
+  if (theme === 'auto') {
+    actualTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  document.documentElement.setAttribute('data-theme', actualTheme);
+  const meta = $('#theme-color-meta');
+  if (meta) meta.content = actualTheme === 'dark' ? '#0f172a' : '#ffffff';
+}
+
+if (window.matchMedia) {
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    if (state.settings.theme === 'auto') applyTheme();
+  });
+}
+
+// ----------------------------------------------------------------------------
+// SYNC (Apps Script backend)
+// ----------------------------------------------------------------------------
+let syncTimeout = null;
+function scheduleSync() {
+  if (!state.settings.syncEnabled || !state.settings.syncUrl) return;
+  syncStatus = 'pending';
+  updateSyncBadge();
+  if (syncTimeout) clearTimeout(syncTimeout);
+  syncTimeout = setTimeout(() => doSync(), 3000);
+}
+
+async function doSync(showFeedback = false) {
+  if (!state.settings.syncEnabled || !state.settings.syncUrl) {
+    syncStatus = 'off';
+    updateSyncBadge();
+    return;
+  }
+  
+  syncStatus = 'pending';
+  updateSyncBadge();
+  
+  try {
+    const payload = {
+      token: state.settings.syncToken,
+      action: 'sync',
+      technicien: state.settings.technicien,
+      dossiers: state.dossiers,
+      settings: state.settings,
+      clientTime: new Date().toISOString()
+    };
+    
+    const response = await fetch(state.settings.syncUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    });
+    
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const result = await response.json();
+    if (result.error) throw new Error(result.error);
+    
+    state.settings.lastSync = new Date().toISOString();
+    await saveSettings();
+    syncStatus = 'ok';
+    updateSyncBadge();
+    
+    if (showFeedback) {
+      toast('Synchronisation réussie • ' + (result.count || 0) + ' dossiers', 'success');
+    }
+  } catch (err) {
+    console.error('Sync error', err);
+    syncStatus = 'error';
+    updateSyncBadge();
+    if (showFeedback) toast('Erreur de sync : ' + err.message, 'error');
+  }
+}
+
+function updateSyncBadge() {
+  // Met à jour le badge sync dans Réglages si visible
+  const badge = $('#sync-badge');
+  if (badge) badge.outerHTML = renderSyncBadge();
+}
+
+function renderSyncBadge() {
+  if (!state.settings.syncEnabled) return `<span class="sync-badge off" id="sync-badge"><span class="sync-dot"></span>Désactivé</span>`;
+  const map = {
+    ok: `<span class="sync-badge ok" id="sync-badge"><span class="sync-dot"></span>Synchronisé</span>`,
+    pending: `<span class="sync-badge pending" id="sync-badge"><span class="sync-dot"></span>En cours...</span>`,
+    error: `<span class="sync-badge error" id="sync-badge"><span class="sync-dot"></span>Erreur</span>`,
+    off: `<span class="sync-badge off" id="sync-badge"><span class="sync-dot"></span>Non configuré</span>`
+  };
+  return map[syncStatus] || map.off;
+}
+
+// ----------------------------------------------------------------------------
+// BUSINESS LOGIC
+// ----------------------------------------------------------------------------
+function getWeekDossiers(offset = 0) {
+  const base = new Date();
+  base.setDate(base.getDate() + offset * 7);
+  const { start, end } = getAstreinteWeek(base);
+  return state.dossiers.filter(d => {
+    const dt = new Date(d.dateAppel);
+    return dt >= start && dt < end;
+  });
+}
+
+function getFilteredDossiers() {
+  let dossiers = view.weekOffset !== null ? getWeekDossiers(view.weekOffset) : state.dossiers;
+  dossiers = [...dossiers].sort((a, b) => new Date(b.dateAppel) - new Date(a.dateAppel));
+  
+  if (view.filter === 'all') return dossiers;
+  if (view.filter === 'en-cours') return dossiers.filter(d => d.statut === 'intervention');
+  if (view.filter === 'appels') return dossiers.filter(d => d.type === 'telephone');
+  if (view.filter === 'clotures') return dossiers.filter(d => d.statut === 'cloture');
+  return dossiers;
+}
+
+function getDossierStatus(d) {
+  if (d.type === 'telephone') return d.statut === 'cloture' ? 'call-closed' : 'pending';
+  if (d.statut === 'cloture') return 'done';
+  if (d.statut === 'intervention') return 'intervention';
+  return 'pending';
+}
+
+function getBadge(d) {
+  const s = getDossierStatus(d);
+  switch (s) {
+    case 'call-closed': return { class: 'badge-call', text: '☎ Téléphone', card: 'status-call' };
+    case 'intervention': return { class: 'badge-intervention', text: '⚠ En cours', card: 'status-intervention' };
+    case 'done': return { class: 'badge-done', text: '✓ Clôturé', card: 'status-done' };
+    default: return { class: 'badge-pending', text: '◷ En attente', card: 'status-pending' };
+  }
+}
+
+function findOpenSequence() {
+  // Cherche un dossier sans retour domicile mais avec départ
+  const openDossiers = state.dossiers.filter(d =>
+    d.departDomicile && !d.retourDomicile && d.sequenceId
+  );
+  if (openDossiers.length === 0) return null;
+  
+  // Pour chaque sequenceId trouvé, vérifier qu'aucun dossier de la séquence n'a de retour
+  const candidates = new Set(openDossiers.map(d => d.sequenceId));
+  for (const seqId of candidates) {
+    const all = state.dossiers.filter(d => d.sequenceId === seqId);
+    const hasRetour = all.some(d => d.retourDomicile);
+    if (!hasRetour) return { sequenceId: seqId, dossiers: all };
+  }
+  return null;
+}
+
+function recalcDurations(d) {
+  if (d.arriveeSite && d.departSite) {
+    d.tempsSiteMs = diffMs(d.arriveeSite, d.departSite);
+    d.tempsSiteCalcule = fmtDuration(d.tempsSiteMs);
+  }
+  if (d.departDomicile && d.retourDomicile) {
+    d.totalTrajetMs = diffMs(d.departDomicile, d.retourDomicile);
+    d.totalTrajetCalcule = fmtDuration(d.totalTrajetMs);
+  }
+}
+
+// ----------------------------------------------------------------------------
+// MAIN RENDER
+// ----------------------------------------------------------------------------
+function render() {
+  const app = $('#app');
+  switch (view.current) {
+    case 'list': app.innerHTML = renderList(); break;
+    case 'new': app.innerHTML = renderNewDossier(); break;
+    case 'detail': app.innerHTML = renderDetail(); break;
+    case 'export': app.innerHTML = renderExport(); break;
+    case 'settings': app.innerHTML = renderSettings(); break;
+    case 'stats': app.innerHTML = renderStats(); break;
+  }
+  attachListeners();
+}
+
+function renderBottomNav() {
+  const items = [
+    ['list', '📋', 'Dossiers'],
+    ['export', '📤', 'Export'],
+    ['stats', '📊', 'Stats'],
+    ['settings', '⚙️', 'Réglages']
+  ];
+  return `<nav class="bottom-nav">${items.map(([key, icon, label]) => `
+    <button class="nav-item ${view.current === key ? 'active' : ''}" data-action="nav" data-view="${key}">
+      <span class="nav-icon">${icon}</span>
+      <span>${label}</span>
+    </button>
+  `).join('')}</nav>`;
+}
+
+// ----- LIST VIEW -----
+function renderList() {
+  const baseDate = new Date(); baseDate.setDate(baseDate.getDate() + view.weekOffset * 7);
+  const week = getAstreinteWeek(baseDate);
+  const weekDossiers = getWeekDossiers(view.weekOffset);
+  const filtered = getFilteredDossiers();
+  const openSeq = findOpenSequence();
+  
+  const counts = {
+    all: weekDossiers.length,
+    'en-cours': state.dossiers.filter(d => d.statut === 'intervention').length,
+    appels: weekDossiers.filter(d => d.type === 'telephone').length,
+    clotures: weekDossiers.filter(d => d.statut === 'cloture').length
+  };
+  
+  return `
+    <header class="app-header">
+      <div class="header-top">
+        <div>
+          <div class="header-title">Astreintes</div>
+          <div class="header-subtitle">${state.settings.technicien || 'AMI2S'} • ${state.settings.statutSemaine === 'titulaire' ? 'Titulaire' : 'Suppléant'}</div>
+        </div>
+        <div class="header-actions">
+          <button class="icon-btn" data-action="prev-week" title="Semaine précédente">‹</button>
+          <button class="icon-btn" data-action="next-week" title="Semaine suivante" ${view.weekOffset >= 0 ? 'disabled style="opacity:0.3"' : ''}>›</button>
+        </div>
+      </div>
+      <div class="week-banner">
+        <div class="week-info">
+          <div class="week-label">Semaine n°${week.weekNumber}${view.weekOffset === 0 ? ' (actuelle)' : view.weekOffset === -1 ? ' (précédente)' : ''}</div>
+          <div class="week-dates">${fmtDateShort(week.start)} 09h → ${fmtDateShort(week.end)} 09h</div>
+        </div>
+        <div class="week-count">
+          <div class="week-count-value">${weekDossiers.length}</div>
+          <div class="week-count-label">dossier${weekDossiers.length > 1 ? 's' : ''}</div>
+        </div>
+      </div>
+    </header>
+    
+    ${openSeq ? `
+      <div class="sequence-indicator" data-action="show-sequence">
+        <div class="sequence-pulse"></div>
+        <div class="sequence-text">
+          <strong>Séquence ouverte • ${openSeq.dossiers.length} dossier${openSeq.dossiers.length > 1 ? 's' : ''}</strong>
+          Tu es parti de chez toi, pas encore rentré
+        </div>
+        <div class="sequence-action">Voir →</div>
+      </div>
+    ` : ''}
+    
+    <div class="filter-tabs">
+      <button class="filter-tab ${view.filter === 'all' ? 'active' : ''}" data-action="filter" data-filter="all">Tous <span class="filter-tab-count">${counts.all}</span></button>
+      <button class="filter-tab ${view.filter === 'en-cours' ? 'active' : ''}" data-action="filter" data-filter="en-cours">En cours <span class="filter-tab-count">${counts['en-cours']}</span></button>
+      <button class="filter-tab ${view.filter === 'appels' ? 'active' : ''}" data-action="filter" data-filter="appels">Téléphone <span class="filter-tab-count">${counts.appels}</span></button>
+      <button class="filter-tab ${view.filter === 'clotures' ? 'active' : ''}" data-action="filter" data-filter="clotures">Clôturés <span class="filter-tab-count">${counts.clotures}</span></button>
+    </div>
+    
+    <div class="dossiers-list">
+      ${filtered.length === 0 ? `
+        <div class="empty-state">
+          <div class="empty-state-icon">📋</div>
+          <div class="empty-state-title">Aucun dossier${view.filter !== 'all' ? ' dans cette catégorie' : ''}</div>
+          <div class="empty-state-desc">${view.filter === 'all' ? 'Appuie sur le bouton + en bas à droite pour créer ton premier dossier' : 'Change de filtre pour voir d\'autres dossiers'}</div>
+        </div>
+      ` : filtered.map(renderDossierCard).join('')}
+    </div>
+    
+    <button class="fab" data-action="new" aria-label="Nouveau dossier">+</button>
+    ${renderBottomNav()}
+  `;
+}
+
+function renderDossierCard(d) {
+  const b = getBadge(d);
+  const isChained = d.sequenceId && state.dossiers.filter(x => x.sequenceId === d.sequenceId).length > 1;
+  
+  return `
+    <div class="dossier ${b.card}" data-action="detail" data-id="${d.id}">
+      <div class="dossier-header">
+        <div class="dossier-time">${fmtDateShort(d.dateAppel)} • ${fmtTime(d.dateAppel)}</div>
+        <div class="dossier-badges">
+          <span class="badge ${b.class}">${b.text}</span>
+          ${isChained ? `<span class="badge badge-chain">🔗</span>` : ''}
+        </div>
+      </div>
+      <div class="dossier-etablissement">${escapeHtml(d.etablissement || 'Sans nom')}</div>
+      ${d.motif ? `<div class="dossier-motif">${escapeHtml(d.motif)}</div>` : ''}
+      ${(d.codeAstreinte || d.demandeur || d.tempsSiteCalcule || d.km) ? `
+        <div class="dossier-meta">
+          ${d.codeAstreinte ? `<span>🔑 ${escapeHtml(d.codeAstreinte)}</span>` : ''}
+          ${d.demandeur ? `<span>👤 ${escapeHtml(d.demandeur)}</span>` : ''}
+          ${d.tempsSiteCalcule ? `<span>⏱ ${d.tempsSiteCalcule}</span>` : ''}
+          ${d.km ? `<span>📏 ${d.km} km</span>` : ''}
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+// ----- NEW DOSSIER -----
+function renderNewDossier() {
+  if (!tempDossier) {
+    const openSeq = findOpenSequence();
+    tempDossier = {
+      id: uid(),
+      dateAppel: new Date().toISOString(),
+      etablissement: '', demandeur: '', codeAstreinte: '', motif: '',
+      type: null,
+      pointDepart: openSeq ? 'autre-site' : 'domicile',
+      adresseSite: '', km: '', rapportN: '',
+      departDomicile: null, arriveeSite: null, departSite: null, retourDomicile: null,
+      compteRendu: '',
+      statut: 'pending',
+      sequenceId: null,
+      createdAt: new Date().toISOString()
+    };
+  }
+  
+  const d = tempDossier;
+  const dateApRounded = roundTo5(d.dateAppel);
+  const dateApOrig = new Date(d.dateAppel);
+  const showRound = dateApRounded.getTime() !== dateApOrig.getTime();
+  
+  return `
+    <header class="app-header">
+      <div class="header-top">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="header-back" data-action="cancel-new">←</span>
+          <div>
+            <div class="header-title">Nouveau dossier</div>
+            <div class="header-subtitle">Saisie en cours</div>
+          </div>
+        </div>
+      </div>
+    </header>
+    
+    <div class="form-screen">
+      <div class="section">
+        <div class="section-title">⏱ Horodatage de l'appel</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Date</label>
+            <button class="picker-btn" data-action="pick-date" data-field="dateAppel">
+              <span>${fmtDate(d.dateAppel)}</span>
+              <span class="picker-btn-icon">📅</span>
+            </button>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Heure</label>
+            <button class="picker-btn" data-action="pick-time" data-field="dateAppel">
+              <span>${fmtTime(dateApRounded)}${showRound ? '<span class="rounded-pill">5\'</span>' : ''}</span>
+              <span class="picker-btn-icon">🕐</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      <div class="section">
+        <div class="section-title">📋 Informations</div>
+        <div class="form-group">
+          <label class="form-label">Établissement <span class="required">*</span></label>
+          <input type="text" class="form-input" data-bind="etablissement" value="${escapeHtml(d.etablissement)}" placeholder="Ex: EHPAD Les Tilleuls" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nom du demandeur</label>
+          <input type="text" class="form-input" data-bind="demandeur" value="${escapeHtml(d.demandeur)}" placeholder="Personne qui appelle" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label class="form-label">N° abonné / Code astreinte</label>
+          <input type="text" class="form-input" data-bind="codeAstreinte" value="${escapeHtml(d.codeAstreinte)}" placeholder="Ex: AST-0847" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Motif</label>
+          <textarea class="form-textarea" data-bind="motif" placeholder="Décrire la nature de l'appel">${escapeHtml(d.motif)}</textarea>
+        </div>
+      </div>
+      
+      <div class="section">
+        <div class="section-title">🔧 Type de traitement <span class="required">*</span></div>
+        <div class="type-selector">
+          <div class="type-option phone ${d.type === 'telephone' ? 'selected' : ''}" data-action="set-type" data-type="telephone">
+            <span class="icon">☎</span>
+            <div class="label">Téléphone</div>
+            <div class="desc">Résolu sans déplacement</div>
+          </div>
+          <div class="type-option move ${d.type === 'deplacement' ? 'selected' : ''}" data-action="set-type" data-type="deplacement">
+            <span class="icon">🚗</span>
+            <div class="label">Déplacement</div>
+            <div class="desc">Intervention sur site</div>
+          </div>
+        </div>
+      </div>
+      
+      ${d.type === 'deplacement' ? renderDeplacement(d) : ''}
+    </div>
+    
+    <div class="form-actions no-nav">
+      <button class="btn btn-secondary" data-action="cancel-new">Annuler</button>
+      <button class="btn btn-primary" data-action="save-new" ${!d.type || !d.etablissement ? 'disabled' : ''}>
+        ${d.type === 'telephone' ? '✓ Enregistrer' : 'Créer dossier →'}
+      </button>
+    </div>
+  `;
+}
+
+function renderDeplacement(d) {
+  const openSeq = findOpenSequence();
+  return `
+    <div class="section">
+      <div class="section-title">📍 D'où pars-tu ?</div>
+      <div class="radio-group">
+        <div class="radio-option ${d.pointDepart === 'domicile' ? 'selected' : ''}" data-action="set-depart" data-depart="domicile">
+          <div class="radio-dot"></div>
+          <span class="radio-icon">🏠</span>
+          <div class="radio-content">
+            <div class="radio-title">De mon domicile</div>
+            <div class="radio-subtitle">${state.settings.adresseDomicile || 'Adresse à configurer dans Réglages'}</div>
+          </div>
+        </div>
+        ${openSeq ? `
+          <div class="radio-option ${d.pointDepart === 'autre-site' ? 'selected' : ''}" data-action="set-depart" data-depart="autre-site">
+            <div class="radio-dot"></div>
+            <span class="radio-icon">🔗</span>
+            <div class="radio-content">
+              <div class="radio-title">Depuis un autre site (chaînage)</div>
+              <div class="radio-subtitle">Tu enchaînes une intervention</div>
+            </div>
+          </div>
+        ` : ''}
+        <div class="radio-option ${d.pointDepart === 'autre-lieu' ? 'selected' : ''}" data-action="set-depart" data-depart="autre-lieu">
+          <div class="radio-dot"></div>
+          <span class="radio-icon">📌</span>
+          <div class="radio-content">
+            <div class="radio-title">Depuis un autre lieu</div>
+            <div class="radio-subtitle">Si tu n'es pas chez toi</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="section">
+      <div class="section-title">📏 Site & distance</div>
+      <div class="form-group">
+        <label class="form-label">Adresse du site</label>
+        <input type="text" class="form-input" data-bind="adresseSite" value="${escapeHtml(d.adresseSite)}" placeholder="Adresse de l'établissement" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Distance parcourue (km)</label>
+        <input type="number" class="form-input" data-bind="km" value="${escapeHtml(d.km)}" placeholder="Ex: 8.4" step="0.1" inputmode="decimal">
+        <div class="help-text">💡 Saisie manuelle pour l'instant. Calcul auto Google Maps en V2.1.</div>
+      </div>
+    </div>
+    
+    <div class="section">
+      <div class="section-title">📝 N° de rapport</div>
+      <div class="form-group">
+        <input type="text" class="form-input" data-bind="rapportN" value="${escapeHtml(d.rapportN)}" placeholder="Ex: R-2026-0312" autocomplete="off">
+        <div class="help-text">💡 Tu peux le renseigner plus tard.</div>
+      </div>
+    </div>
+  `;
+}
+
+// ----- DETAIL -----
+function renderDetail() {
+  const d = state.dossiers.find(x => x.id === view.dossierId);
+  if (!d) { view.current = 'list'; return renderList(); }
+  
+  const b = getBadge(d);
+  const status = getDossierStatus(d);
+  
+  return `
+    <header class="app-header">
+      <div class="header-top">
+        <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">
+          <span class="header-back" data-action="nav" data-view="list">←</span>
+          <div style="min-width:0;flex:1">
+            <div class="header-title" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(d.codeAstreinte || d.etablissement)}</div>
+            <div class="header-subtitle">${escapeHtml(d.etablissement)}</div>
+          </div>
+        </div>
+      </div>
+    </header>
+    
+    <div class="form-screen">
+      <div class="status-banner ${status === 'intervention' ? 'intervention' : status === 'done' ? 'done' : status === 'call-closed' ? 'call' : 'pending'}">
+        <span class="badge ${b.class}">${b.text}</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-secondary)">${fmtDateTime(d.dateAppel)}</span>
+      </div>
+      
+      <div class="section">
+        <div class="section-title">📋 Informations</div>
+        <div class="detail-row">
+          <span class="detail-label">Établissement</span>
+          <span class="detail-value">${escapeHtml(d.etablissement)}</span>
+        </div>
+        ${d.demandeur ? `<div class="detail-row"><span class="detail-label">Demandeur</span><span class="detail-value">${escapeHtml(d.demandeur)}</span></div>` : ''}
+        ${d.codeAstreinte ? `<div class="detail-row"><span class="detail-label">Code</span><span class="detail-value mono">${escapeHtml(d.codeAstreinte)}</span></div>` : ''}
+        <div class="detail-row">
+          <span class="detail-label">Type</span>
+          <span class="detail-value">${d.type === 'telephone' ? '☎ Téléphone' : '🚗 Déplacement'}</span>
+        </div>
+        ${d.motif ? `<div class="detail-block"><div class="detail-block-label">Motif</div><div class="detail-block-content">${escapeHtml(d.motif)}</div></div>` : ''}
+      </div>
+      
+      ${d.type === 'deplacement' ? renderDetailHoraires(d) : ''}
+      
+      ${d.type === 'deplacement' ? `
+        <div class="section">
+          <div class="section-title">📝 Compte-rendu d'intervention</div>
+          <textarea class="form-textarea" data-bind-edit="compteRendu" placeholder="Détailler l'intervention, pièces, observations...">${escapeHtml(d.compteRendu || '')}</textarea>
+        </div>
+        
+        ${d.km || d.rapportN ? `
+          <div class="section">
+            <div class="section-title">📊 Données complémentaires</div>
+            ${d.rapportN ? `<div class="detail-row"><span class="detail-label">N° rapport</span><span class="detail-value mono">${escapeHtml(d.rapportN)}</span></div>` : ''}
+            ${d.km ? `<div class="detail-row"><span class="detail-label">Distance</span><span class="detail-value mono">${escapeHtml(d.km)} km</span></div>` : ''}
+            ${d.adresseSite ? `<div class="detail-row"><span class="detail-label">Adresse site</span><span class="detail-value">${escapeHtml(d.adresseSite)}</span></div>` : ''}
+          </div>
+        ` : ''}
+      ` : ''}
+      
+      <div class="section" style="display:flex;flex-direction:column;gap:8px">
+        <button class="btn btn-secondary btn-block" data-action="edit-dossier">✏️ Modifier les informations</button>
+        ${d.statut === 'cloture' ? `
+          <button class="btn btn-ghost btn-block" data-action="reopen">🔄 Annuler la clôture</button>
+        ` : ''}
+        <button class="btn btn-ghost-danger btn-block" data-action="delete">🗑 Supprimer</button>
+      </div>
+    </div>
+    
+    ${d.statut !== 'cloture' && d.type === 'deplacement' ? `
+      <div class="form-actions">
+        <button class="btn btn-secondary" data-action="save-cr">Sauvegarder</button>
+        <button class="btn btn-success" data-action="cloture" ${!d.departSite ? 'disabled' : ''}>✓ Clôturer</button>
+      </div>
+    ` : d.statut === 'pending' && d.type === 'telephone' ? `
+      <div class="form-actions">
+        <button class="btn btn-success btn-block" data-action="cloture-tel">✓ Marquer comme résolu</button>
+      </div>
+    ` : ''}
+    
+    ${renderBottomNav()}
+  `;
+}
+
+function renderDetailHoraires(d) {
+  return `
+    <div class="section">
+      <div class="section-title">⏱ Horodatages</div>
+      ${renderTimestamp(d, 'departDomicile', 'Départ domicile', '🏠')}
+      ${renderTimestamp(d, 'arriveeSite', 'Arrivée sur site', '📍')}
+      ${renderTimestamp(d, 'departSite', 'Départ du site', '🚗')}
+      ${renderTimestamp(d, 'retourDomicile', 'Retour domicile', '🏠')}
+      
+      ${(d.tempsSiteCalcule || d.totalTrajetCalcule) ? `
+        <div class="duration-grid">
+          ${d.tempsSiteCalcule ? `
+            <div class="duration-card">
+              <div class="duration-value">${d.tempsSiteCalcule}</div>
+              <div class="duration-label">Temps sur site</div>
+            </div>
+          ` : '<div></div>'}
+          ${d.totalTrajetCalcule ? `
+            <div class="duration-card payed">
+              <div class="duration-value">${d.totalTrajetCalcule}</div>
+              <div class="duration-label">Total payé</div>
+            </div>
+          ` : '<div></div>'}
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+function renderTimestamp(d, field, label, icon) {
+  const value = d[field];
+  const isFilled = !!value;
+  
+  let disabled = false;
+  if (field === 'arriveeSite' && !d.departDomicile && d.pointDepart === 'domicile') disabled = true;
+  if (field === 'departSite' && !d.arriveeSite) disabled = true;
+  if (field === 'retourDomicile' && !d.departSite) disabled = true;
+  
+  return `
+    <div class="timestamp-row ${isFilled ? '' : disabled ? 'disabled' : 'pending'}">
+      <div>
+        <div class="timestamp-label">${icon} ${label}</div>
+        <div class="timestamp-sub">${isFilled ? fmtTime(value) : disabled ? '—' : 'En attente'}</div>
+      </div>
+      <div class="ts-actions">
+        ${isFilled ? `
+          <button class="ts-btn-icon" data-action="edit-ts" data-field="${field}">✏</button>
+          <button class="ts-btn filled" data-action="edit-ts" data-field="${field}">${fmtTime(value)}</button>
+        ` : `
+          <button class="ts-btn" data-action="ts-now" data-field="${field}" ${disabled ? 'disabled' : ''}>Maintenant</button>
+          <button class="ts-btn-icon" data-action="edit-ts" data-field="${field}" ${disabled ? 'disabled' : ''}>✏</button>
+        `}
+      </div>
+    </div>
+  `;
+}
+
+// ----- EXPORT -----
+function renderExport() {
+  const week = getAstreinteWeek();
+  const weekDossiers = getWeekDossiers(0);
+  
+  const now = new Date();
+  const today8h = new Date(now); today8h.setHours(8, 0, 0, 0);
+  const yesterday18h = new Date(today8h); yesterday18h.setDate(yesterday18h.getDate() - 1); yesterday18h.setHours(18, 0, 0, 0);
+  const nightDossiers = state.dossiers.filter(d => {
+    const dt = new Date(d.dateAppel);
+    return dt >= yesterday18h && dt <= today8h;
+  });
+  
+  const totalKm = weekDossiers.reduce((s, d) => s + (parseFloat(d.km) || 0), 0);
+  let totalMs = 0;
+  weekDossiers.forEach(d => {
+    if (d.departDomicile && d.retourDomicile) totalMs += diffMs(d.departDomicile, d.retourDomicile);
+  });
+  
+  return `
+    <header class="app-header">
+      <div class="header-top">
+        <div>
+          <div class="header-title">Export</div>
+          <div class="header-subtitle">PDF G1-0-8 et email Outlook</div>
+        </div>
+      </div>
+    </header>
+    
+    <div class="form-screen">
+      <div class="settings-section">
+        <div class="settings-section-title">▸ G1-0-8 hebdomadaire (Service RH)</div>
+        <div class="export-card pdf" data-action="export-pdf">
+          <div class="export-card-header">
+            <div class="export-icon-box" style="background:var(--danger-bg);color:var(--danger)">📄</div>
+            <div>
+              <div class="export-title">G1-0-8 — Semaine n°${week.weekNumber}</div>
+              <div class="export-subtitle">${fmtDateShort(week.start)} → ${fmtDateShort(week.end)} • PDF officiel pré-rempli</div>
+            </div>
+          </div>
+          <div class="export-stats">
+            <div class="export-stat">
+              <div class="export-stat-value">${weekDossiers.length}</div>
+              <div class="export-stat-label">Dossiers</div>
+            </div>
+            <div class="export-stat">
+              <div class="export-stat-value">${fmtDuration(totalMs)}</div>
+              <div class="export-stat-label">Total payé</div>
+            </div>
+            <div class="export-stat">
+              <div class="export-stat-value">${totalKm.toFixed(0)}</div>
+              <div class="export-stat-label">km</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="settings-section">
+        <div class="settings-section-title">▸ Email quotidien Outlook</div>
+        <div class="export-card primary" data-action="export-email-nuit">
+          <div class="export-card-header">
+            <div class="export-icon-box" style="background:var(--status-call-bg);color:var(--status-call)">🌙</div>
+            <div>
+              <div class="export-title">Rapport de la nuit</div>
+              <div class="export-subtitle">Hier 18h → ce matin 8h</div>
+            </div>
+          </div>
+          <div class="export-stats">
+            <div class="export-stat">
+              <div class="export-stat-value">${nightDossiers.length}</div>
+              <div class="export-stat-label">Dossiers</div>
+            </div>
+            <div class="export-stat">
+              <div class="export-stat-value">${nightDossiers.filter(d => d.type === 'deplacement').length}</div>
+              <div class="export-stat-label">Interv.</div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="export-card" data-action="export-email-custom">
+          <div class="export-card-header">
+            <div class="export-icon-box" style="background:var(--status-intervention-bg);color:var(--status-intervention)">📆</div>
+            <div>
+              <div class="export-title">Rapport personnalisé</div>
+              <div class="export-subtitle">Choisir une plage de dates</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    ${renderBottomNav()}
+  `;
+}
+
+// ----- SETTINGS -----
+function renderSettings() {
+  const s = state.settings;
+  return `
+    <header class="app-header">
+      <div class="header-top">
+        <div>
+          <div class="header-title">Réglages</div>
+          <div class="header-subtitle">Configuration</div>
+        </div>
+      </div>
+    </header>
+    
+    <div class="form-screen">
+      <div class="settings-section">
+        <div class="settings-section-title">Apparence</div>
+        <div class="settings-group">
+          <div class="theme-selector">
+            <div class="theme-option ${s.theme === 'light' ? 'active' : ''}" data-action="set-theme" data-theme="light">
+              <span class="theme-option-icon">☀️</span>
+              <div class="theme-option-label">Clair</div>
+            </div>
+            <div class="theme-option ${s.theme === 'dark' ? 'active' : ''}" data-action="set-theme" data-theme="dark">
+              <span class="theme-option-icon">🌙</span>
+              <div class="theme-option-label">Sombre</div>
+            </div>
+            <div class="theme-option ${s.theme === 'auto' ? 'active' : ''}" data-action="set-theme" data-theme="auto">
+              <span class="theme-option-icon">🌓</span>
+              <div class="theme-option-label">Auto</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="settings-section">
+        <div class="settings-section-title">Identité technicien</div>
+        <div class="settings-group">
+          <div class="settings-row" data-action="edit-setting" data-field="technicien">
+            <div class="settings-row-icon">👤</div>
+            <div class="settings-row-content">
+              <div class="settings-row-title">Nom du technicien</div>
+              <div class="settings-row-value">${escapeHtml(s.technicien || 'À configurer')}</div>
+            </div>
+            <span class="settings-row-chevron">›</span>
+          </div>
+          <div class="settings-row" data-action="edit-setting" data-field="email">
+            <div class="settings-row-icon">📧</div>
+            <div class="settings-row-content">
+              <div class="settings-row-title">Mon email</div>
+              <div class="settings-row-value">${escapeHtml(s.email || 'À configurer')}</div>
+            </div>
+            <span class="settings-row-chevron">›</span>
+          </div>
+          <div class="settings-row" data-action="edit-setting" data-field="emailDestinataire">
+            <div class="settings-row-icon">📩</div>
+            <div class="settings-row-content">
+              <div class="settings-row-title">Email destinataire CR</div>
+              <div class="settings-row-value">${escapeHtml(s.emailDestinataire || 'À configurer')}</div>
+            </div>
+            <span class="settings-row-chevron">›</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="settings-section">
+        <div class="settings-section-title">Astreinte en cours</div>
+        <div class="settings-group">
+          <div class="settings-row" data-action="toggle-statut">
+            <div class="settings-row-icon">📅</div>
+            <div class="settings-row-content">
+              <div class="settings-row-title">Statut cette semaine</div>
+              <div class="settings-row-value">${s.statutSemaine === 'titulaire' ? 'Titulaire' : 'Suppléant'} • appuyer pour changer</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="settings-section">
+        <div class="settings-section-title">Localisation & rappel</div>
+        <div class="settings-group">
+          <div class="settings-row" data-action="edit-setting" data-field="adresseDomicile">
+            <div class="settings-row-icon">🏠</div>
+            <div class="settings-row-content">
+              <div class="settings-row-title">Adresse domicile</div>
+              <div class="settings-row-value">${escapeHtml(s.adresseDomicile || 'À configurer')}</div>
+            </div>
+            <span class="settings-row-chevron">›</span>
+          </div>
+          <div class="settings-row" data-action="edit-setting" data-field="rappelHeure">
+            <div class="settings-row-icon">🔔</div>
+            <div class="settings-row-content">
+              <div class="settings-row-title">Rappel compte-rendu</div>
+              <div class="settings-row-value">Tous les jours à ${s.rappelHeure}</div>
+            </div>
+            <span class="settings-row-chevron">›</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="settings-section">
+        <div class="settings-section-title">Synchronisation Cloud</div>
+        <div class="settings-group">
+          <div class="settings-row" data-action="show-sync">
+            <div class="settings-row-icon">☁️</div>
+            <div class="settings-row-content">
+              <div class="settings-row-title">Google Sheets ${renderSyncBadge()}</div>
+              <div class="settings-row-value">${s.syncEnabled ? (s.lastSync ? 'Dernière sync : ' + fmtDateTime(s.lastSync) : 'Activé, pas encore synchronisé') : 'Cliquer pour configurer'}</div>
+            </div>
+            <span class="settings-row-chevron">›</span>
+          </div>
+          ${s.syncEnabled ? `
+            <div class="settings-row" data-action="sync-now">
+              <div class="settings-row-icon">🔄</div>
+              <div class="settings-row-content">
+                <div class="settings-row-title">Synchroniser maintenant</div>
+                <div class="settings-row-value">Forcer une synchronisation manuelle</div>
+              </div>
+            </div>
+          ` : ''}
+        </div>
+      </div>
+      
+      <div class="settings-section">
+        <div class="settings-section-title">Données</div>
+        <div class="settings-group">
+          <div class="settings-row" data-action="export-data">
+            <div class="settings-row-icon">💾</div>
+            <div class="settings-row-content">
+              <div class="settings-row-title">Exporter sauvegarde</div>
+              <div class="settings-row-value">Fichier JSON téléchargeable</div>
+            </div>
+            <span class="settings-row-chevron">›</span>
+          </div>
+          <div class="settings-row" data-action="import-data">
+            <div class="settings-row-icon">📥</div>
+            <div class="settings-row-content">
+              <div class="settings-row-title">Importer sauvegarde</div>
+              <div class="settings-row-value">Restaurer un fichier JSON</div>
+            </div>
+            <span class="settings-row-chevron">›</span>
+          </div>
+          <div class="settings-row" data-action="reset-data">
+            <div class="settings-row-icon" style="background:var(--danger-bg);color:var(--danger)">🗑</div>
+            <div class="settings-row-content">
+              <div class="settings-row-title" style="color:var(--danger)">Effacer toutes les données</div>
+              <div class="settings-row-value">Action irréversible</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="text-center" style="padding:24px 0;font-size:11px;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace">
+        Astreintes AMI2S v2.0<br>
+        ${state.dossiers.length} dossier(s) • ${new Date().toISOString().substring(0,10)}
+      </div>
+    </div>
+    
+    ${renderBottomNav()}
+  `;
+}
+
+// ----- STATS -----
+function renderStats() {
+  const week = getAstreinteWeek();
+  const weekDossiers = getWeekDossiers(0);
+  const totalKm = weekDossiers.reduce((s, d) => s + (parseFloat(d.km) || 0), 0);
+  let totalMs = 0;
+  weekDossiers.forEach(d => {
+    if (d.departDomicile && d.retourDomicile) totalMs += diffMs(d.departDomicile, d.retourDomicile);
+  });
+  const interventions = weekDossiers.filter(d => d.type === 'deplacement').length;
+  const appels = weekDossiers.filter(d => d.type === 'telephone').length;
+  
+  return `
+    <header class="app-header">
+      <div class="header-top">
+        <div>
+          <div class="header-title">Statistiques</div>
+          <div class="header-subtitle">Semaine n°${week.weekNumber}</div>
+        </div>
+      </div>
+    </header>
+    
+    <div class="form-screen">
+      <div class="stats-grid">
+        <div class="stat-card accent">
+          <div class="stat-value">${fmtDuration(totalMs)}</div>
+          <div class="stat-label">Total payé</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">${weekDossiers.length}</div>
+          <div class="stat-label">Dossiers</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">${interventions}</div>
+          <div class="stat-label">Interventions</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">${appels}</div>
+          <div class="stat-label">Appels résolus</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">${totalKm.toFixed(0)}</div>
+          <div class="stat-label">Kilomètres</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">${state.dossiers.length}</div>
+          <div class="stat-label">Total app</div>
+        </div>
+      </div>
+      
+      <div class="section">
+        <div class="section-title">Dossiers de la semaine</div>
+        ${weekDossiers.length === 0 ? `
+          <div style="padding:24px;text-align:center;color:var(--text-tertiary);font-size:13px">
+            Aucun dossier cette semaine
+          </div>
+        ` : weekDossiers.sort((a,b) => new Date(b.dateAppel)-new Date(a.dateAppel)).map(d => `
+          <div class="detail-row">
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:600;color:var(--text);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(d.etablissement)}</div>
+              <div style="font-size:11px;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace;margin-top:2px">${fmtDateShort(d.dateAppel)} ${fmtTime(d.dateAppel)}</div>
+            </div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent);font-weight:700">
+              ${d.departDomicile && d.retourDomicile ? fmtDuration(diffMs(d.departDomicile, d.retourDomicile)) : '—'}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+    
+    ${renderBottomNav()}
+  `;
+}
+
+// ----------------------------------------------------------------------------
+// EVENTS
+// ----------------------------------------------------------------------------
+function attachListeners() {
+  $$('[data-action]').forEach(el => el.addEventListener('click', handleAction));
+  $$('[data-bind]').forEach(el => {
+    el.addEventListener('input', (e) => {
+      if (tempDossier) tempDossier[e.target.dataset.bind] = e.target.value;
+    });
+  });
+  $$('[data-bind-edit]').forEach(el => {
+    el.addEventListener('input', (e) => {
+      const d = state.dossiers.find(x => x.id === view.dossierId);
+      if (!d) return;
+      d[e.target.dataset.bindEdit] = e.target.value;
+      // Autosave avec debounce
+      if (autosaveTimer) clearTimeout(autosaveTimer);
+      autosaveTimer = setTimeout(() => {
+        saveDossier(d);
+        toast('Sauvegardé', 'success');
+      }, 800);
+    });
+  });
+}
+
+async function handleAction(e) {
+  const t = e.currentTarget;
+  const action = t.dataset.action;
+  haptic('light');
+  
+  switch (action) {
+    case 'nav':
+      view.current = t.dataset.view;
+      if (view.current === 'list') view.dossierId = null;
+      render();
+      break;
+    case 'new':
+      tempDossier = null;
+      view.current = 'new';
+      render();
+      break;
+    case 'cancel-new':
+      tempDossier = null;
+      view.current = 'list';
+      render();
+      break;
+    case 'save-new':
+      await saveNewDossier();
+      break;
+    case 'set-type':
+      if (tempDossier) { tempDossier.type = t.dataset.type; render(); }
+      break;
+    case 'set-depart':
+      if (tempDossier) { tempDossier.pointDepart = t.dataset.depart; render(); }
+      break;
+    case 'detail':
+      view.dossierId = t.dataset.id;
+      view.current = 'detail';
+      render();
+      break;
+    case 'filter':
+      view.filter = t.dataset.filter;
+      render();
+      break;
+    case 'prev-week':
+      view.weekOffset--;
+      render();
+      break;
+    case 'next-week':
+      if (view.weekOffset < 0) { view.weekOffset++; render(); }
+      break;
+    case 'ts-now':
+      await setTimestampNow(t.dataset.field);
+      break;
+    case 'edit-ts':
+      await editTimestamp(t.dataset.field);
+      break;
+    case 'pick-date':
+      await pickDate(t.dataset.field);
+      break;
+    case 'pick-time':
+      await pickTime(t.dataset.field);
+      break;
+    case 'cloture':
+      await showClotureModal();
+      break;
+    case 'cloture-tel':
+      await clotureTel();
+      break;
+    case 'reopen':
+      await reopenDossier();
+      break;
+    case 'delete':
+      await deleteDossierAction();
+      break;
+    case 'edit-dossier':
+      editDossier();
+      break;
+    case 'save-cr':
+      const d = state.dossiers.find(x => x.id === view.dossierId);
+      if (d) { await saveDossier(d); toast('Sauvegardé', 'success'); }
+      break;
+    case 'edit-setting':
+      await editSetting(t.dataset.field);
+      break;
+    case 'toggle-statut':
+      state.settings.statutSemaine = state.settings.statutSemaine === 'titulaire' ? 'suppleant' : 'titulaire';
+      await saveSettings();
+      render();
+      break;
+    case 'set-theme':
+      state.settings.theme = t.dataset.theme;
+      await saveSettings();
+      applyTheme();
+      render();
+      break;
+    case 'show-sync':
+      showSyncModal();
+      break;
+    case 'sync-now':
+      await doSync(true);
+      break;
+    case 'export-pdf':
+      generatePDF();
+      break;
+    case 'export-email-nuit':
+      generateEmailNuit();
+      break;
+    case 'export-email-custom':
+      await generateEmailCustom();
+      break;
+    case 'export-data':
+      exportData();
+      break;
+    case 'import-data':
+      importData();
+      break;
+    case 'reset-data':
+      await resetAllData();
+      break;
+    case 'show-sequence':
+      // TODO: ouvrir vue séquence
+      toast('Vue séquence à venir', 'warning');
+      break;
+  }
+}
+
+// ----------------------------------------------------------------------------
+// ACTIONS DOSSIER
+// ----------------------------------------------------------------------------
+async function saveNewDossier() {
+  if (!tempDossier || !tempDossier.etablissement || !tempDossier.type) {
+    toast('Établissement et type obligatoires', 'error');
+    return;
+  }
+  
+  tempDossier.dateAppel = roundTo5(tempDossier.dateAppel).toISOString();
+  
+  if (tempDossier.type === 'telephone') {
+    tempDossier.statut = 'cloture';
+  } else {
+    tempDossier.statut = 'intervention';
+    if (tempDossier.pointDepart === 'autre-site') {
+      const openSeq = findOpenSequence();
+      tempDossier.sequenceId = openSeq ? openSeq.sequenceId : uid();
+    } else {
+      tempDossier.sequenceId = uid();
+    }
+  }
+  
+  await saveDossier(tempDossier);
+  haptic('success');
+  toast(tempDossier.type === 'telephone' ? 'Appel enregistré' : 'Dossier créé', 'success');
+  
+  if (tempDossier.type === 'deplacement') {
+    view.dossierId = tempDossier.id;
+    view.current = 'detail';
+  } else {
+    view.current = 'list';
+  }
+  tempDossier = null;
+  render();
+}
+
+async function setTimestampNow(field) {
+  const d = state.dossiers.find(x => x.id === view.dossierId);
+  if (!d) return;
+  d[field] = roundTo5(new Date()).toISOString();
+  recalcDurations(d);
+  await saveDossier(d);
+  haptic('medium');
+  toast(`${field} : ${fmtTime(d[field])}`, 'success');
+  render();
+}
+
+async function editTimestamp(field) {
+  const d = state.dossiers.find(x => x.id === view.dossierId);
+  if (!d) return;
+  const current = d[field] ? new Date(d[field]) : new Date();
+  const newDate = await showTimePicker(current, `${field}`);
+  if (!newDate) return;
+  d[field] = roundTo5(newDate).toISOString();
+  recalcDurations(d);
+  await saveDossier(d);
+  render();
+}
+
+async function pickDate(field) {
+  const current = new Date(tempDossier[field]);
+  const newDate = await showDatePicker(current);
+  if (!newDate) return;
+  // Conserver l'heure actuelle
+  newDate.setHours(current.getHours(), current.getMinutes(), 0, 0);
+  tempDossier[field] = newDate.toISOString();
+  render();
+}
+
+async function pickTime(field) {
+  const current = new Date(tempDossier[field]);
+  const newDate = await showTimePicker(current, `Heure d'appel`);
+  if (!newDate) return;
+  tempDossier[field] = newDate.toISOString();
+  render();
+}
+
+// ----------------------------------------------------------------------------
+// PICKERS — Custom (pas de prompt !)
+// ----------------------------------------------------------------------------
+function showTimePicker(initialDate, title = 'Choisir l\'heure') {
+  return new Promise((resolve) => {
+    let h = initialDate.getHours();
+    let m = roundTo5(initialDate).getMinutes();
+    
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    
+    function renderPicker() {
+      overlay.innerHTML = `
+        <div class="modal" onclick="event.stopPropagation()">
+          <div class="modal-handle"></div>
+          <div class="modal-title">${title}</div>
+          
+          <div class="time-picker-display">
+            <div class="time-segment" id="tp-h">${h.toString().padStart(2,'0')}</div>
+            <div class="time-colon">:</div>
+            <div class="time-segment" id="tp-m">${m.toString().padStart(2,'0')}</div>
+          </div>
+          
+          <div class="time-picker-controls">
+            <div class="time-control-column">
+              <div class="time-control-label">Heures</div>
+              <div class="time-control-btns">
+                <button class="time-ctrl-btn" data-tp="h-1">−1</button>
+                <button class="time-ctrl-btn" data-tp="h+1">+1</button>
+              </div>
+            </div>
+            <div class="time-control-column">
+              <div class="time-control-label">Minutes (par 5)</div>
+              <div class="time-control-btns">
+                <button class="time-ctrl-btn" data-tp="m-5">−5</button>
+                <button class="time-ctrl-btn" data-tp="m+5">+5</button>
+              </div>
+            </div>
+          </div>
+          
+          <div class="time-quick-options">
+            <button class="time-quick" data-tp="now">Maintenant</button>
+            <button class="time-quick" data-tp="hour-back">Il y a 1h</button>
+            <button class="time-quick" data-tp="reset">Réinit.</button>
+          </div>
+          
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-secondary" style="flex:1" data-tp="cancel">Annuler</button>
+            <button class="btn btn-primary" style="flex:1" data-tp="ok">Valider</button>
+          </div>
+        </div>
+      `;
+      
+      overlay.querySelectorAll('[data-tp]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const action = e.currentTarget.dataset.tp;
+          haptic('light');
+          switch (action) {
+            case 'h+1': h = (h + 1) % 24; break;
+            case 'h-1': h = (h - 1 + 24) % 24; break;
+            case 'm+5': m += 5; if (m >= 60) { m -= 60; h = (h + 1) % 24; } break;
+            case 'm-5': m -= 5; if (m < 0) { m += 60; h = (h - 1 + 24) % 24; } break;
+            case 'now':
+              const now = roundTo5(new Date());
+              h = now.getHours(); m = now.getMinutes();
+              break;
+            case 'hour-back':
+              const back = new Date(); back.setHours(back.getHours() - 1);
+              const r = roundTo5(back);
+              h = r.getHours(); m = r.getMinutes();
+              break;
+            case 'reset':
+              h = initialDate.getHours(); m = roundTo5(initialDate).getMinutes();
+              break;
+            case 'cancel':
+              overlay.remove(); resolve(null); return;
+            case 'ok':
+              const result = new Date(initialDate);
+              result.setHours(h, m, 0, 0);
+              overlay.remove();
+              resolve(result);
+              return;
+          }
+          renderPicker();
+        });
+      });
+    }
+    
+    overlay.addEventListener('click', () => { overlay.remove(); resolve(null); });
+    document.body.appendChild(overlay);
+    renderPicker();
+  });
+}
+
+function showDatePicker(initialDate) {
+  return new Promise((resolve) => {
+    let currentMonth = new Date(initialDate.getFullYear(), initialDate.getMonth(), 1);
+    let selectedDate = new Date(initialDate);
+    
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    
+    function renderPicker() {
+      const year = currentMonth.getFullYear();
+      const month = currentMonth.getMonth();
+      const monthName = currentMonth.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+      
+      const firstDay = new Date(year, month, 1);
+      const lastDay = new Date(year, month + 1, 0);
+      const startDayOfWeek = (firstDay.getDay() + 6) % 7; // Lun = 0
+      
+      const cells = [];
+      // Jours du mois précédent
+      for (let i = startDayOfWeek - 1; i >= 0; i--) {
+        const d = new Date(year, month, -i);
+        cells.push({ date: d, otherMonth: true });
+      }
+      // Jours du mois
+      for (let d = 1; d <= lastDay.getDate(); d++) {
+        cells.push({ date: new Date(year, month, d), otherMonth: false });
+      }
+      // Jours du mois suivant (compléter)
+      while (cells.length % 7 !== 0) {
+        const lastCell = cells[cells.length - 1].date;
+        const next = new Date(lastCell); next.setDate(next.getDate() + 1);
+        cells.push({ date: next, otherMonth: true });
+      }
+      
+      const today = new Date();
+      
+      overlay.innerHTML = `
+        <div class="modal" onclick="event.stopPropagation()">
+          <div class="modal-handle"></div>
+          <div class="modal-title">Choisir une date</div>
+          
+          <div class="date-nav">
+            <button class="date-nav-btn" data-dp="prev">‹</button>
+            <div class="date-nav-title">${monthName}</div>
+            <button class="date-nav-btn" data-dp="next">›</button>
+          </div>
+          
+          <div class="date-picker-grid">
+            ${['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map(d => `<div class="date-cell header">${d}</div>`).join('')}
+            ${cells.map(c => {
+              const isToday = c.date.toDateString() === today.toDateString();
+              const isSelected = c.date.toDateString() === selectedDate.toDateString();
+              return `<button class="date-cell ${c.otherMonth ? 'other-month' : ''} ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''}" data-dp="day" data-day="${c.date.toISOString()}">${c.date.getDate()}</button>`;
+            }).join('')}
+          </div>
+          
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-secondary" style="flex:1" data-dp="cancel">Annuler</button>
+            <button class="btn btn-primary" style="flex:1" data-dp="ok">Valider</button>
+          </div>
+        </div>
+      `;
+      
+      overlay.querySelectorAll('[data-dp]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const action = e.currentTarget.dataset.dp;
+          haptic('light');
+          switch (action) {
+            case 'prev': currentMonth.setMonth(currentMonth.getMonth() - 1); renderPicker(); break;
+            case 'next': currentMonth.setMonth(currentMonth.getMonth() + 1); renderPicker(); break;
+            case 'day':
+              selectedDate = new Date(e.currentTarget.dataset.day);
+              renderPicker();
+              break;
+            case 'cancel':
+              overlay.remove(); resolve(null); break;
+            case 'ok':
+              overlay.remove(); resolve(selectedDate); break;
+          }
+        });
+      });
+    }
+    
+    overlay.addEventListener('click', () => { overlay.remove(); resolve(null); });
+    document.body.appendChild(overlay);
+    renderPicker();
+  });
+}
+
+// ----------------------------------------------------------------------------
+// MODALES MÉTIER
+// ----------------------------------------------------------------------------
+function showClotureModal() {
+  return new Promise((resolve) => {
+    const d = state.dossiers.find(x => x.id === view.dossierId);
+    if (!d || !d.departSite) { toast('Renseigne d\'abord le départ du site', 'error'); resolve(); return; }
+    
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-handle"></div>
+        <div class="modal-title">Et après ?</div>
+        <div class="modal-subtitle">Tu rentres au domicile ou tu enchaînes une autre intervention ?</div>
+        <div class="modal-choices">
+          <button class="modal-choice primary" data-cl="domicile">
+            <div class="modal-choice-icon">🏠</div>
+            <div class="modal-choice-content">
+              <div class="modal-choice-title">Je rentre au domicile</div>
+              <div class="modal-choice-desc">Saisir l'heure de retour et clôturer le dossier.</div>
+            </div>
+          </button>
+          <button class="modal-choice" data-cl="autre-site">
+            <div class="modal-choice-icon">🔗</div>
+            <div class="modal-choice-content">
+              <div class="modal-choice-title">Je vais sur un autre site</div>
+              <div class="modal-choice-desc">Le prochain dossier sera chaîné. Pas de retour domicile noté.</div>
+            </div>
+          </button>
+          <button class="modal-choice" data-cl="cancel">
+            <div class="modal-choice-icon">↩</div>
+            <div class="modal-choice-content">
+              <div class="modal-choice-title">Annuler</div>
+              <div class="modal-choice-desc">Revenir au dossier.</div>
+            </div>
+          </button>
+        </div>
+      </div>
+    `;
+    
+    overlay.querySelectorAll('[data-cl]').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const choice = e.currentTarget.dataset.cl;
+        overlay.remove();
+        
+        if (choice === 'cancel') { resolve(); return; }
+        
+        if (choice === 'domicile') {
+          const retour = await showTimePicker(new Date(), 'Heure de retour au domicile');
+          if (!retour) { resolve(); return; }
+          d.retourDomicile = roundTo5(retour).toISOString();
+          d.statut = 'cloture';
+          recalcDurations(d);
+          await saveDossier(d);
+          haptic('success');
+          toast(`Clôturé • ${d.totalTrajetCalcule} payés`, 'success');
+        } else if (choice === 'autre-site') {
+          d.statut = 'cloture';
+          recalcDurations(d);
+          await saveDossier(d);
+          haptic('medium');
+          toast('Clôturé • Chaînage actif', 'success');
+          view.current = 'list';
+          view.dossierId = null;
+        }
+        render();
+        resolve();
+      });
+    });
+    
+    overlay.addEventListener('click', () => { overlay.remove(); resolve(); });
+    document.body.appendChild(overlay);
+  });
+}
+
+async function clotureTel() {
+  const d = state.dossiers.find(x => x.id === view.dossierId);
+  if (!d) return;
+  d.statut = 'cloture';
+  await saveDossier(d);
+  haptic('success');
+  toast('Marqué comme résolu', 'success');
+  render();
+}
+
+async function reopenDossier() {
+  const d = state.dossiers.find(x => x.id === view.dossierId);
+  if (!d) return;
+  
+  const confirmed = await showConfirm('Annuler la clôture ?', 'L\'heure de retour domicile sera effacée si elle existe. Tu pourras reprendre les horodatages.');
+  if (!confirmed) return;
+  
+  d.statut = d.type === 'deplacement' ? 'intervention' : 'pending';
+  if (d.type === 'deplacement') {
+    d.retourDomicile = null;
+    d.totalTrajetMs = null;
+    d.totalTrajetCalcule = null;
+  }
+  await saveDossier(d);
+  toast('Dossier rouvert', 'success');
+  render();
+}
+
+async function deleteDossierAction() {
+  const d = state.dossiers.find(x => x.id === view.dossierId);
+  if (!d) return;
+  
+  const confirmed = await showConfirm('Supprimer ce dossier ?', `${d.etablissement} — Cette action est irréversible.`, 'danger');
+  if (!confirmed) return;
+  
+  await deleteDossier(d.id);
+  toast('Dossier supprimé', 'success');
+  view.dossierId = null;
+  view.current = 'list';
+  render();
+}
+
+function editDossier() {
+  const d = state.dossiers.find(x => x.id === view.dossierId);
+  if (!d) return;
+  tempDossier = { ...d, _isEdit: true };
+  view.current = 'new';
+  render();
+}
+
+function showConfirm(title, message, type = 'normal') {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-handle"></div>
+        <div class="modal-title">${escapeHtml(title)}</div>
+        <div class="modal-subtitle">${escapeHtml(message)}</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary" style="flex:1" data-cf="no">Annuler</button>
+          <button class="btn ${type === 'danger' ? 'btn-danger' : 'btn-primary'}" style="flex:1" data-cf="yes">Confirmer</button>
+        </div>
+      </div>
+    `;
+    overlay.querySelectorAll('[data-cf]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        overlay.remove();
+        resolve(e.currentTarget.dataset.cf === 'yes');
+      });
+    });
+    overlay.addEventListener('click', () => { overlay.remove(); resolve(false); });
+    document.body.appendChild(overlay);
+  });
+}
+
+function showPrompt(title, message, defaultValue = '', placeholder = '') {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-handle"></div>
+        <div class="modal-title">${escapeHtml(title)}</div>
+        ${message ? `<div class="modal-subtitle">${escapeHtml(message)}</div>` : ''}
+        <input type="text" class="form-input" id="prompt-input" value="${escapeHtml(defaultValue)}" placeholder="${escapeHtml(placeholder)}" autofocus style="margin-bottom:16px">
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary" style="flex:1" data-pr="no">Annuler</button>
+          <button class="btn btn-primary" style="flex:1" data-pr="yes">Valider</button>
+        </div>
+      </div>
+    `;
+    const input = overlay.querySelector('#prompt-input');
+    setTimeout(() => input.focus(), 100);
+    
+    overlay.querySelectorAll('[data-pr]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const yes = e.currentTarget.dataset.pr === 'yes';
+        const val = input.value;
+        overlay.remove();
+        resolve(yes ? val : null);
+      });
+    });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const val = input.value;
+        overlay.remove();
+        resolve(val);
+      }
+    });
+    overlay.addEventListener('click', () => { overlay.remove(); resolve(null); });
+    document.body.appendChild(overlay);
+  });
+}
+
+async function editSetting(field) {
+  const labels = {
+    technicien: 'Nom du technicien',
+    email: 'Mon email',
+    emailDestinataire: 'Email destinataire (CR astreinte)',
+    adresseDomicile: 'Adresse de domicile',
+    rappelHeure: 'Heure de rappel (HH:MM)'
+  };
+  const val = await showPrompt(labels[field] || field, '', state.settings[field] || '');
+  if (val === null) return;
+  state.settings[field] = val;
+  await saveSettings();
+  render();
+  toast('Réglage mis à jour', 'success');
+}
+
+// ----------------------------------------------------------------------------
+// SYNC MODAL
+// ----------------------------------------------------------------------------
+function showSyncModal() {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-handle"></div>
+      <div class="modal-title">Synchronisation Google Sheets</div>
+      <div class="modal-subtitle">Backup automatique de tes données dans une feuille Google Sheets que tu peux consulter depuis ton PC.</div>
+      
+      <div class="form-group">
+        <label class="form-label">URL Apps Script (Web App)</label>
+        <input type="url" class="form-input" id="sync-url" value="${escapeHtml(state.settings.syncUrl || '')}" placeholder="https://script.google.com/macros/s/.../exec">
+        <div class="help-text">Obtenue après déploiement du script. Voir le guide.</div>
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label">Token de sécurité</label>
+        <input type="text" class="form-input" id="sync-token" value="${escapeHtml(state.settings.syncToken || '')}" placeholder="Token défini dans le script">
+        <div class="help-text">Doit correspondre au TOKEN défini dans le code Apps Script.</div>
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label" style="display:flex;align-items:center;gap:8px">
+          <input type="checkbox" id="sync-enabled" ${state.settings.syncEnabled ? 'checked' : ''}>
+          <span>Activer la synchronisation automatique</span>
+        </label>
+      </div>
+      
+      <div style="display:flex;gap:8px;margin-top:16px">
+        <button class="btn btn-secondary" style="flex:1" data-sync="cancel">Annuler</button>
+        <button class="btn btn-primary" style="flex:1" data-sync="save">Enregistrer</button>
+      </div>
+      ${state.settings.syncEnabled && state.settings.syncUrl ? `
+        <button class="btn btn-ghost btn-block" style="margin-top:8px" data-sync="test">🔄 Tester la connexion</button>
+      ` : ''}
+    </div>
+  `;
+  
+  overlay.querySelectorAll('[data-sync]').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const action = e.currentTarget.dataset.sync;
+      if (action === 'cancel') { overlay.remove(); return; }
+      if (action === 'save') {
+        state.settings.syncUrl = $('#sync-url').value.trim();
+        state.settings.syncToken = $('#sync-token').value.trim();
+        state.settings.syncEnabled = $('#sync-enabled').checked;
+        await saveSettings();
+        overlay.remove();
+        toast('Configuration sync sauvegardée', 'success');
+        render();
+        if (state.settings.syncEnabled) doSync(true);
+      }
+      if (action === 'test') {
+        toast('Test en cours...', 'warning');
+        await doSync(true);
+      }
+    });
+  });
+  
+  overlay.addEventListener('click', () => overlay.remove());
+  document.body.appendChild(overlay);
+}
+
+// ----------------------------------------------------------------------------
+// PDF G1-0-8
+// ----------------------------------------------------------------------------
+function generatePDF() {
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    
+    const week = getAstreinteWeek();
+    const weekDossiers = getWeekDossiers(0).sort((a, b) => new Date(a.dateAppel) - new Date(b.dateAppel));
+    
+    if (weekDossiers.length === 0) {
+      toast('Aucun dossier cette semaine', 'error');
+      return;
+    }
+    
+    // Header
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.rect(10, 8, 280, 14);
+    doc.rect(10, 8, 40, 14);
+    doc.text('AMI2S', 30, 17, { align: 'center' });
+    
+    doc.setFontSize(9);
+    doc.text('G1-0-8 - Version D', 170, 13, { align: 'center' });
+    doc.setLineWidth(0.1);
+    doc.line(50, 15, 290, 15);
+    doc.setFontSize(10);
+    doc.text('Suivi des interventions de l\'astreinte Hebdomadaire', 170, 20, { align: 'center' });
+    
+    // Tech infos
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Nom du technicien : ${state.settings.technicien}`, 10, 28);
+    
+    doc.rect(220, 25, 3, 3);
+    doc.rect(245, 25, 3, 3);
+    if (state.settings.statutSemaine === 'titulaire') doc.text('X', 220.7, 27.5);
+    else doc.text('X', 245.7, 27.5);
+    doc.text('Titulaire', 225, 28);
+    doc.text('Suppléant', 250, 28);
+    
+    doc.text(`Semaine n° ${week.weekNumber} — du ${fmtDate(week.start)} au ${fmtDate(week.end)}`, 10, 33);
+    
+    // Table
+    const headers = [
+      [
+        { content: 'N°', rowSpan: 2 },
+        { content: 'Date', rowSpan: 2 },
+        { content: 'Informations client', colSpan: 3, styles: { fillColor: [176, 176, 176] } },
+        { content: 'Dépannage', colSpan: 2, styles: { fillColor: [176, 176, 176] } },
+        { content: 'Intervention sur site', colSpan: 5, styles: { fillColor: [176, 176, 176] } },
+        { content: 'Notification temps de trajets', colSpan: 3, styles: { fillColor: [176, 176, 176] } }
+      ],
+      ['N° Abonné', 'Demandeur', 'H. appel', 'Tél.', 'Site', 'Rapport N°', 'Arr. site', 'Départ site', 'Tps site', 'Km', 'Départ dom.', 'Retour dom.', 'Total trajet']
+    ];
+    
+    const rows = [];
+    let totalTrajetMs = 0;
+    let totalKm = 0;
+    
+    // Identifier les séquences
+    const seqGroups = {};
+    weekDossiers.forEach(d => {
+      if (d.sequenceId) {
+        if (!seqGroups[d.sequenceId]) seqGroups[d.sequenceId] = [];
+        seqGroups[d.sequenceId].push(d);
+      }
+    });
+    
+    weekDossiers.forEach((d, idx) => {
+      const isPhone = d.type === 'telephone';
+      let departDom = d.departDomicile ? fmtTime(d.departDomicile) : '—';
+      let retourDom = d.retourDomicile ? fmtTime(d.retourDomicile) : '—';
+      let totalTrajet = '—';
+      
+      if (d.sequenceId && seqGroups[d.sequenceId] && seqGroups[d.sequenceId].length > 1) {
+        const seq = seqGroups[d.sequenceId].sort((a,b) => new Date(a.dateAppel) - new Date(b.dateAppel));
+        const isFirst = seq[0].id === d.id;
+        const isLast = seq[seq.length - 1].id === d.id;
+        
+        if (!isFirst) departDom = 'X';
+        if (!isLast) { retourDom = 'X'; totalTrajet = 'X'; }
+        else if (d.departDomicile && d.retourDomicile) {
+          const seqFirst = seq[0];
+          const ms = diffMs(seqFirst.departDomicile, d.retourDomicile);
+          totalTrajet = fmtDuration(ms);
+          totalTrajetMs += ms;
+        }
+      } else if (d.departDomicile && d.retourDomicile) {
+        const ms = diffMs(d.departDomicile, d.retourDomicile);
+        totalTrajet = fmtDuration(ms);
+        totalTrajetMs += ms;
+      }
+      
+      if (d.km) totalKm += parseFloat(d.km) || 0;
+      
+      rows.push([
+        idx + 1,
+        fmtDateShort(d.dateAppel),
+        d.codeAstreinte || '',
+        d.demandeur || '',
+        fmtTime(d.dateAppel),
+        isPhone ? '✓' : '',
+        !isPhone ? '✓' : '',
+        d.rapportN || (isPhone ? '—' : ''),
+        d.arriveeSite ? fmtTime(d.arriveeSite) : (isPhone ? '—' : ''),
+        d.departSite ? fmtTime(d.departSite) : (isPhone ? '—' : ''),
+        d.tempsSiteCalcule || (isPhone ? '—' : ''),
+        d.km || (isPhone ? '—' : ''),
+        departDom, retourDom, totalTrajet
+      ]);
+    });
+    
+    while (rows.length < 18) {
+      rows.push([rows.length + 1, '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
+    }
+    
+    rows.push([
+      { content: 'TOTAL HEBDOMADAIRE', colSpan: 11, styles: { fillColor: [136,136,136], textColor: [255,255,255], fontStyle: 'bold', halign: 'right' } },
+      { content: `${totalKm.toFixed(0)} km`, colSpan: 3, styles: { fillColor: [136,136,136], textColor: [255,255,255], fontStyle: 'bold', halign: 'center' } },
+      { content: fmtDuration(totalTrajetMs), styles: { fillColor: [136,136,136], textColor: [255,255,255], fontStyle: 'bold', halign: 'center' } }
+    ]);
+    
+    doc.autoTable({
+      head: headers, body: rows, startY: 36, theme: 'grid',
+      styles: { fontSize: 6.5, cellPadding: 1, valign: 'middle', halign: 'center' },
+      headStyles: { fillColor: [208,208,208], textColor: [0,0,0], fontSize: 6.5, fontStyle: 'bold' },
+      columnStyles: {
+        0: { cellWidth: 6 }, 1: { cellWidth: 14 }, 2: { cellWidth: 20 },
+        3: { cellWidth: 22 }, 4: { cellWidth: 13 }, 5: { cellWidth: 8 },
+        6: { cellWidth: 8 }, 7: { cellWidth: 20 }, 8: { cellWidth: 13 },
+        9: { cellWidth: 13 }, 10: { cellWidth: 13 }, 11: { cellWidth: 10 },
+        12: { cellWidth: 16 }, 13: { cellWidth: 16 }, 14: { cellWidth: 18 }
+      },
+      margin: { left: 10, right: 10 }
+    });
+    
+    const finalY = doc.lastAutoTable.finalY + 4;
+    doc.setFontSize(6);
+    doc.setFont('helvetica', 'italic');
+    doc.text('* Mention obligatoire — En cas d\'impossibilité d\'intervention du titulaire, celui-ci doit appeler son suppléant dans l\'heure qui suit l\'appel du client !!!', 10, finalY);
+    
+    const valY = finalY + 3;
+    const valW = 67;
+    const valH = 26;
+    for (let i = 0; i < 4; i++) doc.rect(10 + i * (valW + 3), valY, valW, valH);
+    
+    doc.setFontSize(6.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Étape n°1\nValidation du Salarié', 10 + valW/2, valY + 4, { align: 'center' });
+    doc.text('Étape n°2\nContrôle Agent Administratif', 10 + valW + 3 + valW/2, valY + 4, { align: 'center' });
+    doc.text('Étape n°3\nValidation Responsable Service', 10 + 2*(valW + 3) + valW/2, valY + 4, { align: 'center' });
+    doc.text('Étape n°4\nRéception Service RH', 10 + 3*(valW + 3) + valW/2, valY + 4, { align: 'center' });
+    
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6);
+    for (let i = 0; i < 4; i++) {
+      doc.text('Date :', 12 + i * (valW + 3), valY + 18);
+      if (i < 3) doc.text('Signature :', 12 + i * (valW + 3), valY + 23);
+    }
+    
+    const filename = `G1-0-8_S${week.weekNumber}_${(state.settings.technicien || 'tech').replace(/\s+/g, '_')}.pdf`;
+    doc.save(filename);
+    haptic('success');
+    toast(`PDF généré : ${filename}`, 'success');
+  } catch (err) {
+    console.error(err);
+    toast('Erreur génération PDF', 'error');
+  }
+}
+
+// ----------------------------------------------------------------------------
+// EMAIL EXPORT
+// ----------------------------------------------------------------------------
+function generateEmailNuit() {
+  const now = new Date();
+  const today8h = new Date(now); today8h.setHours(8, 0, 0, 0);
+  const yesterday18h = new Date(today8h); yesterday18h.setDate(yesterday18h.getDate() - 1); yesterday18h.setHours(18, 0, 0, 0);
+  
+  const dossiers = state.dossiers.filter(d => {
+    const dt = new Date(d.dateAppel);
+    return dt >= yesterday18h && dt <= today8h;
+  }).sort((a, b) => new Date(a.dateAppel) - new Date(b.dateAppel));
+  
+  buildEmail(dossiers, `CR Astreinte — Nuit du ${fmtDate(yesterday18h)} au ${fmtDate(today8h)}`);
+}
+
+async function generateEmailCustom() {
+  const start = await showPrompt('Date de début', 'Format JJ/MM/AAAA', fmtDate(new Date()));
+  if (!start) return;
+  const end = await showPrompt('Date de fin', 'Format JJ/MM/AAAA', fmtDate(new Date()));
+  if (!end) return;
+  
+  try {
+    const [d1, m1, y1] = start.split('/');
+    const [d2, m2, y2] = end.split('/');
+    const startDate = new Date(y1, m1-1, d1, 0, 0);
+    const endDate = new Date(y2, m2-1, d2, 23, 59);
+    
+    const dossiers = state.dossiers.filter(d => {
+      const dt = new Date(d.dateAppel);
+      return dt >= startDate && dt <= endDate;
+    }).sort((a, b) => new Date(a.dateAppel) - new Date(b.dateAppel));
+    
+    buildEmail(dossiers, `CR Astreinte — Du ${fmtDate(startDate)} au ${fmtDate(endDate)}`);
+  } catch (e) {
+    toast('Format de date invalide', 'error');
+  }
+}
+
+function buildEmail(dossiers, subject) {
+  if (dossiers.length === 0) { toast('Aucun dossier sur cette période', 'error'); return; }
+  
+  let body = `Bonjour,\n\nVeuillez trouver ci-dessous le compte-rendu d'astreinte.\n\n`;
+  body += `══════════════════════════════════════\n`;
+  
+  dossiers.forEach((d, i) => {
+    body += `\n[${i + 1}] ${fmtDateShort(d.dateAppel)} • ${fmtTime(d.dateAppel)} — ${d.etablissement}\n`;
+    if (d.codeAstreinte) body += `    Code : ${d.codeAstreinte}\n`;
+    if (d.demandeur) body += `    Demandeur : ${d.demandeur}\n`;
+    if (d.motif) body += `    Motif : ${d.motif}\n`;
+    if (d.type === 'telephone') {
+      body += `    ✓ Résolu par téléphone\n`;
+    } else {
+      body += `    ✓ Intervention sur site\n`;
+      if (d.departDomicile) body += `    Départ domicile : ${fmtTime(d.departDomicile)}\n`;
+      if (d.arriveeSite) body += `    Arrivée site : ${fmtTime(d.arriveeSite)}\n`;
+      if (d.departSite) body += `    Départ site : ${fmtTime(d.departSite)}\n`;
+      if (d.retourDomicile) body += `    Retour domicile : ${fmtTime(d.retourDomicile)}\n`;
+      if (d.totalTrajetCalcule) body += `    ⏱ Total payé : ${d.totalTrajetCalcule}\n`;
+      if (d.km) body += `    📏 Distance : ${d.km} km\n`;
+      if (d.rapportN) body += `    📝 Rapport : ${d.rapportN}\n`;
+      if (d.compteRendu) body += `    Compte-rendu : ${d.compteRendu}\n`;
+    }
+  });
+  
+  let totalMs = 0, totalKm = 0;
+  dossiers.forEach(d => {
+    if (d.departDomicile && d.retourDomicile) totalMs += diffMs(d.departDomicile, d.retourDomicile);
+    if (d.km) totalKm += parseFloat(d.km) || 0;
+  });
+  
+  body += `\n══════════════════════════════════════\n\n`;
+  body += `RÉCAPITULATIF :\n`;
+  body += `• ${dossiers.length} dossier(s)\n`;
+  body += `• ${dossiers.filter(d => d.type === 'deplacement').length} intervention(s)\n`;
+  body += `• Total payé : ${fmtDuration(totalMs)}\n`;
+  body += `• Distance totale : ${totalKm.toFixed(0)} km\n`;
+  body += `\nCordialement,\n${state.settings.technicien}`;
+  
+  const mailto = `mailto:${state.settings.emailDestinataire}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  navigator.clipboard.writeText(body).then(() => toast('Texte copié + Outlook ouvert', 'success'))
+    .catch(() => toast('Outlook ouvert', 'success'));
+  window.location.href = mailto;
+}
+
+// ----------------------------------------------------------------------------
+// DATA IMPORT/EXPORT
+// ----------------------------------------------------------------------------
+function exportData() {
+  const data = JSON.stringify({ settings: state.settings, dossiers: state.dossiers, exportedAt: new Date().toISOString() }, null, 2);
+  const blob = new Blob([data], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `astreintes_backup_${new Date().toISOString().substring(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('Sauvegarde téléchargée', 'success');
+}
+
+function importData() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json';
+  input.onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const data = JSON.parse(e.target.result);
+        const confirmed = await showConfirm('Restaurer ?', `${data.dossiers?.length || 0} dossiers à importer. Les données actuelles seront remplacées.`, 'danger');
+        if (!confirmed) return;
+        
+        await dbClear('dossiers');
+        if (data.settings) {
+          state.settings = { ...DEFAULT_SETTINGS, ...data.settings };
+          await saveSettings();
+        }
+        state.dossiers = [];
+        if (data.dossiers) {
+          for (const d of data.dossiers) {
+            await dbPut('dossiers', d);
+            state.dossiers.push(d);
+          }
+        }
+        toast('Données restaurées', 'success');
+        applyTheme();
+        render();
+      } catch (err) {
+        toast('Fichier invalide', 'error');
+      }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+}
+
+async function resetAllData() {
+  const c1 = await showConfirm('Tout effacer ?', 'Tous les dossiers et réglages seront supprimés.', 'danger');
+  if (!c1) return;
+  const c2 = await showConfirm('Vraiment sûr ?', 'Cette action est définitive.', 'danger');
+  if (!c2) return;
+  
+  await dbClear('dossiers');
+  await dbClear('settings');
+  state = { settings: { ...DEFAULT_SETTINGS }, dossiers: [] };
+  view = { current: 'list', filter: 'all', dossierId: null, weekOffset: 0 };
+  applyTheme();
+  render();
+  toast('Données effacées', 'success');
+}
+
+// ----------------------------------------------------------------------------
+// TOAST
+// ----------------------------------------------------------------------------
+function toast(message, type = 'info') {
+  const container = $('#toasts');
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = (type === 'success' ? '✓ ' : type === 'error' ? '✕ ' : '') + escapeHtml(message);
+  container.appendChild(el);
+  setTimeout(() => {
+    el.style.opacity = '0';
+    el.style.transition = 'opacity 0.3s';
+    setTimeout(() => el.remove(), 300);
+  }, 2500);
+}
+
+// ----------------------------------------------------------------------------
+// INIT
+// ----------------------------------------------------------------------------
+async function init() {
+  try {
+    await loadState();
+    render();
+    
+    // Service worker pour PWA
+    if ('serviceWorker' in navigator) {
+      const swCode = `
+        self.addEventListener('install', e => self.skipWaiting());
+        self.addEventListener('activate', e => self.clients.claim());
+      `;
+      const swBlob = new Blob([swCode], { type: 'application/javascript' });
+      navigator.serviceWorker.register(URL.createObjectURL(swBlob)).catch(() => {});
+    }
+    
+    // Notification de rappel
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+    
+    // Sync au démarrage si configuré
+    if (state.settings.syncEnabled && state.settings.syncUrl) {
+      setTimeout(() => doSync(), 2000);
+    }
+  } catch (err) {
+    console.error('Init error', err);
+    document.body.innerHTML = '<div style="padding:40px;text-align:center;color:#ef4444">Erreur d\'initialisation : ' + err.message + '</div>';
+  }
+}
+
+init();
+</script>
+</body>
+</html>
