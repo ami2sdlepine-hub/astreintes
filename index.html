@@ -2067,9 +2067,8 @@ function renderNewDossier() {
 }
 
 function renderDeplacement(d) {
-  const openSeq = findOpenSequence();
-  const previousSite = openSeq && openSeq.dossiers.length > 0 ? 
-    openSeq.dossiers.sort((a,b) => new Date(b.dateAppel) - new Date(a.dateAppel))[0] : null;
+  // Exclure le dossier en cours (si édition) pour trouver le bon "site précédent"
+  const previousSite = findPreviousSiteInSequence(d.id);
   
   return `
     <div class="section">
@@ -2609,7 +2608,7 @@ function renderSettings() {
       </div>
       
       <div class="text-center" style="padding:24px 0;font-size:11px;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace">
-        Astreintes AMI2S v2.6<br>
+        Astreintes AMI2S v2.7<br>
         ${state.dossiers.length} dossier(s) • ${new Date().toISOString().substring(0,10)}
       </div>
     </div>
@@ -3583,6 +3582,8 @@ async function calculateDistance() {
   }
   
   const destination = workingDossier.adresseSite;
+  // L'ID du dossier en cours d'édition (pour l'exclure de la recherche du site précédent)
+  const currentDossierId = workingDossier.id;
   
   if (!state.settings.syncUrl || !state.settings.syncToken) {
     toast('Configure d\'abord la sync Apps Script dans Réglages', 'error');
@@ -3600,7 +3601,7 @@ async function calculateDistance() {
     }
     await performDistanceCalc(state.settings.adresseDomicile, destination, workingDossier, isExisting);
   } else if (pointDepart === 'autre-site') {
-    await showChainOriginModal(destination, workingDossier, isExisting);
+    await showChainOriginModal(destination, workingDossier, isExisting, currentDossierId);
   } else {
     await showOtherLocationModal(destination, workingDossier, isExisting);
   }
@@ -3658,42 +3659,60 @@ async function performDistanceCalc(origin, destination, dossier, isExisting) {
   }
 }
 
-// Modale pour le chaînage : choisir entre site précédent ou GPS
-async function showChainOriginModal(destination, dossier, isExisting) {
-  // Chercher le dossier précédent dans la séquence (avec adresse)
-  const previousSite = findPreviousSiteInSequence();
-  const hasAddress = previousSite && previousSite.adresseSite && previousSite.adresseSite.trim();
+// Modale pour le chaînage : choisir entre sites précédents ou GPS
+async function showChainOriginModal(destination, dossier, isExisting, currentDossierId) {
+  // Récupérer tous les sites de la séquence (hors dossier en cours d'édition)
+  const candidates = findPreviousSitesInSequence(currentDossierId);
+  
+  // Pour le cas où il n'y a aucun candidat avec adresse mais qu'il y en a au moins un sans adresse
+  const fallback = candidates.length === 0 ? findPreviousSiteInSequence(currentDossierId) : null;
+  const hasFallbackWithoutAddress = fallback && (!fallback.adresseSite || !fallback.adresseSite.trim());
   
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
+  
+  // Construire la liste des sites candidats
+  let sitesHtml = '';
+  if (candidates.length > 0) {
+    sitesHtml = candidates.map((site, idx) => `
+      <button class="modal-choice ${idx === 0 ? 'primary' : ''}" data-co="site" data-site-id="${site.id}">
+        <div class="modal-choice-icon">🔗</div>
+        <div class="modal-choice-content">
+          <div class="modal-choice-title">${escapeHtml(site.etablissement)}</div>
+          <div class="modal-choice-desc">${escapeHtml(site.adresseSite)} <span style="opacity:0.6">• ${fmtDateShort(site.dateAppel)} ${fmtTime(site.dateAppel)}</span></div>
+        </div>
+      </button>
+    `).join('');
+  } else if (hasFallbackWithoutAddress) {
+    sitesHtml = `
+      <div class="modal-choice" style="opacity:0.6;cursor:not-allowed">
+        <div class="modal-choice-icon">⚠️</div>
+        <div class="modal-choice-content">
+          <div class="modal-choice-title">${escapeHtml(fallback.etablissement)}</div>
+          <div class="modal-choice-desc">Pas d'adresse renseignée → utilise GPS ou saisie manuelle</div>
+        </div>
+      </div>
+    `;
+  }
+  
+  const subtitle = candidates.length > 1 
+    ? `${candidates.length} sites possibles. Choisis depuis lequel tu pars :`
+    : candidates.length === 1
+    ? 'Tu es en mode chaînage. D\'où viens-tu exactement ?'
+    : 'Aucun site précédent avec adresse trouvé. Choisis une autre option :';
+  
   overlay.innerHTML = `
     <div class="modal" onclick="event.stopPropagation()">
       <div class="modal-handle"></div>
       <div class="modal-title">D'où pars-tu ?</div>
-      <div class="modal-subtitle">Tu es en mode chaînage. D'où viens-tu exactement ?</div>
+      <div class="modal-subtitle">${subtitle}</div>
       <div class="modal-choices">
-        ${hasAddress ? `
-          <button class="modal-choice primary" data-co="previous">
-            <div class="modal-choice-icon">🔗</div>
-            <div class="modal-choice-content">
-              <div class="modal-choice-title">Du site précédent</div>
-              <div class="modal-choice-desc">${escapeHtml(previousSite.etablissement)} — ${escapeHtml(previousSite.adresseSite)}</div>
-            </div>
-          </button>
-        ` : previousSite ? `
-          <div class="modal-choice" style="opacity:0.6;cursor:not-allowed">
-            <div class="modal-choice-icon">⚠️</div>
-            <div class="modal-choice-content">
-              <div class="modal-choice-title">Site précédent : ${escapeHtml(previousSite.etablissement)}</div>
-              <div class="modal-choice-desc">Pas d'adresse renseignée → utilise GPS ou saisie manuelle</div>
-            </div>
-          </div>
-        ` : ''}
-        <button class="modal-choice ${hasAddress ? '' : 'primary'}" data-co="gps">
+        ${sitesHtml}
+        <button class="modal-choice ${candidates.length === 0 ? 'primary' : ''}" data-co="gps">
           <div class="modal-choice-icon">📍</div>
           <div class="modal-choice-content">
             <div class="modal-choice-title">Ma position GPS</div>
-            <div class="modal-choice-desc">Utiliser le GPS du téléphone pour déterminer où je suis maintenant</div>
+            <div class="modal-choice-desc">Utiliser le GPS du téléphone</div>
           </div>
         </button>
         <button class="modal-choice" data-co="manual">
@@ -3717,12 +3736,16 @@ async function showChainOriginModal(destination, dossier, isExisting) {
   overlay.querySelectorAll('[data-co]').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       const choice = e.currentTarget.dataset.co;
+      const siteId = e.currentTarget.dataset.siteId;
       overlay.remove();
       
       if (choice === 'cancel') return;
       
-      if (choice === 'previous' && hasAddress) {
-        await performDistanceCalc(previousSite.adresseSite, destination, dossier, isExisting);
+      if (choice === 'site' && siteId) {
+        const selectedSite = candidates.find(s => s.id === siteId);
+        if (selectedSite) {
+          await performDistanceCalc(selectedSite.adresseSite, destination, dossier, isExisting);
+        }
       } else if (choice === 'gps') {
         const gpsAddress = await getCurrentLocation();
         if (gpsAddress) {
@@ -3795,21 +3818,33 @@ async function showOtherLocationModal(destination, dossier, isExisting) {
   document.body.appendChild(overlay);
 }
 
-// Trouver le site précédent dans la séquence ouverte, qui a une adresse renseignée
-function findPreviousSiteInSequence() {
+// Trouver TOUS les sites possibles dans la séquence ouverte (pour choix manuel si plusieurs)
+// excludeId = ID du dossier en cours d'édition (à exclure de la liste)
+function findPreviousSitesInSequence(excludeId = null) {
   const openSeq = findOpenSequence();
-  if (!openSeq || openSeq.dossiers.length === 0) return null;
+  if (!openSeq || openSeq.dossiers.length === 0) return [];
   
-  // 1. Cherche le plus récent qui a une adresse renseignée (priorité)
-  const sortedSites = [...openSeq.dossiers]
+  // Exclure le dossier en cours d'édition, ne garder que les déplacements avec adresse
+  const candidates = openSeq.dossiers
+    .filter(d => d.id !== excludeId)
     .filter(d => d.type === 'deplacement' && d.adresseSite && d.adresseSite.trim())
     .sort((a, b) => new Date(b.dateAppel) - new Date(a.dateAppel));
   
-  if (sortedSites.length > 0) return sortedSites[0];
+  return candidates;
+}
+
+// Trouver le site précédent le plus probable (le plus récent avec adresse, hors dossier en cours)
+function findPreviousSiteInSequence(excludeId = null) {
+  const candidates = findPreviousSitesInSequence(excludeId);
+  if (candidates.length > 0) return candidates[0];
   
-  // 2. Fallback : retourne le plus récent même sans adresse
-  // (le code appelant gérera le cas adresse vide)
-  return [...openSeq.dossiers].sort((a, b) => new Date(b.dateAppel) - new Date(a.dateAppel))[0];
+  // Fallback : retourner le plus récent sans adresse (pour info dans message)
+  const openSeq = findOpenSequence();
+  if (!openSeq) return null;
+  const allOthers = openSeq.dossiers
+    .filter(d => d.id !== excludeId)
+    .sort((a, b) => new Date(b.dateAppel) - new Date(a.dateAppel));
+  return allOthers[0] || null;
 }
 
 // Géolocalisation + reverse geocoding
