@@ -1742,20 +1742,38 @@ function getBadge(d) {
 }
 
 function findOpenSequence() {
-  // Cherche un dossier sans retour domicile mais avec départ
-  const openDossiers = state.dossiers.filter(d =>
-    d.departDomicile && !d.retourDomicile && d.sequenceId
-  );
-  if (openDossiers.length === 0) return null;
+  // Logique V2.5 plus tolérante : un dossier "ouvert" est :
+  // - en statut "intervention" (en cours), OU
+  // - clôturé avec retourDomicile = 'X' (chaînage en cours, n'a pas encore enregistré retour)
+  // ET qui n'a PAS de retour domicile horodaté (sinon la séquence est fermée)
   
-  // Pour chaque sequenceId trouvé, vérifier qu'aucun dossier de la séquence n'a de retour
-  const candidates = new Set(openDossiers.map(d => d.sequenceId));
-  for (const seqId of candidates) {
-    const all = state.dossiers.filter(d => d.sequenceId === seqId);
-    const hasRetour = all.some(d => d.retourDomicile);
-    if (!hasRetour) return { sequenceId: seqId, dossiers: all };
+  const candidatesEnCours = state.dossiers.filter(d => 
+    d.statut === 'intervention' && d.retourDomicile !== 'X' && !d.retourDomicile && d.type === 'deplacement'
+  );
+  
+  const candidatesChaines = state.dossiers.filter(d =>
+    d.retourDomicile === 'X' && d.type === 'deplacement'
+  );
+  
+  const allCandidates = [...candidatesEnCours, ...candidatesChaines];
+  if (allCandidates.length === 0) return null;
+  
+  // Si on a plusieurs candidats avec des sequenceId différents, prendre le plus récent
+  const sortedByDate = allCandidates.sort((a, b) => new Date(b.dateAppel) - new Date(a.dateAppel));
+  const latestDossier = sortedByDate[0];
+  
+  // Récupérer tous les dossiers de la même séquence
+  const seqId = latestDossier.sequenceId;
+  if (!seqId) {
+    return { sequenceId: latestDossier.id, dossiers: [latestDossier] };
   }
-  return null;
+  
+  // Vérifier qu'aucun dossier de la séquence n'a un retour domicile horodaté
+  const seqDossiers = state.dossiers.filter(d => d.sequenceId === seqId);
+  const hasRealRetour = seqDossiers.some(d => d.retourDomicile && d.retourDomicile !== 'X');
+  if (hasRealRetour) return null;
+  
+  return { sequenceId: seqId, dossiers: seqDossiers };
 }
 
 function recalcDurations(d) {
@@ -2050,6 +2068,9 @@ function renderNewDossier() {
 
 function renderDeplacement(d) {
   const openSeq = findOpenSequence();
+  const previousSite = openSeq && openSeq.dossiers.length > 0 ? 
+    openSeq.dossiers.sort((a,b) => new Date(b.dateAppel) - new Date(a.dateAppel))[0] : null;
+  
   return `
     <div class="section">
       <div class="section-title">📍 D'où pars-tu ?</div>
@@ -2062,16 +2083,16 @@ function renderDeplacement(d) {
             <div class="radio-subtitle">${state.settings.adresseDomicile || 'Adresse à configurer dans Réglages'}</div>
           </div>
         </div>
-        ${openSeq ? `
-          <div class="radio-option ${d.pointDepart === 'autre-site' ? 'selected' : ''}" data-action="set-depart" data-depart="autre-site">
-            <div class="radio-dot"></div>
-            <span class="radio-icon">🔗</span>
-            <div class="radio-content">
-              <div class="radio-title">Depuis un autre site (chaînage)</div>
-              <div class="radio-subtitle">Tu enchaînes une intervention</div>
-            </div>
+        <div class="radio-option ${d.pointDepart === 'autre-site' ? 'selected' : ''}" data-action="set-depart" data-depart="autre-site">
+          <div class="radio-dot"></div>
+          <span class="radio-icon">🔗</span>
+          <div class="radio-content">
+            <div class="radio-title">Depuis un autre site (chaînage)</div>
+            <div class="radio-subtitle">${previousSite ? 
+              'Tu enchaînes après : ' + escapeHtml(previousSite.etablissement) :
+              'Tu viens d\'un autre site (sera marqué chaînage)'}</div>
           </div>
-        ` : ''}
+        </div>
         <div class="radio-option ${d.pointDepart === 'autre-lieu' ? 'selected' : ''}" data-action="set-depart" data-depart="autre-lieu">
           <div class="radio-dot"></div>
           <span class="radio-icon">📌</span>
@@ -2101,8 +2122,12 @@ function renderDeplacement(d) {
           <div class="help-text">💡 Pour le calcul auto : configure la sync Apps Script</div>
         ` : !state.settings.adresseDomicile ? `
           <div class="help-text">💡 Pour le calcul auto : Réglages → Adresse domicile</div>
-        ` : `
+        ` : d.pointDepart === 'domicile' ? `
           <div class="help-text">📍 Calcul auto depuis ${state.settings.adresseDomicile}</div>
+        ` : d.pointDepart === 'autre-site' && previousSite ? `
+          <div class="help-text">📍 Calcul auto depuis le site précédent</div>
+        ` : `
+          <div class="help-text">📍 Le calcul ouvrira une modale GPS / manuel</div>
         `}
       </div>
     </div>
@@ -2577,7 +2602,7 @@ function renderSettings() {
       </div>
       
       <div class="text-center" style="padding:24px 0;font-size:11px;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace">
-        Astreintes AMI2S v2.4<br>
+        Astreintes AMI2S v2.5<br>
         ${state.dossiers.length} dossier(s) • ${new Date().toISOString().substring(0,10)}
       </div>
     </div>
@@ -2864,16 +2889,21 @@ async function saveNewDossier() {
     return;
   }
   
-  // Pas d'arrondi sur l'heure d'appel (heure exacte de l'appel)
-  // L'arrondi 5 min reste sur les horodatages d'intervention (départ/arrivée/etc.)
-  
   if (tempDossier.type === 'telephone') {
     tempDossier.statut = 'cloture';
   } else {
     tempDossier.statut = 'intervention';
     if (tempDossier.pointDepart === 'autre-site') {
       const openSeq = findOpenSequence();
-      tempDossier.sequenceId = openSeq ? openSeq.sequenceId : uid();
+      // Si une séquence est ouverte, on rejoint cette séquence
+      // Sinon on crée une nouvelle séquence ET on marque automatiquement le départ domicile à X
+      if (openSeq) {
+        tempDossier.sequenceId = openSeq.sequenceId;
+      } else {
+        tempDossier.sequenceId = uid();
+      }
+      // Auto-marquer le départ domicile à X (chaînage entrant)
+      tempDossier.departDomicile = 'X';
     } else {
       tempDossier.sequenceId = uid();
     }
@@ -2883,7 +2913,6 @@ async function saveNewDossier() {
   if (tempDossier.etablissement && !state.settings.favorisEtablissements.includes(tempDossier.etablissement)) {
     state.settings.favorisEtablissements = state.settings.favorisEtablissements || [];
     state.settings.favorisEtablissements.unshift(tempDossier.etablissement);
-    // Garder seulement les 20 plus récents
     if (state.settings.favorisEtablissements.length > 20) {
       state.settings.favorisEtablissements = state.settings.favorisEtablissements.slice(0, 20);
     }
@@ -3712,9 +3741,17 @@ function findPreviousSiteInSequence() {
   const openSeq = findOpenSequence();
   if (!openSeq || openSeq.dossiers.length === 0) return null;
   
-  // Trier par date, prendre le plus récent
-  const sorted = [...openSeq.dossiers].sort((a, b) => new Date(b.dateAppel) - new Date(a.dateAppel));
-  return sorted[0]; // Le dernier dossier ouvert de la séquence
+  // Filtrer pour ne garder que les dossiers déplacement avec une adresse site
+  const sortedSites = [...openSeq.dossiers]
+    .filter(d => d.type === 'deplacement' && d.adresseSite)
+    .sort((a, b) => new Date(b.dateAppel) - new Date(a.dateAppel));
+  
+  if (sortedSites.length === 0) {
+    // Fallback : le dernier dossier même sans adresse site
+    return [...openSeq.dossiers].sort((a, b) => new Date(b.dateAppel) - new Date(a.dateAppel))[0];
+  }
+  
+  return sortedSites[0]; // Le site le plus récent
 }
 
 // Géolocalisation + reverse geocoding
