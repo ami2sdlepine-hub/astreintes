@@ -2195,14 +2195,21 @@ function renderDetail() {
           <textarea class="form-textarea" data-bind-edit="compteRendu" placeholder="Détailler l'intervention, pièces, observations...">${escapeHtml(d.compteRendu || '')}</textarea>
         </div>
         
-        ${d.km || d.rapportN ? `
-          <div class="section">
-            <div class="section-title">📊 Données complémentaires</div>
-            ${d.rapportN ? `<div class="detail-row"><span class="detail-label">N° rapport</span><span class="detail-value mono">${escapeHtml(d.rapportN)}</span></div>` : ''}
-            ${d.km ? `<div class="detail-row"><span class="detail-label">Distance</span><span class="detail-value mono">${escapeHtml(d.km)} km</span></div>` : ''}
-            ${d.adresseSite ? `<div class="detail-row"><span class="detail-label">Adresse site</span><span class="detail-value">${escapeHtml(d.adresseSite)}</span></div>` : ''}
+      ${d.type === 'deplacement' ? `
+        <div class="section">
+          <div class="section-title">📊 Site & distance</div>
+          ${d.rapportN ? `<div class="detail-row"><span class="detail-label">N° rapport</span><span class="detail-value mono">${escapeHtml(d.rapportN)}</span></div>` : ''}
+          ${d.adresseSite ? `<div class="detail-row"><span class="detail-label">Adresse site</span><span class="detail-value">${escapeHtml(d.adresseSite)}</span></div>` : ''}
+          <div class="detail-row">
+            <span class="detail-label">Distance</span>
+            <span class="detail-value mono">${d.km ? escapeHtml(d.km) + ' km' : '—'}</span>
           </div>
-        ` : ''}
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <button class="btn btn-secondary" style="flex:1" data-action="edit-adresse-site">📍 Modifier adresse</button>
+            <button class="btn btn-primary" style="flex:1" data-action="calc-distance" ${!state.settings.syncEnabled || !d.adresseSite ? 'disabled' : ''}>📍 Calculer km</button>
+          </div>
+        </div>
+      ` : ''}
       ` : ''}
       
       <div class="section" style="display:flex;flex-direction:column;gap:8px">
@@ -2602,7 +2609,7 @@ function renderSettings() {
       </div>
       
       <div class="text-center" style="padding:24px 0;font-size:11px;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace">
-        Astreintes AMI2S v2.5<br>
+        Astreintes AMI2S v2.6<br>
         ${state.dossiers.length} dossier(s) • ${new Date().toISOString().substring(0,10)}
       </div>
     </div>
@@ -2876,6 +2883,9 @@ async function handleAction(e) {
       break;
     case 'calc-distance':
       await calculateDistance();
+      break;
+    case 'edit-adresse-site':
+      await editAdresseSite();
       break;
   }
 }
@@ -3543,11 +3553,36 @@ async function quickNew() {
   toast('⚡ Dossier en cours : choisis téléphone ou déplacement', 'success');
 }
 
+async function editAdresseSite() {
+  const d = state.dossiers.find(x => x.id === view.dossierId);
+  if (!d) return;
+  
+  const newAdresse = await showPrompt('Adresse du site', 'Saisis ou modifie l\'adresse de l\'établissement', d.adresseSite || '', 'Ex: 12 rue de Paris, 75001 Paris');
+  if (newAdresse === null) return;
+  
+  d.adresseSite = newAdresse.trim();
+  await saveDossier(d);
+  toast('Adresse mise à jour', 'success');
+  render();
+}
+
 // ----------------------------------------------------------------------------
 async function calculateDistance() {
-  if (!tempDossier) return;
+  // Déterminer sur quel dossier on travaille : tempDossier (création) ou dossier existant (détail)
+  let workingDossier = tempDossier;
+  let isExisting = false;
   
-  const destination = tempDossier.adresseSite;
+  if (!workingDossier && view.dossierId) {
+    workingDossier = state.dossiers.find(x => x.id === view.dossierId);
+    isExisting = true;
+  }
+  
+  if (!workingDossier) {
+    toast('Aucun dossier en cours', 'error');
+    return;
+  }
+  
+  const destination = workingDossier.adresseSite;
   
   if (!state.settings.syncUrl || !state.settings.syncToken) {
     toast('Configure d\'abord la sync Apps Script dans Réglages', 'error');
@@ -3556,24 +3591,27 @@ async function calculateDistance() {
   if (!destination) { toast('Saisis d\'abord l\'adresse du site', 'error'); return; }
   
   // Déterminer le point de départ selon le contexte
-  const pointDepart = tempDossier.pointDepart || 'domicile';
+  const pointDepart = workingDossier.pointDepart || 'domicile';
   
   if (pointDepart === 'domicile') {
     if (!state.settings.adresseDomicile) {
       toast('Configure ton adresse domicile dans Réglages', 'error');
       return;
     }
-    await performDistanceCalc(state.settings.adresseDomicile, destination);
+    await performDistanceCalc(state.settings.adresseDomicile, destination, workingDossier, isExisting);
   } else if (pointDepart === 'autre-site') {
-    // Chaînage : proposer le site précédent OU géolocalisation
-    await showChainOriginModal(destination);
+    await showChainOriginModal(destination, workingDossier, isExisting);
   } else {
-    // autre-lieu : géolocalisation ou saisie manuelle
-    await showOtherLocationModal(destination);
+    await showOtherLocationModal(destination, workingDossier, isExisting);
   }
 }
 
-async function performDistanceCalc(origin, destination) {
+async function performDistanceCalc(origin, destination, dossier, isExisting) {
+  if (!origin || !origin.trim()) {
+    toast('Adresse de départ vide ou invalide', 'error');
+    return;
+  }
+  
   toast('Calcul en cours...', 'warning');
   
   try {
@@ -3598,10 +3636,22 @@ async function performDistanceCalc(origin, destination) {
       return;
     }
     
-    tempDossier.km = data.distanceKm;
-    haptic('success');
-    toast(`📍 ${data.distanceKm} km (${data.durationText})`, 'success');
-    render();
+    if (!data.distanceKm || parseFloat(data.distanceKm) === 0) {
+      toast('Distance 0 km ? Vérifie tes adresses', 'warning');
+    }
+    
+    // Mettre à jour le dossier
+    if (dossier) {
+      dossier.km = data.distanceKm;
+      haptic('success');
+      toast(`📍 ${data.distanceKm} km (${data.durationText})`, 'success');
+      
+      // Si dossier déjà sauvegardé, persister la modif
+      if (isExisting) {
+        await saveDossier(dossier);
+      }
+      render();
+    }
   } catch (err) {
     console.error(err);
     toast('Erreur réseau. Vérifie ta connexion.', 'error');
@@ -3609,9 +3659,10 @@ async function performDistanceCalc(origin, destination) {
 }
 
 // Modale pour le chaînage : choisir entre site précédent ou GPS
-async function showChainOriginModal(destination) {
-  // Chercher le dossier précédent dans la séquence
+async function showChainOriginModal(destination, dossier, isExisting) {
+  // Chercher le dossier précédent dans la séquence (avec adresse)
   const previousSite = findPreviousSiteInSequence();
+  const hasAddress = previousSite && previousSite.adresseSite && previousSite.adresseSite.trim();
   
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
@@ -3621,16 +3672,24 @@ async function showChainOriginModal(destination) {
       <div class="modal-title">D'où pars-tu ?</div>
       <div class="modal-subtitle">Tu es en mode chaînage. D'où viens-tu exactement ?</div>
       <div class="modal-choices">
-        ${previousSite ? `
+        ${hasAddress ? `
           <button class="modal-choice primary" data-co="previous">
             <div class="modal-choice-icon">🔗</div>
             <div class="modal-choice-content">
               <div class="modal-choice-title">Du site précédent</div>
-              <div class="modal-choice-desc">${escapeHtml(previousSite.adresseSite || previousSite.etablissement)}</div>
+              <div class="modal-choice-desc">${escapeHtml(previousSite.etablissement)} — ${escapeHtml(previousSite.adresseSite)}</div>
             </div>
           </button>
+        ` : previousSite ? `
+          <div class="modal-choice" style="opacity:0.6;cursor:not-allowed">
+            <div class="modal-choice-icon">⚠️</div>
+            <div class="modal-choice-content">
+              <div class="modal-choice-title">Site précédent : ${escapeHtml(previousSite.etablissement)}</div>
+              <div class="modal-choice-desc">Pas d'adresse renseignée → utilise GPS ou saisie manuelle</div>
+            </div>
+          </div>
         ` : ''}
-        <button class="modal-choice" data-co="gps">
+        <button class="modal-choice ${hasAddress ? '' : 'primary'}" data-co="gps">
           <div class="modal-choice-icon">📍</div>
           <div class="modal-choice-content">
             <div class="modal-choice-title">Ma position GPS</div>
@@ -3662,16 +3721,16 @@ async function showChainOriginModal(destination) {
       
       if (choice === 'cancel') return;
       
-      if (choice === 'previous' && previousSite) {
-        await performDistanceCalc(previousSite.adresseSite || previousSite.etablissement, destination);
+      if (choice === 'previous' && hasAddress) {
+        await performDistanceCalc(previousSite.adresseSite, destination, dossier, isExisting);
       } else if (choice === 'gps') {
         const gpsAddress = await getCurrentLocation();
         if (gpsAddress) {
-          await performDistanceCalc(gpsAddress, destination);
+          await performDistanceCalc(gpsAddress, destination, dossier, isExisting);
         }
       } else if (choice === 'manual') {
         const manual = await showPrompt('Adresse de départ', 'Tape ton adresse de départ actuelle', '', 'Ex: 12 rue de Paris, 78000 Versailles');
-        if (manual) await performDistanceCalc(manual, destination);
+        if (manual) await performDistanceCalc(manual, destination, dossier, isExisting);
       }
     });
   });
@@ -3681,7 +3740,7 @@ async function showChainOriginModal(destination) {
 }
 
 // Modale pour "autre lieu" : GPS ou saisie manuelle
-async function showOtherLocationModal(destination) {
+async function showOtherLocationModal(destination, dossier, isExisting) {
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.innerHTML = `
@@ -3724,10 +3783,10 @@ async function showOtherLocationModal(destination) {
       
       if (choice === 'gps') {
         const gpsAddress = await getCurrentLocation();
-        if (gpsAddress) await performDistanceCalc(gpsAddress, destination);
+        if (gpsAddress) await performDistanceCalc(gpsAddress, destination, dossier, isExisting);
       } else if (choice === 'manual') {
         const manual = await showPrompt('Adresse de départ', 'Tape ton adresse de départ actuelle', '', 'Ex: 12 rue de Paris, 78000 Versailles');
-        if (manual) await performDistanceCalc(manual, destination);
+        if (manual) await performDistanceCalc(manual, destination, dossier, isExisting);
       }
     });
   });
@@ -3736,22 +3795,21 @@ async function showOtherLocationModal(destination) {
   document.body.appendChild(overlay);
 }
 
-// Trouver le site précédent dans la séquence ouverte
+// Trouver le site précédent dans la séquence ouverte, qui a une adresse renseignée
 function findPreviousSiteInSequence() {
   const openSeq = findOpenSequence();
   if (!openSeq || openSeq.dossiers.length === 0) return null;
   
-  // Filtrer pour ne garder que les dossiers déplacement avec une adresse site
+  // 1. Cherche le plus récent qui a une adresse renseignée (priorité)
   const sortedSites = [...openSeq.dossiers]
-    .filter(d => d.type === 'deplacement' && d.adresseSite)
+    .filter(d => d.type === 'deplacement' && d.adresseSite && d.adresseSite.trim())
     .sort((a, b) => new Date(b.dateAppel) - new Date(a.dateAppel));
   
-  if (sortedSites.length === 0) {
-    // Fallback : le dernier dossier même sans adresse site
-    return [...openSeq.dossiers].sort((a, b) => new Date(b.dateAppel) - new Date(a.dateAppel))[0];
-  }
+  if (sortedSites.length > 0) return sortedSites[0];
   
-  return sortedSites[0]; // Le site le plus récent
+  // 2. Fallback : retourne le plus récent même sans adresse
+  // (le code appelant gérera le cas adresse vide)
+  return [...openSeq.dossiers].sort((a, b) => new Date(b.dateAppel) - new Date(a.dateAppel))[0];
 }
 
 // Géolocalisation + reverse geocoding
