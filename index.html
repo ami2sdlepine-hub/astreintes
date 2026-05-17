@@ -2789,7 +2789,7 @@ function renderSettings() {
       </div>
       
       <div class="text-center" style="padding:24px 0;font-size:11px;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace">
-        Astreintes AMI2S v2.9.4<br>
+        Astreintes AMI2S v2.9.5<br>
         ${state.dossiers.length} dossier(s) • ${new Date().toISOString().substring(0,10)}
       </div>
     </div>
@@ -4355,27 +4355,38 @@ async function showOtherLocationModal(destination, dossier, isExisting) {
   document.body.appendChild(overlay);
 }
 
-// V2.9 — Tous les déplacements avec adresse sont candidats
-// Triés par récence, limite 10 pour pas saturer la modale
+// V2.9.5 — Filtre basé sur les horaires d'intervention réels (pas l'ordre d'appel)
+// Permet le chaînage même quand l'ordre des appels ≠ l'ordre des interventions
 function findPreviousSitesInSequence(excludeId = null, referenceDossier = null) {
-  // Référence : date d'appel du dossier en cours (ou maintenant si pas de référence)
-  const referenceDate = (referenceDossier && referenceDossier.dateAppel) 
-    ? new Date(referenceDossier.dateAppel) 
+  // Helper : obtenir le timestamp "principal" d'un dossier
+  // Priorité : arrivée site > départ domicile > date d'appel
+  function getDossierTimestamp(d) {
+    if (d.arriveeSite) return new Date(d.arriveeSite);
+    if (d.departDomicile && d.departDomicile !== 'X') return new Date(d.departDomicile);
+    return new Date(d.dateAppel);
+  }
+  
+  // Référence : le timestamp principal du dossier en cours
+  const referenceTimestamp = referenceDossier 
+    ? getDossierTimestamp(referenceDossier) 
     : new Date();
   
-  // Candidats : déplacement, avec adresse, ANTÉRIEUR au dossier en cours, hors dossier en cours
+  // Candidats : déplacement avec adresse, ANTÉRIEUR au dossier en cours (selon horaires)
   const candidates = state.dossiers
     .filter(d => d.id !== excludeId)
     .filter(d => d.type === 'deplacement')
     .filter(d => d.adresseSite && d.adresseSite.trim())
-    .filter(d => new Date(d.dateAppel) <= referenceDate)
-    .sort((a, b) => new Date(b.dateAppel) - new Date(a.dateAppel))
-    .slice(0, 10); // Limite 10 pour pas saturer la modale
+    .filter(d => {
+      const candidateTs = getDossierTimestamp(d);
+      return candidateTs <= referenceTimestamp;
+    })
+    .sort((a, b) => getDossierTimestamp(b) - getDossierTimestamp(a))
+    .slice(0, 10);
   
   return candidates;
 }
 
-// Le site précédent le plus probable (le plus récent)
+// Le site précédent le plus probable
 function findPreviousSiteInSequence(excludeId = null, referenceDossier = null) {
   const candidates = findPreviousSitesInSequence(excludeId, referenceDossier);
   return candidates.length > 0 ? candidates[0] : null;
