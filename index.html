@@ -2226,6 +2226,91 @@ function renderDetail() {
   const b = getBadge(d);
   const status = getDossierStatus(d);
   
+  // V2.9.4 — Détecter si ce dossier fait partie d'une séquence chaînée
+  // (a un départ ou retour à X)
+  const isInChain = d.departDomicile === 'X' || d.retourDomicile === 'X';
+  let chainInfo = null;
+  
+  if (isInChain && d.type === 'deplacement') {
+    // Reconstruire la séquence : tous les dossiers déplacement de la semaine, dans l'ordre
+    const week = getAstreinteWeek();
+    const weekDossiers = getWeekDossiers(0).filter(x => x.type === 'deplacement');
+    const sorted = [...weekDossiers].sort((a, b) => new Date(a.dateAppel) - new Date(b.dateAppel));
+    
+    // Trouver le groupe auquel appartient ce dossier
+    let currentGroup = null;
+    const groups = [];
+    
+    for (const dx of sorted) {
+      if (dx.departDomicile && dx.departDomicile !== 'X') {
+        if (currentGroup) groups.push(currentGroup);
+        currentGroup = { dossiers: [dx], firstDepart: dx.departDomicile, lastRetour: null };
+      } else if (dx.departDomicile === 'X' && currentGroup) {
+        currentGroup.dossiers.push(dx);
+      } else if (dx.departDomicile === 'X' && !currentGroup) {
+        currentGroup = { dossiers: [dx], firstDepart: null, lastRetour: null };
+      }
+      
+      if (dx.retourDomicile && dx.retourDomicile !== 'X' && currentGroup) {
+        currentGroup.lastRetour = dx.retourDomicile;
+        groups.push(currentGroup);
+        currentGroup = null;
+      }
+    }
+    if (currentGroup) groups.push(currentGroup);
+    
+    // Trouver le groupe qui contient le dossier en cours
+    const myGroup = groups.find(g => g.dossiers.some(x => x.id === d.id));
+    
+    if (myGroup && myGroup.dossiers.length > 1) {
+      function safeDiff(start, end) {
+        if (!start || !end) return 0;
+        const startDate = new Date(start);
+        const endDate = new Date(end);
+        let ms = endDate - startDate;
+        if (ms < 0) {
+          const startMin = startDate.getHours() * 60 + startDate.getMinutes();
+          const endMin = endDate.getHours() * 60 + endDate.getMinutes();
+          let diffMin = endMin - startMin;
+          if (diffMin < 0) diffMin += 24 * 60;
+          ms = diffMin * 60 * 1000;
+        }
+        if (ms > 24 * 3600 * 1000) {
+          const startMin = startDate.getHours() * 60 + startDate.getMinutes();
+          const endMin = endDate.getHours() * 60 + endDate.getMinutes();
+          let diffMin = endMin - startMin;
+          if (diffMin < 0) diffMin += 24 * 60;
+          ms = diffMin * 60 * 1000;
+        }
+        return ms;
+      }
+      
+      let totalMs = 0;
+      let statusLabel = '';
+      if (myGroup.firstDepart && myGroup.lastRetour) {
+        totalMs = safeDiff(myGroup.firstDepart, myGroup.lastRetour);
+        statusLabel = 'Total séquence (clôturée)';
+      } else if (myGroup.firstDepart) {
+        totalMs = safeDiff(myGroup.firstDepart, new Date());
+        statusLabel = 'Total séquence (en cours)';
+      }
+      
+      // Position du dossier dans la séquence
+      const myIndex = myGroup.dossiers.findIndex(x => x.id === d.id);
+      const position = myIndex === 0 ? '1er (début)' :
+                       myIndex === myGroup.dossiers.length - 1 ? `${myIndex + 1}e (fin)` :
+                       `${myIndex + 1}e (milieu)`;
+      
+      chainInfo = {
+        totalMs,
+        statusLabel,
+        nbDossiers: myGroup.dossiers.length,
+        position,
+        dossiers: myGroup.dossiers
+      };
+    }
+  }
+  
   return `
     <header class="app-header">
       <div class="header-top">
@@ -2244,6 +2329,25 @@ function renderDetail() {
         <span class="badge ${b.class}">${b.text}</span>
         <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-secondary)">${fmtDateTime(d.dateAppel)}</span>
       </div>
+      
+      ${chainInfo ? `
+        <div class="section" style="background:var(--status-chain-bg);border:1px solid var(--status-chain-border);padding:14px 16px;margin-top:12px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+            <span style="font-size:20px">🔗</span>
+            <div style="flex:1">
+              <div style="font-weight:700;color:var(--status-chain);font-size:14px">Fait partie d'une séquence chaînée</div>
+              <div style="font-size:12px;color:var(--text-secondary);margin-top:2px">Position : ${chainInfo.position} • ${chainInfo.nbDossiers} dossiers au total</div>
+            </div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--bg-elevated);border-radius:var(--radius);margin-top:6px">
+            <span style="font-size:12px;color:var(--text-secondary)">${chainInfo.statusLabel}</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-weight:700;font-size:16px;color:var(--status-chain)">${chainInfo.totalMs ? fmtDuration(chainInfo.totalMs) : '—'}</span>
+          </div>
+          <button class="btn btn-secondary" data-action="show-sequence" style="width:100%;margin-top:10px;font-size:13px">
+            🔗 Voir toute la séquence →
+          </button>
+        </div>
+      ` : ''}
       
       <div class="section">
         <div class="section-title">📋 Informations</div>
@@ -2685,7 +2789,7 @@ function renderSettings() {
       </div>
       
       <div class="text-center" style="padding:24px 0;font-size:11px;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace">
-        Astreintes AMI2S v2.9.3<br>
+        Astreintes AMI2S v2.9.4<br>
         ${state.dossiers.length} dossier(s) • ${new Date().toISOString().substring(0,10)}
       </div>
     </div>
