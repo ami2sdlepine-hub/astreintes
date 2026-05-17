@@ -2665,7 +2665,7 @@ function renderSettings() {
       </div>
       
       <div class="text-center" style="padding:24px 0;font-size:11px;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace">
-        Astreintes AMI2S v2.9<br>
+        Astreintes AMI2S v2.9.1<br>
         ${state.dossiers.length} dossier(s) • ${new Date().toISOString().substring(0,10)}
       </div>
     </div>
@@ -3602,12 +3602,26 @@ function showClotureModal() {
         if (choice === 'cancel') { resolve(); return; }
         
         if (choice === 'domicile') {
-          // On NE demande PLUS d'heure prévisionnelle
-          // Le dossier reste en "intervention" jusqu'à ce que l'utilisateur clique "Maintenant" sur Retour domicile
-          haptic('medium');
-          toast('💡 Clique sur "Maintenant" sur la ligne Retour domicile quand tu seras rentré', 'success');
-          // On garde le statut "intervention" (pas de clôture immédiate)
+          // V2.9 fix : Si retour domicile DÉJÀ rempli (saisie rétroactive), on clôture direct
+          if (d.retourDomicile && d.retourDomicile !== 'X') {
+            d.statut = 'cloture';
+            recalcDurations(d);
+            await saveDossier(d);
+            haptic('success');
+            toast(`Clôturé • ${d.totalTrajetCalcule || '—'} payés`, 'success');
+            view.current = 'list';
+            view.dossierId = null;
+          } else {
+            // Sinon (saisie temps réel) : on attend que l'utilisateur clique "Maintenant" sur le retour
+            haptic('medium');
+            toast('💡 Clique sur "Maintenant" sur la ligne Retour domicile quand tu seras rentré', 'success');
+            // On garde le statut "intervention" (pas de clôture immédiate)
+          }
         } else if (choice === 'autre-site') {
+          // Chaînage : forcer retourDomicile à X si pas déjà fait
+          if (!d.retourDomicile || d.retourDomicile !== 'X') {
+            d.retourDomicile = 'X';
+          }
           d.statut = 'cloture';
           recalcDurations(d);
           await saveDossier(d);
