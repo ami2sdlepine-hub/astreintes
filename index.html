@@ -2789,7 +2789,7 @@ function renderSettings() {
       </div>
       
       <div class="text-center" style="padding:24px 0;font-size:11px;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace">
-        Astreintes AMI2S v2.9.6<br>
+        Astreintes AMI2S v2.9.7<br>
         ${state.dossiers.length} dossier(s) • ${new Date().toISOString().substring(0,10)}
       </div>
     </div>
@@ -3022,12 +3022,13 @@ function renderSequence() {
     `;
   }
   
-  // V2.9.6 — Tri par HORAIRE D'INTERVENTION RÉEL (et non par date d'appel)
-  // Priorité : départ domicile > arrivée site > date d'appel
+  // V2.9.7 — Tri intelligent qui gère les dossiers pas encore visités
+  // Si un dossier n'a pas d'arrivée site, on le met EN DERNIER (parce que tu n'y es pas encore allé)
   function getInterventionTime(d) {
-    if (d.departDomicile && d.departDomicile !== 'X') return new Date(d.departDomicile);
     if (d.arriveeSite) return new Date(d.arriveeSite);
-    return new Date(d.dateAppel);
+    if (d.departDomicile && d.departDomicile !== 'X') return new Date(d.departDomicile);
+    // Pas encore arrivé : on met en dernier (futur lointain)
+    return new Date(9999, 11, 31);
   }
   const dossiers = [...openSeq.dossiers].sort((a, b) => getInterventionTime(a) - getInterventionTime(b));
   
@@ -4362,28 +4363,34 @@ async function showOtherLocationModal(destination, dossier, isExisting) {
   document.body.appendChild(overlay);
 }
 
-// V2.9.5 — Filtre basé sur les horaires d'intervention réels (pas l'ordre d'appel)
-// Permet le chaînage même quand l'ordre des appels ≠ l'ordre des interventions
+// V2.9.7 — Logique correcte pour déterminer "site précédent" :
+// - Si le dossier en cours a déjà une arrivée site → on ne propose que les dossiers arrivés AVANT
+// - Si le dossier en cours n'a PAS encore d'arrivée site (tu n'y es pas allé) → tous les dossiers
+//   avec une arrivée site sont automatiquement antérieurs (puisque tu n'y es pas encore allé)
 function findPreviousSitesInSequence(excludeId = null, referenceDossier = null) {
-  // Helper : obtenir le timestamp "principal" d'un dossier
-  // Priorité : arrivée site > départ domicile > date d'appel
   function getDossierTimestamp(d) {
     if (d.arriveeSite) return new Date(d.arriveeSite);
     if (d.departDomicile && d.departDomicile !== 'X') return new Date(d.departDomicile);
     return new Date(d.dateAppel);
   }
   
-  // Référence : le timestamp principal du dossier en cours
+  // Le dossier de référence est-il "pas encore arrivé sur site" ?
+  const referenceNotArrivedYet = referenceDossier && !referenceDossier.arriveeSite;
+  
   const referenceTimestamp = referenceDossier 
     ? getDossierTimestamp(referenceDossier) 
     : new Date();
   
-  // Candidats : déplacement avec adresse, ANTÉRIEUR au dossier en cours (selon horaires)
   const candidates = state.dossiers
     .filter(d => d.id !== excludeId)
     .filter(d => d.type === 'deplacement')
     .filter(d => d.adresseSite && d.adresseSite.trim())
     .filter(d => {
+      // Si le dossier en cours n'a pas encore d'arrivée site,
+      // tous les dossiers AVEC arrivée site sont candidats (tu y es déjà allé)
+      if (referenceNotArrivedYet && d.arriveeSite) return true;
+      
+      // Sinon, filtre classique : antérieur en horaire d'intervention
       const candidateTs = getDossierTimestamp(d);
       return candidateTs <= referenceTimestamp;
     })
@@ -4393,7 +4400,6 @@ function findPreviousSitesInSequence(excludeId = null, referenceDossier = null) 
   return candidates;
 }
 
-// Le site précédent le plus probable
 function findPreviousSiteInSequence(excludeId = null, referenceDossier = null) {
   const candidates = findPreviousSitesInSequence(excludeId, referenceDossier);
   return candidates.length > 0 ? candidates[0] : null;
