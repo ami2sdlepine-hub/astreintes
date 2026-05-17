@@ -2789,7 +2789,7 @@ function renderSettings() {
       </div>
       
       <div class="text-center" style="padding:24px 0;font-size:11px;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace">
-        Astreintes AMI2S v2.9.5<br>
+        Astreintes AMI2S v2.9.6<br>
         ${state.dossiers.length} dossier(s) • ${new Date().toISOString().substring(0,10)}
       </div>
     </div>
@@ -3022,7 +3022,14 @@ function renderSequence() {
     `;
   }
   
-  const dossiers = [...openSeq.dossiers].sort((a, b) => new Date(a.dateAppel) - new Date(b.dateAppel));
+  // V2.9.6 — Tri par HORAIRE D'INTERVENTION RÉEL (et non par date d'appel)
+  // Priorité : départ domicile > arrivée site > date d'appel
+  function getInterventionTime(d) {
+    if (d.departDomicile && d.departDomicile !== 'X') return new Date(d.departDomicile);
+    if (d.arriveeSite) return new Date(d.arriveeSite);
+    return new Date(d.dateAppel);
+  }
+  const dossiers = [...openSeq.dossiers].sort((a, b) => getInterventionTime(a) - getInterventionTime(b));
   
   // Calculs récap
   let totalKm = 0;
