@@ -2685,7 +2685,7 @@ function renderSettings() {
       </div>
       
       <div class="text-center" style="padding:24px 0;font-size:11px;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace">
-        Astreintes AMI2S v2.9.2<br>
+        Astreintes AMI2S v2.9.3<br>
         ${state.dossiers.length} dossier(s) • ${new Date().toISOString().substring(0,10)}
       </div>
     </div>
@@ -2700,16 +2700,45 @@ function renderStats() {
   const weekDossiers = getWeekDossiers(0);
   const totalKm = weekDossiers.reduce((s, d) => s + (parseFloat(d.km) || 0), 0);
   
-  // V2.9.2 — Calcul complet par groupes de chaînage + total combiné
-  let totalMsClos = 0;       // Séquences clôturées (figées)
-  let totalMsEnCours = 0;    // Séquences en cours (estimé jusqu'à maintenant)
+  // V2.9.3 — Algorithme tolérant aux dates incohérentes
+  // Calcul par groupes en se basant sur l'ORDRE des dossiers (par dateAppel) et non les dates des timestamps
+  let totalMsClos = 0;
+  let totalMsEnCours = 0;
   let nbSeqOuvertes = 0;
-  let earliestOpenDepart = null; // Pour afficher "depuis HH:mm"
+  let earliestOpenDepart = null;
   
-  // Tri par date pour grouper
+  // Helper pour calculer une durée avec gestion auto du passage minuit
+  function safeDiff(start, end) {
+    if (!start || !end) return 0;
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    let ms = endDate - startDate;
+    
+    // Si négatif (passage minuit avec date erronée), on prend juste les heures HH:MM et on suppose +1 jour
+    if (ms < 0) {
+      // Utiliser uniquement HH:MM:SS pour faire le calcul
+      const startMin = startDate.getHours() * 60 + startDate.getMinutes();
+      const endMin = endDate.getHours() * 60 + endDate.getMinutes();
+      let diffMin = endMin - startMin;
+      if (diffMin < 0) diffMin += 24 * 60; // Passage minuit
+      ms = diffMin * 60 * 1000;
+    }
+    
+    // Si > 24h, on suppose une mauvaise date → on prend juste les heures
+    if (ms > 24 * 3600 * 1000) {
+      const startMin = startDate.getHours() * 60 + startDate.getMinutes();
+      const endMin = endDate.getHours() * 60 + endDate.getMinutes();
+      let diffMin = endMin - startMin;
+      if (diffMin < 0) diffMin += 24 * 60;
+      ms = diffMin * 60 * 1000;
+    }
+    
+    return ms;
+  }
+  
   const sortedWeek = [...weekDossiers].sort((a, b) => new Date(a.dateAppel) - new Date(b.dateAppel));
   
-  // Parcours pour construire les "groupes de chaînage"
+  // Construction des groupes de chaînage
   let currentGroup = null;
   const groups = [];
   
@@ -2717,12 +2746,23 @@ function renderStats() {
     if (d.type !== 'deplacement') continue;
     
     if (d.departDomicile && d.departDomicile !== 'X') {
+      // Nouveau groupe
       if (currentGroup) groups.push(currentGroup);
       currentGroup = { dossiers: [d], firstDepart: d.departDomicile, lastRetour: null };
     } else if (d.departDomicile === 'X' && currentGroup) {
+      // Continuation
       currentGroup.dossiers.push(d);
     } else if (d.departDomicile === 'X' && !currentGroup) {
-      currentGroup = { dossiers: [d], firstDepart: null, lastRetour: null };
+      // Chaînage entrant orphelin : on l'ignore pour le total (incohérence de saisie)
+      continue;
+    } else if (!d.departDomicile && d.retourDomicile && d.retourDomicile !== 'X') {
+      // Cas spécial : retour rempli mais pas de départ → on l'ajoute au groupe en cours
+      if (currentGroup) {
+        currentGroup.dossiers.push(d);
+        currentGroup.lastRetour = d.retourDomicile;
+        groups.push(currentGroup);
+        currentGroup = null;
+      }
     }
     
     if (d.retourDomicile && d.retourDomicile !== 'X' && currentGroup) {
@@ -2735,9 +2775,9 @@ function renderStats() {
   
   for (const g of groups) {
     if (g.firstDepart && g.lastRetour) {
-      totalMsClos += diffMs(g.firstDepart, g.lastRetour);
+      totalMsClos += safeDiff(g.firstDepart, g.lastRetour);
     } else if (g.firstDepart && !g.lastRetour) {
-      totalMsEnCours += diffMs(g.firstDepart, new Date());
+      totalMsEnCours += safeDiff(g.firstDepart, new Date());
       nbSeqOuvertes++;
       if (!earliestOpenDepart || new Date(g.firstDepart) < new Date(earliestOpenDepart)) {
         earliestOpenDepart = g.firstDepart;
@@ -2751,7 +2791,7 @@ function renderStats() {
   
   function tempsAffiche(d, idx, arr) {
     if (d.departDomicile && d.departDomicile !== 'X' && d.retourDomicile && d.retourDomicile !== 'X') {
-      return fmtDuration(diffMs(d.departDomicile, d.retourDomicile));
+      return fmtDuration(safeDiff(d.departDomicile, d.retourDomicile));
     }
     if (d.departDomicile && d.departDomicile !== 'X' && d.retourDomicile === 'X') {
       return '🔗 début';
@@ -2780,14 +2820,14 @@ function renderStats() {
     </header>
     
     <div class="form-screen">
-      <!-- Total payé combiné — affiché en gros en haut -->
+      <!-- Total payé combiné -->
       <div class="stat-card accent" style="grid-column:1 / -1;padding:20px;margin-bottom:8px">
         <div class="stat-value" style="font-size:38px">${totalMsCombine ? fmtDuration(totalMsCombine) : '—'}</div>
         <div class="stat-label">Total payé ${nbSeqOuvertes > 0 ? '(estimé, en cours)' : ''}</div>
         ${(totalMsClos > 0 || nbSeqOuvertes > 0) ? `
           <div style="margin-top:12px;display:flex;justify-content:space-around;gap:8px;font-size:11px;font-family:'JetBrains Mono',monospace">
             <div style="flex:1;text-align:center;padding:6px;background:var(--bg-elevated);border-radius:var(--radius-sm)">
-              <div style="color:var(--status-success);font-weight:700;font-size:14px">${fmtDuration(totalMsClos) || '—'}</div>
+              <div style="color:var(--status-success);font-weight:700;font-size:14px">${totalMsClos > 0 ? fmtDuration(totalMsClos) : '—'}</div>
               <div style="color:var(--text-secondary);font-size:10px;margin-top:2px">✅ clôturé</div>
             </div>
             ${nbSeqOuvertes > 0 ? `
@@ -2805,7 +2845,6 @@ function renderStats() {
         ` : ''}
       </div>
       
-      <!-- Stats secondaires -->
       <div class="stats-grid">
         <div class="stat-card">
           <div class="stat-value">${weekDossiers.length}</div>
@@ -3251,7 +3290,55 @@ async function saveNewDossier() {
 async function setTimestampNow(field) {
   const d = state.dossiers.find(x => x.id === view.dossierId);
   if (!d) return;
-  d[field] = roundTo5(new Date()).toISOString();
+  
+  // V2.9.3 — Bug fix : pour les dossiers passés (saisie rétroactive)
+  // on prend la date d'appel du dossier au lieu de "aujourd'hui"
+  const now = new Date();
+  const dossierDate = d.dateAppel ? new Date(d.dateAppel) : null;
+  let timestamp;
+  
+  if (dossierDate) {
+    // Détecter si on est sur un dossier de plus d'1h dans le passé
+    // → on suppose saisie rétroactive → on garde la date du dossier
+    const dossierToday = new Date(dossierDate.getFullYear(), dossierDate.getMonth(), dossierDate.getDate());
+    const realToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    if (dossierToday.getTime() !== realToday.getTime()) {
+      // Saisie rétroactive : utiliser la date du dossier + heure actuelle
+      timestamp = new Date(dossierDate);
+      timestamp.setHours(now.getHours(), now.getMinutes(), 0, 0);
+      
+      // Si le retourDomicile est plus tôt que le départ → passage minuit → +1 jour
+      if (field === 'retourDomicile' && d.departDomicile && d.departDomicile !== 'X') {
+        const departDate = new Date(d.departDomicile);
+        if (timestamp < departDate) {
+          timestamp.setDate(timestamp.getDate() + 1);
+        }
+      } else if (field === 'arriveeSite' && d.departDomicile && d.departDomicile !== 'X') {
+        const departDate = new Date(d.departDomicile);
+        if (timestamp < departDate) {
+          timestamp.setDate(timestamp.getDate() + 1);
+        }
+      } else if (field === 'departSite' && d.arriveeSite) {
+        const arriveeDate = new Date(d.arriveeSite);
+        if (timestamp < arriveeDate) {
+          timestamp.setDate(timestamp.getDate() + 1);
+        }
+      } else if (field === 'retourDomicile' && d.departSite) {
+        const departSiteDate = new Date(d.departSite);
+        if (timestamp < departSiteDate) {
+          timestamp.setDate(timestamp.getDate() + 1);
+        }
+      }
+    } else {
+      // Saisie temps réel : utiliser maintenant
+      timestamp = now;
+    }
+  } else {
+    timestamp = now;
+  }
+  
+  d[field] = roundTo5(timestamp).toISOString();
   recalcDurations(d);
   
   if (field === 'retourDomicile' && d.statut === 'intervention') {
