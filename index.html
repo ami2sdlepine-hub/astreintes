@@ -1849,6 +1849,9 @@ function recalcDurations(d) {
 // ----------------------------------------------------------------------------
 // MAIN RENDER
 // ----------------------------------------------------------------------------
+// Timer pour rafraîchir Stats en temps réel (V2.9.2)
+let statsRefreshTimer = null;
+
 function render() {
   const app = $('#app');
   switch (view.current) {
@@ -1867,6 +1870,23 @@ function render() {
     requestWakeLock();
   } else {
     releaseWakeLock();
+  }
+  
+  // V2.9.2 — Rafraîchissement auto de la page Stats toutes les 60 secondes
+  // (pour mettre à jour le total estimé des séquences en cours)
+  if (statsRefreshTimer) {
+    clearInterval(statsRefreshTimer);
+    statsRefreshTimer = null;
+  }
+  if (view.current === 'stats' || view.current === 'sequence') {
+    statsRefreshTimer = setInterval(() => {
+      if (view.current === 'stats' || view.current === 'sequence') {
+        render();
+      } else {
+        clearInterval(statsRefreshTimer);
+        statsRefreshTimer = null;
+      }
+    }, 60000); // Toutes les 60 secondes
   }
 }
 
@@ -2665,7 +2685,7 @@ function renderSettings() {
       </div>
       
       <div class="text-center" style="padding:24px 0;font-size:11px;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace">
-        Astreintes AMI2S v2.9.1<br>
+        Astreintes AMI2S v2.9.2<br>
         ${state.dossiers.length} dossier(s) • ${new Date().toISOString().substring(0,10)}
       </div>
     </div>
@@ -2680,11 +2700,11 @@ function renderStats() {
   const weekDossiers = getWeekDossiers(0);
   const totalKm = weekDossiers.reduce((s, d) => s + (parseFloat(d.km) || 0), 0);
   
-  // V2.9 — Calcul correct des temps payés, gère les chaînages
-  // Regrouper les dossiers en "groupes de chaînage" et calculer un total par groupe
-  let totalMs = 0;
-  let totalMsPartiel = 0; // Compté à part : séquences ouvertes
+  // V2.9.2 — Calcul complet par groupes de chaînage + total combiné
+  let totalMsClos = 0;       // Séquences clôturées (figées)
+  let totalMsEnCours = 0;    // Séquences en cours (estimé jusqu'à maintenant)
   let nbSeqOuvertes = 0;
+  let earliestOpenDepart = null; // Pour afficher "depuis HH:mm"
   
   // Tri par date pour grouper
   const sortedWeek = [...weekDossiers].sort((a, b) => new Date(a.dateAppel) - new Date(b.dateAppel));
@@ -2697,14 +2717,11 @@ function renderStats() {
     if (d.type !== 'deplacement') continue;
     
     if (d.departDomicile && d.departDomicile !== 'X') {
-      // Début d'un nouveau groupe
       if (currentGroup) groups.push(currentGroup);
       currentGroup = { dossiers: [d], firstDepart: d.departDomicile, lastRetour: null };
     } else if (d.departDomicile === 'X' && currentGroup) {
-      // Continuation du groupe (chaînage entrant)
       currentGroup.dossiers.push(d);
     } else if (d.departDomicile === 'X' && !currentGroup) {
-      // Chaînage entrant sans groupe ouvert : isolé
       currentGroup = { dossiers: [d], firstDepart: null, lastRetour: null };
     }
     
@@ -2716,42 +2733,41 @@ function renderStats() {
   }
   if (currentGroup) groups.push(currentGroup);
   
-  // Calculer total par groupe
   for (const g of groups) {
     if (g.firstDepart && g.lastRetour) {
-      totalMs += diffMs(g.firstDepart, g.lastRetour);
+      totalMsClos += diffMs(g.firstDepart, g.lastRetour);
     } else if (g.firstDepart && !g.lastRetour) {
-      // Séquence ouverte : estime depuis le début jusqu'à maintenant
-      totalMsPartiel += diffMs(g.firstDepart, new Date());
+      totalMsEnCours += diffMs(g.firstDepart, new Date());
       nbSeqOuvertes++;
+      if (!earliestOpenDepart || new Date(g.firstDepart) < new Date(earliestOpenDepart)) {
+        earliestOpenDepart = g.firstDepart;
+      }
     }
   }
   
+  const totalMsCombine = totalMsClos + totalMsEnCours;
   const interventions = weekDossiers.filter(d => d.type === 'deplacement').length;
   const appels = weekDossiers.filter(d => d.type === 'telephone').length;
   
-  // Helper pour afficher le bon temps par dossier dans la liste
   function tempsAffiche(d, idx, arr) {
-    // Si dossier isolé (départ et retour normaux)
     if (d.departDomicile && d.departDomicile !== 'X' && d.retourDomicile && d.retourDomicile !== 'X') {
       return fmtDuration(diffMs(d.departDomicile, d.retourDomicile));
     }
-    // Si premier d'une séquence chaînée
     if (d.departDomicile && d.departDomicile !== 'X' && d.retourDomicile === 'X') {
       return '🔗 début';
     }
-    // Si milieu d'une séquence
     if (d.departDomicile === 'X' && d.retourDomicile === 'X') {
       return '🔗 milieu';
     }
-    // Si fin d'une séquence
     if (d.departDomicile === 'X' && d.retourDomicile && d.retourDomicile !== 'X') {
       return '🔗 fin';
     }
-    // Téléphone ou bureau
     if (d.type === 'telephone') return '☎';
     return '—';
   }
+  
+  const now = new Date();
+  const nowTime = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
   
   return `
     <header class="app-header">
@@ -2764,11 +2780,33 @@ function renderStats() {
     </header>
     
     <div class="form-screen">
+      <!-- Total payé combiné — affiché en gros en haut -->
+      <div class="stat-card accent" style="grid-column:1 / -1;padding:20px;margin-bottom:8px">
+        <div class="stat-value" style="font-size:38px">${totalMsCombine ? fmtDuration(totalMsCombine) : '—'}</div>
+        <div class="stat-label">Total payé ${nbSeqOuvertes > 0 ? '(estimé, en cours)' : ''}</div>
+        ${(totalMsClos > 0 || nbSeqOuvertes > 0) ? `
+          <div style="margin-top:12px;display:flex;justify-content:space-around;gap:8px;font-size:11px;font-family:'JetBrains Mono',monospace">
+            <div style="flex:1;text-align:center;padding:6px;background:var(--bg-elevated);border-radius:var(--radius-sm)">
+              <div style="color:var(--status-success);font-weight:700;font-size:14px">${fmtDuration(totalMsClos) || '—'}</div>
+              <div style="color:var(--text-secondary);font-size:10px;margin-top:2px">✅ clôturé</div>
+            </div>
+            ${nbSeqOuvertes > 0 ? `
+              <div style="flex:1;text-align:center;padding:6px;background:var(--status-chain-bg);border-radius:var(--radius-sm)">
+                <div style="color:var(--status-chain);font-weight:700;font-size:14px">${fmtDuration(totalMsEnCours)}</div>
+                <div style="color:var(--text-secondary);font-size:10px;margin-top:2px">🟠 en cours ⏱</div>
+              </div>
+            ` : ''}
+          </div>
+          ${earliestOpenDepart ? `
+            <div style="margin-top:8px;text-align:center;font-size:10px;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace">
+              Séquence en cours depuis ${fmtDate(earliestOpenDepart)} ${fmtTime(earliestOpenDepart)} • Maintenant : ${nowTime}
+            </div>
+          ` : ''}
+        ` : ''}
+      </div>
+      
+      <!-- Stats secondaires -->
       <div class="stats-grid">
-        <div class="stat-card accent">
-          <div class="stat-value">${totalMs ? fmtDuration(totalMs) : '—'}</div>
-          <div class="stat-label">Total payé (clos)</div>
-        </div>
         <div class="stat-card">
           <div class="stat-value">${weekDossiers.length}</div>
           <div class="stat-label">Dossiers</div>
@@ -2785,19 +2823,7 @@ function renderStats() {
           <div class="stat-value">${totalKm.toFixed(0)}</div>
           <div class="stat-label">Kilomètres</div>
         </div>
-        <div class="stat-card">
-          <div class="stat-value">${state.dossiers.length}</div>
-          <div class="stat-label">Total app</div>
-        </div>
       </div>
-      
-      ${nbSeqOuvertes > 0 ? `
-        <div class="section" style="background:var(--status-chain-bg);border-left:3px solid var(--status-chain);padding:12px 14px">
-          <div style="font-size:13px;color:var(--text);font-weight:600;margin-bottom:4px">⚠ ${nbSeqOuvertes} séquence${nbSeqOuvertes > 1 ? 's' : ''} en cours non clôturée${nbSeqOuvertes > 1 ? 's' : ''}</div>
-          <div style="font-size:12px;color:var(--text-secondary)">Temps estimé en cours : <b style="color:var(--status-chain)">${fmtDuration(totalMsPartiel)}</b> (depuis le départ initial)</div>
-          <div style="font-size:11px;color:var(--text-tertiary);margin-top:6px">💡 Saisis ton heure de retour domicile pour clôturer et figer le total.</div>
-        </div>
-      ` : ''}
       
       <div class="section">
         <div class="section-title">Dossiers de la semaine</div>
