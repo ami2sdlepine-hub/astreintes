@@ -1544,7 +1544,7 @@ let state = {
   dossiers: []
 };
 
-let view = { current: 'list', filter: 'all', dossierId: null, weekOffset: 0, searchQuery: '' };
+let view = { current: 'list', filter: 'all', dossierId: null, weekOffset: 0, searchQuery: '', statsWeekOffset: 0, exportWeekOffset: null };
 let tempDossier = null;
 let syncStatus = 'off'; // off, ok, pending, error
 let autosaveTimer = null;
@@ -1562,6 +1562,8 @@ async function saveSettings() {
 }
 
 async function saveDossier(d) {
+  // V2.9.9 — Nettoyer le flag _isEdit (résidu d'édition) à chaque sauvegarde
+  delete d._isEdit;
   d.updatedAt = new Date().toISOString();
   await dbPut('dossiers', d);
   // Update in memory
@@ -2576,34 +2578,63 @@ function renderTimestamp(d, field, label, icon) {
 
 // ----- EXPORT -----
 function renderExport() {
-  const week = getAstreinteWeek();
-  const weekDossiers = getWeekDossiers(0);
+  // V2.9.9 — Navigation semaines + auto-détection
+  // Si exportWeekOffset est null, on auto-détecte
+  let offset = view.exportWeekOffset;
+  if (offset === null) {
+    // Auto-détection : si la semaine actuelle est vide, on propose la précédente
+    const weekActuelle = getWeekDossiers(0);
+    offset = weekActuelle.length === 0 ? -1 : 0;
+  }
   
-  const now = new Date();
-  const today8h = new Date(now); today8h.setHours(8, 0, 0, 0);
-  const yesterday18h = new Date(today8h); yesterday18h.setDate(yesterday18h.getDate() - 1); yesterday18h.setHours(18, 0, 0, 0);
+  const baseDate = new Date();
+  baseDate.setDate(baseDate.getDate() + offset * 7);
+  const week = getAstreinteWeek(baseDate);
+  const weekDossiers = getWeekDossiers(offset);
+  
+  // === Rapport nuit/période avec jours fériés FR ===
+  const nightPeriod = computeNightPeriod();
   const nightDossiers = state.dossiers.filter(d => {
     const dt = new Date(d.dateAppel);
-    return dt >= yesterday18h && dt <= today8h;
+    return dt >= nightPeriod.start && dt <= nightPeriod.end;
   });
   
   const totalKm = weekDossiers.reduce((s, d) => s + (parseFloat(d.km) || 0), 0);
   let totalMs = 0;
   weekDossiers.forEach(d => {
-    if (d.departDomicile && d.retourDomicile) totalMs += diffMs(d.departDomicile, d.retourDomicile);
+    if (d.departDomicile && d.retourDomicile && d.departDomicile !== 'X' && d.retourDomicile !== 'X') {
+      totalMs += diffMs(d.departDomicile, d.retourDomicile);
+    }
   });
   
   return `
     <header class="app-header">
       <div class="header-top">
-        <div>
+        <div style="flex:1">
           <div class="header-title">Export</div>
           <div class="header-subtitle">PDF G1-0-8 et email Outlook</div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="icon-btn" data-action="export-prev-week" title="Semaine précédente">‹</button>
+          <button class="icon-btn" data-action="export-next-week" title="Semaine suivante" ${offset >= 0 ? 'disabled style="opacity:0.3"' : ''}>›</button>
         </div>
       </div>
     </header>
     
     <div class="form-screen">
+      <!-- Bandeau semaine sélectionnée -->
+      <div style="background:${offset !== 0 ? 'var(--status-chain-bg)' : 'var(--bg-elevated)'};border:1px solid ${offset !== 0 ? 'var(--status-chain-border)' : 'var(--border)'};border-radius:var(--radius);padding:10px 14px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:11px;color:${offset !== 0 ? 'var(--status-chain)' : 'var(--text-secondary)'};font-weight:700;text-transform:uppercase;letter-spacing:0.5px">
+            Semaine n°${week.weekNumber}${offset === 0 ? ' (actuelle)' : offset === -1 ? ' (précédente)' : ` (il y a ${-offset} sem.)`}
+          </div>
+          <div style="font-size:13px;color:var(--text);font-family:'JetBrains Mono',monospace;margin-top:2px">
+            ${fmtDateShort(week.start)} 09h → ${fmtDateShort(week.end)} 09h
+          </div>
+        </div>
+        ${offset !== 0 ? `<button data-action="export-current-week" style="font-size:12px;color:var(--accent);font-weight:600;background:none;border:none;cursor:pointer;padding:6px 10px">Actuelle</button>` : ''}
+      </div>
+      
       <div class="settings-section">
         <div class="settings-section-title">▸ G1-0-8 hebdomadaire (Service RH)</div>
         <div class="export-card pdf" data-action="export-pdf">
@@ -2620,7 +2651,7 @@ function renderExport() {
               <div class="export-stat-label">Dossiers</div>
             </div>
             <div class="export-stat">
-              <div class="export-stat-value">${fmtDuration(totalMs)}</div>
+              <div class="export-stat-value">${totalMs ? fmtDuration(totalMs) : '—'}</div>
               <div class="export-stat-label">Total payé</div>
             </div>
             <div class="export-stat">
@@ -2635,10 +2666,10 @@ function renderExport() {
         <div class="settings-section-title">▸ Email quotidien Outlook</div>
         <div class="export-card primary" data-action="export-email-nuit">
           <div class="export-card-header">
-            <div class="export-icon-box" style="background:var(--status-call-bg);color:var(--status-call)">🌙</div>
-            <div>
-              <div class="export-title">Rapport de la nuit</div>
-              <div class="export-subtitle">Hier 18h → ce matin 8h</div>
+            <div class="export-icon-box" style="background:var(--status-call-bg);color:var(--status-call)">${nightPeriod.icon}</div>
+            <div style="flex:1">
+              <div class="export-title">${nightPeriod.label}</div>
+              <div class="export-subtitle" style="font-family:'JetBrains Mono',monospace;font-size:11px">${nightPeriod.subtitle}</div>
             </div>
           </div>
           <div class="export-stats">
@@ -2651,6 +2682,9 @@ function renderExport() {
               <div class="export-stat-label">Interv.</div>
             </div>
           </div>
+          <button data-action="export-period-custom" style="margin-top:10px;width:100%;padding:8px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-secondary);font-size:12px;cursor:pointer;font-weight:500">
+            ⏰ Modifier la période
+          </button>
         </div>
         
         <div class="export-card" data-action="export-email-custom">
@@ -2667,6 +2701,179 @@ function renderExport() {
     
     ${renderBottomNav()}
   `;
+}
+
+// V2.9.9 — Calcul intelligent de la période "Rapport de la nuit"
+// Prend en compte les weekends et jours fériés français
+function computeNightPeriod() {
+  const now = new Date();
+  const today9h = new Date(now);
+  today9h.setHours(9, 0, 0, 0);
+  
+  // Si on a un override custom, on l'utilise
+  if (view.nightPeriodOverride) {
+    return view.nightPeriodOverride;
+  }
+  
+  // Calcul des jours fériés français pour l'année en cours
+  const feries = getJoursFeriesFrance(now.getFullYear());
+  
+  // On part de "ce matin 9h" (ou hier 9h si on est avant 9h ce matin)
+  let endDate = new Date(today9h);
+  if (now < today9h) {
+    // Il est avant 9h, donc le rapport va jusqu'à 9h ce matin
+    // (déjà ok)
+  }
+  
+  // Reculer pour trouver le début de la période
+  // On part du jour précédent et on remonte tant qu'on tombe sur :
+  // - Un samedi (jour 6)
+  // - Un dimanche (jour 0)
+  // - Un jour férié
+  let startDate = new Date(endDate);
+  startDate.setDate(startDate.getDate() - 1);
+  
+  // Le début de période est à 18h pour les jours de semaine, ou 17h pour le vendredi qui démarre un weekend
+  // Donc on part par défaut à 18h hier et on remonte si besoin
+  startDate.setHours(18, 0, 0, 0);
+  
+  // Tant que le jour AVANT startDate est un weekend ou férié, on recule
+  // Mais attention : si on commence par exemple le mardi, on veut juste 18h lundi
+  // Si on commence le lundi (après un weekend), on veut vendredi 17h
+  
+  let dayBefore = new Date(startDate);
+  dayBefore.setDate(dayBefore.getDate() - 1);
+  
+  while (true) {
+    const dayBeforeMidnight = new Date(dayBefore);
+    dayBeforeMidnight.setHours(0, 0, 0, 0);
+    
+    const isWeekend = dayBeforeMidnight.getDay() === 0 || dayBeforeMidnight.getDay() === 6;
+    const isFerie = isJourFerie(dayBeforeMidnight, feries);
+    
+    if (!isWeekend && !isFerie) break;
+    
+    // On recule d'un jour
+    startDate = new Date(dayBefore);
+    startDate.setHours(0, 0, 0, 0);
+    dayBefore.setDate(dayBefore.getDate() - 1);
+  }
+  
+  // Si le jour de startDate est vendredi (5), on démarre à 17h (début de weekend)
+  // Si c'est un autre jour, on démarre à 18h
+  if (startDate.getDay() === 5) {
+    startDate.setHours(17, 0, 0, 0);
+  } else {
+    startDate.setHours(18, 0, 0, 0);
+  }
+  
+  // Détecter si c'est un weekend ou une nuit simple
+  const durationHours = (endDate - startDate) / 3600000;
+  const isWeekend = durationHours > 24;
+  
+  return {
+    start: startDate,
+    end: endDate,
+    label: isWeekend ? 'Rapport du week-end' : 'Rapport de la nuit',
+    subtitle: `${fmtDateShort(startDate)} ${String(startDate.getHours()).padStart(2,'0')}h → ${fmtDateShort(endDate)} ${String(endDate.getHours()).padStart(2,'0')}h`,
+    icon: isWeekend ? '🌴' : '🌙'
+  };
+}
+
+// V2.9.9 — Jours fériés France (calcul automatique avec Pâques)
+function getJoursFeriesFrance(year) {
+  // Calcul de Pâques (algorithme de Butcher)
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  
+  const easter = new Date(year, month - 1, day);
+  
+  // Lundi de Pâques = Pâques + 1
+  const lundiPaques = new Date(easter); lundiPaques.setDate(lundiPaques.getDate() + 1);
+  // Ascension = Pâques + 39
+  const ascension = new Date(easter); ascension.setDate(ascension.getDate() + 39);
+  // Pentecôte (lundi) = Pâques + 50
+  const pentecote = new Date(easter); pentecote.setDate(pentecote.getDate() + 50);
+  
+  return [
+    new Date(year, 0, 1),    // Jour de l'an
+    lundiPaques,             // Lundi de Pâques
+    new Date(year, 4, 1),    // Fête du travail
+    new Date(year, 4, 8),    // Victoire 1945
+    ascension,               // Ascension
+    pentecote,               // Lundi de Pentecôte
+    new Date(year, 6, 14),   // Fête nationale
+    new Date(year, 7, 15),   // Assomption
+    new Date(year, 10, 1),   // Toussaint
+    new Date(year, 10, 11),  // Armistice 1918
+    new Date(year, 11, 25)   // Noël
+  ];
+}
+
+function isJourFerie(date, feries) {
+  return feries.some(f => 
+    f.getFullYear() === date.getFullYear() &&
+    f.getMonth() === date.getMonth() &&
+    f.getDate() === date.getDate()
+  );
+}
+
+// Permet à l'utilisateur de modifier la période du rapport de nuit
+async function editRapportPeriodeCustom() {
+  const current = computeNightPeriod();
+  const startStr = await showPrompt(
+    'Date/heure de début',
+    'Format : JJ/MM/AAAA HH:MM',
+    `${fmtDate(current.start)} ${String(current.start.getHours()).padStart(2,'0')}:${String(current.start.getMinutes()).padStart(2,'0')}`
+  );
+  if (!startStr) return;
+  
+  const endStr = await showPrompt(
+    'Date/heure de fin',
+    'Format : JJ/MM/AAAA HH:MM',
+    `${fmtDate(current.end)} ${String(current.end.getHours()).padStart(2,'0')}:${String(current.end.getMinutes()).padStart(2,'0')}`
+  );
+  if (!endStr) return;
+  
+  try {
+    const parseDate = (str) => {
+      const [datePart, timePart] = str.trim().split(' ');
+      const [d, m, y] = datePart.split('/');
+      const [h, mi] = timePart.split(':');
+      return new Date(y, m - 1, d, h, mi, 0, 0);
+    };
+    
+    const start = parseDate(startStr);
+    const end = parseDate(endStr);
+    
+    if (isNaN(start) || isNaN(end) || start >= end) {
+      toast('Dates invalides', 'error');
+      return;
+    }
+    
+    view.nightPeriodOverride = {
+      start, end,
+      label: 'Rapport personnalisé',
+      subtitle: `${fmtDateShort(start)} ${String(start.getHours()).padStart(2,'0')}h → ${fmtDateShort(end)} ${String(end.getHours()).padStart(2,'0')}h`,
+      icon: '⏰'
+    };
+    toast('Période modifiée', 'success');
+    render();
+  } catch (e) {
+    toast('Format de date invalide', 'error');
+  }
 }
 
 // ----- SETTINGS -----
@@ -2834,7 +3041,7 @@ function renderSettings() {
       </div>
       
       <div class="text-center" style="padding:24px 0;font-size:11px;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace">
-        Astreintes AMI2S v2.9.8<br>
+        Astreintes AMI2S v2.9.9<br>
         ${state.dossiers.length} dossier(s) • ${new Date().toISOString().substring(0,10)}
       </div>
     </div>
@@ -2845,8 +3052,12 @@ function renderSettings() {
 
 // ----- STATS -----
 function renderStats() {
-  const week = getAstreinteWeek();
-  const weekDossiers = getWeekDossiers(0);
+  // V2.9.9 — Navigation entre semaines
+  const offset = view.statsWeekOffset || 0;
+  const baseDate = new Date();
+  baseDate.setDate(baseDate.getDate() + offset * 7);
+  const week = getAstreinteWeek(baseDate);
+  const weekDossiers = getWeekDossiers(offset);
   const totalKm = weekDossiers.reduce((s, d) => s + (parseFloat(d.km) || 0), 0);
   
   // V2.9.3 — Algorithme tolérant aux dates incohérentes
@@ -2961,14 +3172,30 @@ function renderStats() {
   return `
     <header class="app-header">
       <div class="header-top">
-        <div>
+        <div style="flex:1">
           <div class="header-title">Statistiques</div>
-          <div class="header-subtitle">Semaine n°${week.weekNumber}</div>
+          <div class="header-subtitle">${state.settings.technicien || 'AMI2S'}</div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="icon-btn" data-action="stats-prev-week" title="Semaine précédente">‹</button>
+          <button class="icon-btn" data-action="stats-next-week" title="Semaine suivante" ${offset >= 0 ? 'disabled style="opacity:0.3"' : ''}>›</button>
         </div>
       </div>
     </header>
     
     <div class="form-screen">
+      <!-- Bandeau semaine sélectionnée -->
+      <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:11px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">
+            Semaine n°${week.weekNumber}${offset === 0 ? ' (actuelle)' : offset === -1 ? ' (précédente)' : offset < 0 ? ` (il y a ${-offset} sem.)` : ''}
+          </div>
+          <div style="font-size:13px;color:var(--text);font-family:'JetBrains Mono',monospace;margin-top:2px">
+            ${fmtDateShort(week.start)} 09h → ${fmtDateShort(week.end)} 09h
+          </div>
+        </div>
+        ${offset !== 0 ? `<button class="btn-link" data-action="stats-current-week" style="font-size:12px;color:var(--accent);font-weight:600;background:none;border:none;cursor:pointer">Actuelle</button>` : ''}
+      </div>
       <!-- Total payé combiné -->
       <div class="stat-card accent" style="grid-column:1 / -1;padding:20px;margin-bottom:8px">
         <div class="stat-value" style="font-size:38px">${totalMsCombine ? fmtDuration(totalMsCombine) : '—'}</div>
@@ -3200,12 +3427,40 @@ function attachListeners() {
     });
   });
   $$('[data-bind-edit]').forEach(el => {
+    // V2.9.9 — Liste blanche des champs autorisés en édition inline
+    // Les champs sensibles (horaires, sequenceId, type, statut) ne sont JAMAIS éditables via data-bind-edit
+    const ALLOWED_EDIT_FIELDS = [
+      'etablissement', 'codeAstreinte', 'motif', 'rapportN', 
+      'adresseSite', 'km', 'compteRendu'
+    ];
+    
+    // Mémoriser la valeur initiale pour détecter un vrai changement
+    el.dataset.initialValue = el.value;
+    
     el.addEventListener('input', (e) => {
+      const field = e.target.dataset.bindEdit;
+      
+      // Vérification sécurité : seuls les champs autorisés peuvent être édités
+      if (!ALLOWED_EDIT_FIELDS.includes(field)) {
+        console.warn(`Champ "${field}" non autorisé en édition inline`);
+        return;
+      }
+      
       const d = state.dossiers.find(x => x.id === view.dossierId);
       if (!d) return;
-      d[e.target.dataset.bindEdit] = e.target.value;
+      
+      // Pas de sauvegarde si la valeur n'a pas vraiment changé
+      const newValue = e.target.value;
+      if (newValue === el.dataset.initialValue) return;
+      
+      d[field] = newValue;
+      // Mettre à jour la valeur initiale après modification
+      el.dataset.initialValue = newValue;
+      
       if (autosaveTimer) clearTimeout(autosaveTimer);
       autosaveTimer = setTimeout(() => {
+        // Nettoyer le flag _isEdit qui peut traîner
+        delete d._isEdit;
         saveDossier(d);
         toast('Sauvegardé', 'success');
       }, 800);
@@ -3294,6 +3549,39 @@ async function handleAction(e) {
       break;
     case 'next-week':
       if (view.weekOffset < 0) { view.weekOffset++; render(); }
+      break;
+    // V2.9.9 — Navigation semaines Stats
+    case 'stats-prev-week':
+      view.statsWeekOffset = (view.statsWeekOffset || 0) - 1;
+      render();
+      break;
+    case 'stats-next-week':
+      if ((view.statsWeekOffset || 0) < 0) {
+        view.statsWeekOffset = (view.statsWeekOffset || 0) + 1;
+        render();
+      }
+      break;
+    case 'stats-current-week':
+      view.statsWeekOffset = 0;
+      render();
+      break;
+    // V2.9.9 — Navigation semaines Export
+    case 'export-prev-week':
+      view.exportWeekOffset = (view.exportWeekOffset === null ? 0 : view.exportWeekOffset) - 1;
+      render();
+      break;
+    case 'export-next-week':
+      if ((view.exportWeekOffset || 0) < 0) {
+        view.exportWeekOffset = (view.exportWeekOffset || 0) + 1;
+        render();
+      }
+      break;
+    case 'export-current-week':
+      view.exportWeekOffset = 0;
+      render();
+      break;
+    case 'export-period-custom':
+      await editRapportPeriodeCustom();
       break;
     case 'ts-now':
       await setTimestampNow(t.dataset.field);
@@ -3429,6 +3717,9 @@ async function saveNewDossier() {
     }
     await saveSettings();
   }
+  
+  // V2.9.9 — Nettoyer le flag _isEdit (résidu d'édition)
+  delete tempDossier._isEdit;
   
   await saveDossier(tempDossier);
   haptic('success');
@@ -4529,8 +4820,16 @@ function generatePDF() {
     // Format A4 paysage en points (comme l'original Excel)
     const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
     
-    const week = getAstreinteWeek();
-    const allWeekDossiers = getWeekDossiers(0).sort((a, b) => new Date(a.dateAppel) - new Date(b.dateAppel));
+    // V2.9.9 — Utiliser la semaine sélectionnée
+    let offset = view.exportWeekOffset;
+    if (offset === null) {
+      const weekActuelle = getWeekDossiers(0);
+      offset = weekActuelle.length === 0 ? -1 : 0;
+    }
+    const baseDate = new Date();
+    baseDate.setDate(baseDate.getDate() + offset * 7);
+    const week = getAstreinteWeek(baseDate);
+    const allWeekDossiers = getWeekDossiers(offset).sort((a, b) => new Date(a.dateAppel) - new Date(b.dateAppel));
     
     if (allWeekDossiers.length === 0) {
       toast('Aucun dossier cette semaine', 'error');
@@ -5092,16 +5391,20 @@ function generatePDF() {
 // EMAIL EXPORT
 // ----------------------------------------------------------------------------
 function generateEmailNuit() {
-  const now = new Date();
-  const today8h = new Date(now); today8h.setHours(8, 0, 0, 0);
-  const yesterday18h = new Date(today8h); yesterday18h.setDate(yesterday18h.getDate() - 1); yesterday18h.setHours(18, 0, 0, 0);
+  // V2.9.9 — Période intelligente (jours fériés FR + weekends)
+  const period = computeNightPeriod();
   
   const dossiers = state.dossiers.filter(d => {
     const dt = new Date(d.dateAppel);
-    return dt >= yesterday18h && dt <= today8h;
+    return dt >= period.start && dt <= period.end;
   }).sort((a, b) => new Date(a.dateAppel) - new Date(b.dateAppel));
   
-  buildEmail(dossiers, `CR Astreinte — Nuit du ${fmtDate(yesterday18h)} au ${fmtDate(today8h)}`);
+  if (dossiers.length === 0) {
+    toast('Aucun dossier sur cette période', 'error');
+    return;
+  }
+  
+  buildEmail(dossiers, `CR Astreinte — ${period.label} du ${fmtDate(period.start)} au ${fmtDate(period.end)}`);
 }
 
 async function generateEmailCustom() {
