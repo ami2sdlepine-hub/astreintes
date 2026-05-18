@@ -1161,6 +1161,35 @@ body { font-size: 15px; line-height: 1.5; }
 .detail-block-label { font-size: 12px; color: var(--text-secondary); font-weight: 600; margin-bottom: 6px; }
 .detail-block-content { font-size: 14px; color: var(--text); line-height: 1.5; }
 
+/* V2.9.8 — Édition inline dans le détail */
+.detail-input {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 600;
+  flex: 1;
+  text-align: right;
+  min-width: 0;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+.detail-input:focus {
+  border-color: var(--accent);
+  background: var(--bg);
+  text-align: left;
+}
+.detail-input.mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+.detail-input::placeholder {
+  color: var(--text-tertiary);
+  font-weight: 400;
+}
+
 /* ============================================================================
    STATS
 ============================================================================ */
@@ -2353,9 +2382,12 @@ function renderDetail() {
         <div class="section-title">📋 Informations</div>
         <div class="detail-row">
           <span class="detail-label">Établissement</span>
-          <span class="detail-value">${escapeHtml(d.etablissement)}</span>
+          <input type="text" class="detail-input" data-bind-edit="etablissement" value="${escapeHtml(d.etablissement || '')}" placeholder="Nom de l'établissement">
         </div>
-        ${d.codeAstreinte ? `<div class="detail-row"><span class="detail-label">Code astreinte</span><span class="detail-value mono">${escapeHtml(d.codeAstreinte)}</span></div>` : ''}
+        <div class="detail-row">
+          <span class="detail-label">Code astreinte</span>
+          <input type="text" class="detail-input mono" data-bind-edit="codeAstreinte" value="${escapeHtml(d.codeAstreinte || '')}" placeholder="Ex: AST-0847">
+        </div>
         <div class="detail-row">
           <span class="detail-label">Heure d'appel</span>
           <span class="detail-value">${d.bureau ? '📞 Bureau' : fmtDateTime(d.dateAppel)}</span>
@@ -2364,7 +2396,10 @@ function renderDetail() {
           <span class="detail-label">Type</span>
           <span class="detail-value">${d.type === 'telephone' ? '☎ Téléphone' : '🚗 Déplacement'}</span>
         </div>
-        ${d.motif ? `<div class="detail-block"><div class="detail-block-label">Motif</div><div class="detail-block-content">${escapeHtml(d.motif)}</div></div>` : ''}
+        <div class="detail-block">
+          <div class="detail-block-label">Motif</div>
+          <textarea class="form-textarea" data-bind-edit="motif" placeholder="Décrire la nature de l'appel" style="min-height:60px">${escapeHtml(d.motif || '')}</textarea>
+        </div>
       </div>
       
       ${d.type === 'deplacement' ? renderDetailHoraires(d) : ''}
@@ -2378,14 +2413,22 @@ function renderDetail() {
       ${d.type === 'deplacement' ? `
         <div class="section">
           <div class="section-title">📊 Site & distance</div>
-          ${d.rapportN ? `<div class="detail-row"><span class="detail-label">N° rapport</span><span class="detail-value mono">${escapeHtml(d.rapportN)}</span></div>` : ''}
-          ${d.adresseSite ? `<div class="detail-row"><span class="detail-label">Adresse site</span><span class="detail-value">${escapeHtml(d.adresseSite)}</span></div>` : ''}
+          <div class="detail-row">
+            <span class="detail-label">N° rapport</span>
+            <input type="text" class="detail-input mono" data-bind-edit="rapportN" value="${escapeHtml(d.rapportN || '')}" placeholder="Ex: R-2026-0312">
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Adresse site</span>
+            <input type="text" class="detail-input" data-bind-edit="adresseSite" value="${escapeHtml(d.adresseSite || '')}" placeholder="Adresse complète">
+          </div>
           <div class="detail-row">
             <span class="detail-label">Distance</span>
-            <span class="detail-value mono">${d.km ? escapeHtml(d.km) + ' km' : '—'}</span>
+            <div style="display:flex;align-items:center;gap:6px">
+              <input type="number" class="detail-input mono" data-bind-edit="km" value="${escapeHtml(d.km || '')}" placeholder="0.0" step="0.1" inputmode="decimal" style="width:80px;text-align:right">
+              <span style="color:var(--text-secondary)">km</span>
+            </div>
           </div>
           <div style="display:flex;gap:8px;margin-top:12px">
-            <button class="btn btn-secondary" style="flex:1" data-action="edit-adresse-site">📍 Modifier adresse</button>
             <button class="btn btn-primary" style="flex:1" data-action="calc-distance" ${!state.settings.syncEnabled || !d.adresseSite ? 'disabled' : ''}>📍 Calculer km</button>
           </div>
         </div>
@@ -2393,8 +2436,10 @@ function renderDetail() {
       ` : ''}
       
       <div class="section" style="display:flex;flex-direction:column;gap:8px">
-        <button class="btn btn-secondary btn-block" data-action="edit-dossier">✏️ Modifier les informations</button>
         ${d.statut === 'cloture' ? `
+          <div style="padding:10px 12px;background:var(--bg-subtle);border:1px solid var(--border);border-radius:var(--radius);font-size:12px;color:var(--text-secondary);text-align:center">
+            ✓ Dossier clôturé • Modifications enregistrées automatiquement
+          </div>
           <button class="btn btn-ghost btn-block" data-action="reopen">🔄 Annuler la clôture</button>
         ` : ''}
         <button class="btn btn-ghost-danger btn-block" data-action="delete">🗑 Supprimer</button>
@@ -2789,7 +2834,7 @@ function renderSettings() {
       </div>
       
       <div class="text-center" style="padding:24px 0;font-size:11px;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace">
-        Astreintes AMI2S v2.9.7<br>
+        Astreintes AMI2S v2.9.8<br>
         ${state.dossiers.length} dossier(s) • ${new Date().toISOString().substring(0,10)}
       </div>
     </div>
@@ -4476,104 +4521,97 @@ async function requestGeolocationPermission() {
 // ----------------------------------------------------------------------------
 // PDF G1-0-8
 // ----------------------------------------------------------------------------
+// V2.9.8 — PDF G1-0-8 reproduit à l'identique du document officiel Eurofeu
+// Audit complet du document de référence : A4 paysage, structure exacte, fond gris 0.749
 function generatePDF() {
   try {
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    // Format A4 paysage en points (comme l'original Excel)
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
     
     const week = getAstreinteWeek();
-    const weekDossiers = getWeekDossiers(0).sort((a, b) => new Date(a.dateAppel) - new Date(b.dateAppel));
+    const allWeekDossiers = getWeekDossiers(0).sort((a, b) => new Date(a.dateAppel) - new Date(b.dateAppel));
     
-    if (weekDossiers.length === 0) {
+    if (allWeekDossiers.length === 0) {
       toast('Aucun dossier cette semaine', 'error');
       return;
     }
     
-    // Header avec logo
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.rect(10, 8, 280, 14);
-    doc.rect(10, 8, 40, 14);
+    // Constantes du document — basées sur l'audit du PDF officiel (page 841.68 × 595.2 pt)
+    const PAGE_W = 841.68;
+    const PAGE_H = 595.2;
+    const GRAY = [191, 191, 191]; // Fond gris 0.749 ≈ #BFBFBF
     
-    // Tenter d'ajouter le logo AMI2S
-    try {
-      doc.addImage(AMI2S_LOGO_BASE64, 'PNG', 12, 9, 36, 12);
-    } catch(e) {
-      doc.text('AMI2S', 30, 17, { align: 'center' });
+    // Le document a 17 lignes vides. Si plus de 17 dossiers, on fait une 2e page.
+    const ROWS_PER_PAGE = 17;
+    const nbPages = Math.max(1, Math.ceil(allWeekDossiers.length / ROWS_PER_PAGE));
+    
+    // Helpers
+    function drawCheckbox(x, y, size, checked) {
+      doc.setLineWidth(0.7);
+      doc.rect(x, y, size, size);
+      if (checked) {
+        doc.setLineWidth(1.2);
+        doc.line(x + 1.5, y + size/2, x + size/2 - 0.5, y + size - 1.5);
+        doc.line(x + size/2 - 0.5, y + size - 1.5, x + size - 1, y + 1);
+        doc.setLineWidth(0.5);
+      }
     }
     
-    doc.setFontSize(9);
-    doc.text('G1-0-8 - Version D', 170, 13, { align: 'center' });
-    doc.setLineWidth(0.1);
-    doc.line(50, 15, 290, 15);
-    doc.setFontSize(10);
-    doc.text('Suivi des interventions de l\'astreinte Hebdomadaire', 170, 20, { align: 'center' });
+    function fillRect(x, y, w, h, color) {
+      doc.setFillColor(color[0], color[1], color[2]);
+      doc.rect(x, y, w, h, 'F');
+    }
     
-    // Tech infos
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Nom du technicien : ${state.settings.technicien}`, 10, 28);
-    
-    doc.rect(220, 25, 3, 3);
-    doc.rect(245, 25, 3, 3);
-    if (state.settings.statutSemaine === 'titulaire') doc.text('X', 220.7, 27.5);
-    else doc.text('X', 245.7, 27.5);
-    doc.text('Titulaire', 225, 28);
-    doc.text('Suppléant', 250, 28);
-    
-    doc.text(`Semaine n° ${week.weekNumber} — du ${fmtDate(week.start)} au ${fmtDate(week.end)}`, 10, 33);
-    
-    // Table
-    const headers = [
-      [
-        { content: 'N°', rowSpan: 2 },
-        { content: 'Date', rowSpan: 2 },
-        { content: 'Informations client', colSpan: 3, styles: { fillColor: [176, 176, 176] } },
-        { content: 'Dépannage', colSpan: 2, styles: { fillColor: [176, 176, 176] } },
-        { content: 'Intervention sur site', colSpan: 5, styles: { fillColor: [176, 176, 176] } },
-        { content: 'Notification temps de trajets', colSpan: 3, styles: { fillColor: [176, 176, 176] } }
-      ],
-      ['N° Abonné', 'Demandeur', 'H. appel', 'Tél.', 'Site', 'Rapport N°', 'Arr. site', 'Départ site', 'Tps site', 'Km', 'Départ dom.', 'Retour dom.', 'Total trajet']
-    ];
-    
-    const rows = [];
+    // Calcul des totaux pour la semaine
     let totalTrajetMs = 0;
     let totalKm = 0;
-    
-    // Identifier les séquences
     const seqGroups = {};
-    weekDossiers.forEach(d => {
+    allWeekDossiers.forEach(d => {
       if (d.sequenceId) {
         if (!seqGroups[d.sequenceId]) seqGroups[d.sequenceId] = [];
         seqGroups[d.sequenceId].push(d);
       }
     });
     
-    weekDossiers.forEach((d, idx) => {
+    function safeDiffMs(start, end) {
+      if (!start || !end || start === 'X' || end === 'X') return 0;
+      const startDate = new Date(start);
+      const endDate = new Date(end);
+      let ms = endDate - startDate;
+      if (ms < 0 || ms > 24 * 3600 * 1000) {
+        const startMin = startDate.getHours() * 60 + startDate.getMinutes();
+        const endMin = endDate.getHours() * 60 + endDate.getMinutes();
+        let diffMin = endMin - startMin;
+        if (diffMin < 0) diffMin += 24 * 60;
+        ms = diffMin * 60 * 1000;
+      }
+      return ms;
+    }
+    
+    // Pré-calculer les valeurs par dossier
+    const dossierRows = allWeekDossiers.map(d => {
       const isPhone = d.type === 'telephone';
-      const isBureau = d.bureau;
-      let departDom = d.departDomicile === 'X' ? 'X' : (d.departDomicile ? fmtTime(d.departDomicile) : '—');
-      let retourDom = d.retourDomicile === 'X' ? 'X' : (d.retourDomicile ? fmtTime(d.retourDomicile) : '—');
-      let totalTrajet = '—';
+      let departDom = d.departDomicile === 'X' ? 'X' : (d.departDomicile ? fmtTime(d.departDomicile) : '');
+      let retourDom = d.retourDomicile === 'X' ? 'X' : (d.retourDomicile ? fmtTime(d.retourDomicile) : '');
+      let totalTrajet = '';
       
       if (d.sequenceId && seqGroups[d.sequenceId] && seqGroups[d.sequenceId].length > 1) {
-        const seq = seqGroups[d.sequenceId].sort((a,b) => new Date(a.dateAppel) - new Date(b.dateAppel));
+        const seq = seqGroups[d.sequenceId].sort((a, b) => new Date(a.dateAppel) - new Date(b.dateAppel));
         const isFirst = seq[0].id === d.id;
         const isLast = seq[seq.length - 1].id === d.id;
-        
         if (!isFirst && d.departDomicile !== 'X') departDom = 'X';
         if (!isLast) { retourDom = 'X'; totalTrajet = 'X'; }
         else if (d.retourDomicile && d.retourDomicile !== 'X') {
-          // Trouver le 1er dossier de la séquence avec un vrai départ domicile (pas X)
           const seqFirstWithRealDeparture = seq.find(s => s.departDomicile && s.departDomicile !== 'X');
           if (seqFirstWithRealDeparture) {
-            const ms = diffMs(seqFirstWithRealDeparture.departDomicile, d.retourDomicile);
+            const ms = safeDiffMs(seqFirstWithRealDeparture.departDomicile, d.retourDomicile);
             totalTrajet = fmtDuration(ms);
             totalTrajetMs += ms;
           }
         }
       } else if (d.departDomicile && d.retourDomicile && d.departDomicile !== 'X' && d.retourDomicile !== 'X') {
-        const ms = diffMs(d.departDomicile, d.retourDomicile);
+        const ms = safeDiffMs(d.departDomicile, d.retourDomicile);
         totalTrajet = fmtDuration(ms);
         totalTrajetMs += ms;
       } else if (d.retourDomicile === 'X' || d.departDomicile === 'X') {
@@ -4582,69 +4620,462 @@ function generatePDF() {
       
       if (d.km) totalKm += parseFloat(d.km) || 0;
       
-      rows.push([
-        idx + 1,
-        fmtDateShort(d.dateAppel),
-        d.codeAstreinte || '',
-        d.etablissement || '',
-        isBureau ? 'BUREAU' : fmtTime(d.dateAppel),
-        isPhone ? 'X' : '',
-        !isPhone ? 'X' : '',
-        d.rapportN || (isPhone ? '—' : ''),
-        d.arriveeSite ? fmtTime(d.arriveeSite) : (isPhone ? '—' : ''),
-        d.departSite ? fmtTime(d.departSite) : (isPhone ? '—' : ''),
-        d.tempsSiteCalcule || (isPhone ? '—' : ''),
-        d.km || (isPhone ? '—' : ''),
+      return {
+        d, isPhone,
+        date: fmtDateShort(d.dateAppel),
+        code: d.codeAstreinte || '',
+        demandeur: d.etablissement || '',
+        heureAppel: d.bureau ? 'BUREAU' : fmtTime(d.dateAppel),
+        parTel: isPhone ? 'X' : '',
+        surSite: !isPhone ? 'X' : '',
+        rapport: d.rapportN || '',
+        arrSite: d.arriveeSite ? fmtTime(d.arriveeSite) : '',
+        depSite: d.departSite ? fmtTime(d.departSite) : '',
+        tpsSite: d.tempsSiteCalcule || '',
+        km: d.km || '',
         departDom, retourDom, totalTrajet
-      ]);
+      };
     });
     
-    while (rows.length < 18) {
-      rows.push([rows.length + 1, '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
+    // ─────────────────────────────────────────────────────────────────
+    // FONCTION DE RENDU D'UNE PAGE
+    // ─────────────────────────────────────────────────────────────────
+    function renderPage(pageNum, pageDossierRows) {
+      // === MARGES (très étroites comme l'original) ===
+      const MARGIN_L = 17;
+      const MARGIN_R = 17;
+      const MARGIN_T = 5;
+      const W = PAGE_W - MARGIN_L - MARGIN_R; // 807.68
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setLineWidth(0.5);
+      doc.setDrawColor(0);
+      doc.setTextColor(0);
+      
+      // ═════════════════════════════════════════
+      // ZONE 1 : EN-TÊTE (logo + titres) — y 5 à 25
+      // ═════════════════════════════════════════
+      const headerY = MARGIN_T;
+      const headerH = 22;
+      const logoW = 84;
+      
+      // Cadre extérieur
+      doc.setLineWidth(0.5);
+      doc.rect(MARGIN_L, headerY, W, headerH);
+      doc.line(MARGIN_L + logoW, headerY, MARGIN_L + logoW, headerY + headerH);
+      doc.line(MARGIN_L + logoW, headerY + headerH/2, MARGIN_L + W, headerY + headerH/2);
+      
+      // Logo AMI2S
+      try {
+        doc.addImage(AMI2S_LOGO_BASE64, 'PNG', MARGIN_L + 6, headerY + 2, logoW - 12, headerH - 4);
+      } catch(e) {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(14);
+        doc.text('AMI2S', MARGIN_L + logoW/2, headerY + 13, { align: 'center' });
+      }
+      
+      // Titres à droite
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.text('G1-0-8  -  Version D', MARGIN_L + logoW + (W - logoW)/2, headerY + 7.5, { align: 'center' });
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.text('Suivi des interventions de l\'astreinte Hebdomadaire', MARGIN_L + logoW + (W - logoW)/2, headerY + 18, { align: 'center' });
+      
+      // ═════════════════════════════════════════
+      // ZONE 2 : IDENTITÉ TECHNICIEN (y ≈ 30 à 40)
+      // ═════════════════════════════════════════
+      const idY = headerY + headerH + 8;
+      
+      // Nom technicien (gauche, gras+souligné)
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      const lblTech = 'Nom du technicien :';
+      doc.text(lblTech, MARGIN_L, idY);
+      const lblTechW = doc.getTextWidth(lblTech);
+      doc.line(MARGIN_L, idY + 1.5, MARGIN_L + lblTechW, idY + 1.5); // souligné
+      
+      // Valeur du nom (normal)
+      doc.setFont('helvetica', 'normal');
+      doc.text(state.settings.technicien || '', MARGIN_L + lblTechW + 4, idY);
+      
+      // Titulaire / Suppléant (droite)
+      const tituX = MARGIN_L + W - 230;
+      const supplX = MARGIN_L + W - 110;
+      const isTitulaire = (state.settings.statutSemaine || 'titulaire') === 'titulaire';
+      const isSuppleant = state.settings.statutSemaine === 'suppleant';
+      
+      doc.setFont('helvetica', 'bold');
+      doc.text('Titulaire', tituX, idY);
+      doc.line(tituX, idY + 1.5, tituX + doc.getTextWidth('Titulaire'), idY + 1.5);
+      drawCheckbox(tituX + 55, idY - 7, 9, isTitulaire);
+      
+      doc.text('Suppléant', supplX, idY);
+      doc.line(supplX, idY + 1.5, supplX + doc.getTextWidth('Suppléant'), idY + 1.5);
+      drawCheckbox(supplX + 55, idY - 7, 9, isSuppleant);
+      
+      // ═════════════════════════════════════════
+      // ZONE 3 + 4 : TABLEAU PRINCIPAL
+      // ═════════════════════════════════════════
+      // Coordonnées colonnes basées sur l'audit (proportions du PDF original)
+      // Page 841.68pt, début à 17, fin à 824.68 → W = 807.68
+      // Mais on adapte légèrement pour 17pt de marge
+      // Largeurs des colonnes (approximatives, basées sur l'original) :
+      const tableX = MARGIN_L;
+      const tableY = idY + 8;
+      const tableW = W;
+      
+      // Définition des colonnes (15 colonnes au total)
+      // Largeurs en pt
+      const colW = [
+        20,   // 0: N°
+        45,   // 1: Date
+        70,   // 2: N° abonné ou code astreinte
+        110,  // 3: Nom du demandeur
+        45,   // 4: Heure d'appel
+        25,   // 5: Par Tél.
+        25,   // 6: Sur site
+        50,   // 7: Rapport N°
+        50,   // 8: Heure d'arrivée sur site
+        50,   // 9: Départ du site
+        45,   // 10: Temps passé sur site
+        45,   // 11: Distance en km
+        72,   // 12: Départ domicile
+        72,   // 13: Fin trajet et retour domicile
+        65    // 14: Total des heures trajets
+      ];
+      // Vérifier que la somme fait W
+      const sumColW = colW.reduce((a, b) => a + b, 0);
+      const scale = tableW / sumColW;
+      const colWScaled = colW.map(w => w * scale);
+      
+      // Calculer X de chaque colonne
+      const colX = [tableX];
+      for (let i = 0; i < colWScaled.length; i++) {
+        colX.push(colX[i] + colWScaled[i]);
+      }
+      
+      // ─── Hauteurs des en-têtes ───
+      const H_HEADER1 = 14; // Bandeau de groupes (gris)
+      const H_HEADER2 = 30; // Sous-en-têtes (incluant TEMPS DE TRAVAIL au-dessus)
+      const HEADER_H = H_HEADER1 + H_HEADER2;
+      const ROW_H = 16; // Hauteur ligne du corps
+      
+      // === EN-TÊTE NIVEAU 1 : 5 bandeaux gris (groupes) ===
+      // Groupe 1 : "Semaine n°" (col 0-1) — fusionné avec niveau 2
+      // Groupe 2 : "Informations concernant le client" (col 2-4)
+      // Groupe 3 : "Dépannage" (col 5-6)
+      // Groupe 4 : "Intervention sur site" (col 7-11)
+      // Groupe 5 : "NOTIFICATION DU TEMPS DE TRAJETS" (col 12-14)
+      
+      // Cellule "Semaine n°" fusionnée verticalement sur les 2 niveaux d'en-tête
+      doc.setFillColor(255, 255, 255);
+      doc.rect(colX[0], tableY, colX[2] - colX[0], HEADER_H, 'F');
+      doc.setLineWidth(0.5);
+      doc.rect(colX[0], tableY, colX[2] - colX[0], HEADER_H);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.text('Semaine n°', colX[0] + 5, tableY + 11);
+      doc.setFontSize(9);
+      doc.text(`${week.weekNumber}`, colX[1] + 5, tableY + 25);
+      
+      // Sous-titres N° et Date dans la zone Semaine
+      doc.setFontSize(8);
+      doc.text('N°', (colX[0] + colX[1])/2, tableY + H_HEADER1 + H_HEADER2 - 4, { align: 'center' });
+      doc.text('Date', (colX[1] + colX[2])/2, tableY + H_HEADER1 + H_HEADER2 - 4, { align: 'center' });
+      // Lignes verticales internes pour N° et Date
+      doc.line(colX[1], tableY + H_HEADER2 - 6, colX[1], tableY + HEADER_H);
+      
+      // === Bandeau groupe 2 : "Informations concernant le client" ===
+      fillRect(colX[2], tableY, colX[5] - colX[2], H_HEADER1, GRAY);
+      doc.setLineWidth(0.5);
+      doc.rect(colX[2], tableY, colX[5] - colX[2], H_HEADER1);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.text('Informations concernant le client', (colX[2] + colX[5])/2, tableY + 9, { align: 'center' });
+      
+      // === Bandeau groupe 3 : "Dépannage" ===
+      fillRect(colX[5], tableY, colX[7] - colX[5], H_HEADER1, GRAY);
+      doc.rect(colX[5], tableY, colX[7] - colX[5], H_HEADER1);
+      doc.text('Dépannage', (colX[5] + colX[7])/2, tableY + 9, { align: 'center' });
+      
+      // === Bandeau groupe 4 : "Intervention sur site" ===
+      fillRect(colX[7], tableY, colX[12] - colX[7], H_HEADER1, GRAY);
+      doc.rect(colX[7], tableY, colX[12] - colX[7], H_HEADER1);
+      doc.text('Intervention sur site', (colX[7] + colX[12])/2, tableY + 9, { align: 'center' });
+      
+      // === Bandeau groupe 5 : "NOTIFICATION DU TEMPS DE TRAJETS" ===
+      fillRect(colX[12], tableY, colX[15] - colX[12], H_HEADER1, GRAY);
+      doc.rect(colX[12], tableY, colX[15] - colX[12], H_HEADER1);
+      doc.text('NOTIFICATION DU TEMPS DE TRAJETS', (colX[12] + colX[15])/2, tableY + 9, { align: 'center' });
+      
+      // === EN-TÊTES NIVEAU 2 (sous-colonnes) ===
+      const subY = tableY + H_HEADER1;
+      
+      // Sous-bandeau "TEMPS DE TRAVAIL" (gris) au-dessus des cols 8 et 9
+      const tempsTravailY = subY;
+      const tempsTravailH = 10;
+      fillRect(colX[8], subY, colX[10] - colX[8], tempsTravailH, GRAY);
+      doc.rect(colX[8], subY, colX[10] - colX[8], tempsTravailH);
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'bold');
+      doc.text('TEMPS DE TRAVAIL', (colX[8] + colX[10])/2, subY + 7, { align: 'center' });
+      
+      // Sous-cellules — niveau 2
+      // Note : Heure d'arrivée et Départ site sont SOUS le bandeau "TEMPS DE TRAVAIL"
+      const subCellY = subY + tempsTravailH;
+      const subCellH = H_HEADER2 - tempsTravailH;
+      
+      // Pour les cellules qui n'ont pas de sous-bandeau "TEMPS DE TRAVAIL",
+      // l'en-tête niveau 2 occupe toute la hauteur restante
+      const subCells = [
+        { idx: 2, label: 'N° ABONNÉ\nou\nCODE ASTREINTE', fullHeight: true },
+        { idx: 3, label: 'Nom du Demandeur\n(client)', fullHeight: true },
+        { idx: 4, label: 'Heure\nd\'appel du\nclient', fullHeight: true },
+        { idx: 5, label: 'Par\nTél.', fullHeight: true },
+        { idx: 6, label: 'Sur\nsite', fullHeight: true },
+        { idx: 7, label: 'RAPPORT\nN°', fullHeight: true },
+        { idx: 8, label: 'Heure d\'arrivée\nsur site', fullHeight: false },
+        { idx: 9, label: 'Départ du site', fullHeight: false },
+        { idx: 10, label: 'Temps\npassé sur\nsite*', fullHeight: true },
+        { idx: 11, label: 'DISTANCE\nEN KM', fullHeight: true },
+        { idx: 12, label: 'DEPART DU\nDOMICILE (ou\nautres lieux) *', fullHeight: true },
+        { idx: 13, label: 'FIN DU TRAJET\nET RETOUR\nDOMICILE (ou\nautres lieux) *', fullHeight: true },
+        { idx: 14, label: 'TOTAL DES\nHEURES TRAJETS*', fullHeight: true }
+      ];
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(6.5);
+      
+      subCells.forEach(({ idx, label, fullHeight }) => {
+        const x = colX[idx];
+        const w = colX[idx + 1] - colX[idx];
+        const y = fullHeight ? subY : subCellY;
+        const h = fullHeight ? H_HEADER2 : subCellH;
+        
+        // Bordure
+        doc.setFillColor(255, 255, 255);
+        doc.rect(x, y, w, h);
+        
+        // Texte centré
+        const lines = label.split('\n');
+        const lineH = 7;
+        const startY = y + h/2 - (lines.length * lineH)/2 + 5;
+        lines.forEach((ln, i) => {
+          doc.text(ln, x + w/2, startY + i * lineH, { align: 'center' });
+        });
+      });
+      
+      // ═════════════════════════════════════════
+      // CORPS DU TABLEAU — 17 lignes
+      // ═════════════════════════════════════════
+      const bodyY = tableY + HEADER_H;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      
+      for (let r = 0; r < ROWS_PER_PAGE; r++) {
+        const rowY = bodyY + r * ROW_H;
+        const row = pageDossierRows[r] || null;
+        const rowNum = (pageNum - 1) * ROWS_PER_PAGE + r + 1;
+        
+        // Bordures de la ligne
+        // Bordure de la ligne complète (toutes les cellules)
+        for (let c = 0; c < 15; c++) {
+          doc.rect(colX[c], rowY, colX[c + 1] - colX[c], ROW_H);
+        }
+        
+        // Contenu si dossier présent
+        if (row) {
+          const cells = [
+            String(rowNum),         // 0
+            row.date,                // 1
+            row.code,                // 2
+            row.demandeur,           // 3
+            row.heureAppel,          // 4
+            row.parTel,              // 5
+            row.surSite,             // 6
+            row.rapport,             // 7
+            row.arrSite,             // 8
+            row.depSite,             // 9
+            row.tpsSite,             // 10
+            row.km ? String(row.km) : '',  // 11
+            row.departDom,           // 12
+            row.retourDom,           // 13
+            row.totalTrajet          // 14
+          ];
+          
+          cells.forEach((txt, c) => {
+            if (!txt) return;
+            const x = colX[c];
+            const w = colX[c + 1] - colX[c];
+            const cellPad = 2;
+            const txtY = rowY + ROW_H/2 + 2;
+            
+            // Pour les colonnes texte long (demandeur, motif), on tronque
+            let display = txt;
+            if (c === 3 && display.length > 30) display = display.substring(0, 28) + '..';
+            
+            doc.text(display, x + w/2, txtY, { align: 'center', maxWidth: w - 4 });
+          });
+        } else {
+          // Ligne vide : juste le numéro à gauche (comme dans le doc officiel)
+          doc.setTextColor(180, 180, 180);
+          doc.text(String(rowNum), (colX[0] + colX[1])/2, rowY + ROW_H/2 + 2, { align: 'center' });
+          doc.setTextColor(0);
+        }
+      }
+      
+      // ═════════════════════════════════════════
+      // PIED DU TABLEAU + TOTAL HEBDOMADAIRE
+      // ═════════════════════════════════════════
+      const footerY = bodyY + ROWS_PER_PAGE * ROW_H + 4;
+      
+      // À gauche : * Mention obligatoire (gras + souligné)
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      const mentionTxt = '* Mention obligatoire';
+      doc.text(mentionTxt, MARGIN_L, footerY + 8);
+      doc.line(MARGIN_L, footerY + 9, MARGIN_L + doc.getTextWidth(mentionTxt), footerY + 9);
+      
+      // À droite : Bloc TOTAL HEBDOMADAIRE (uniquement sur la dernière page)
+      const totalBlockX = colX[12];
+      const totalBlockW = colX[15] - colX[12];
+      const totalBlockH = 24;
+      const totalBlockY = footerY + 2;
+      
+      // Fond gris
+      fillRect(totalBlockX, totalBlockY, totalBlockW - (colX[15] - colX[14]), totalBlockH, GRAY);
+      doc.rect(totalBlockX, totalBlockY, totalBlockW - (colX[15] - colX[14]), totalBlockH);
+      doc.rect(colX[14], totalBlockY, colX[15] - colX[14], totalBlockH);
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(0);
+      doc.text('TOTAL HEBDOMADAIRE', (totalBlockX + colX[14])/2, totalBlockY + totalBlockH/2 + 2, { align: 'center' });
+      
+      // Valeur du total (uniquement sur la dernière page)
+      if (pageNum === nbPages) {
+        doc.setFontSize(10);
+        doc.text(fmtDuration(totalTrajetMs), (colX[14] + colX[15])/2, totalBlockY + totalBlockH/2 + 2, { align: 'center' });
+      }
+      
+      // ═════════════════════════════════════════
+      // PHRASE D'AVERTISSEMENT
+      // ═════════════════════════════════════════
+      const warningY = footerY + 22;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      
+      const warn1 = 'En cas d\'impossibilité d\'intervention du titulaire, ';
+      const warn2 = 'celui-ci doit appeler son suppléant dans l\'heure qui suit l\'appel du client';
+      const warn3 = ' !!!';
+      
+      doc.text(warn1, MARGIN_L, warningY);
+      const warn1W = doc.getTextWidth(warn1);
+      
+      // Partie soulignée et grasse
+      doc.setFont('helvetica', 'bold');
+      doc.text(warn2, MARGIN_L + warn1W, warningY);
+      const warn2W = doc.getTextWidth(warn2);
+      doc.line(MARGIN_L + warn1W, warningY + 1, MARGIN_L + warn1W + warn2W, warningY + 1);
+      
+      doc.setFont('helvetica', 'normal');
+      doc.text(warn3, MARGIN_L + warn1W + warn2W, warningY);
+      
+      // ═════════════════════════════════════════
+      // 4 CADRES ÉTAPES (en bas) — uniquement sur la dernière page
+      // ═════════════════════════════════════════
+      if (pageNum === nbPages) {
+        const stepY = warningY + 8;
+        const stepGap = 6;
+        const stepW = (W - 3 * stepGap) / 4;
+        const stepH = PAGE_H - stepY - 10;
+        
+        const steps = [
+          {
+            num: 'Etape n°1',
+            title: 'Validation du Salarié :',
+            fields: ['Date :', 'Signature :'],
+            // Étape n°1 pré-remplie selon les choix de Dimitri
+            prefill: {
+              date: fmtDate(new Date()),
+              signature: state.settings.technicien || ''
+            }
+          },
+          {
+            num: 'Etape n°2',
+            title: 'Contrôle et Analyse des documents\npar l\'Agent Administratif :',
+            fields: ['Date :', 'Signature :']
+          },
+          {
+            num: 'Etape n°3',
+            title: 'Validation par le Responsable du Service :',
+            fields: ['Date :', 'Signature :']
+          },
+          {
+            num: 'Etape n°4',
+            title: 'Date de réception du Document par le\nService RH :',
+            fields: ['Date :']
+          }
+        ];
+        
+        steps.forEach((step, i) => {
+          const x = MARGIN_L + i * (stepW + stepGap);
+          
+          // "Étape n°X" au-dessus du cadre
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(8);
+          doc.text(step.num, x + stepW/2, stepY - 2, { align: 'center' });
+          
+          // Cadre rectangulaire
+          doc.setLineWidth(0.8);
+          doc.rect(x, stepY, stepW, stepH);
+          doc.setLineWidth(0.5);
+          
+          // Titre dans le cadre (gras + souligné)
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(8);
+          const titleLines = step.title.split('\n');
+          titleLines.forEach((tl, ti) => {
+            const titleY = stepY + 8 + ti * 9;
+            doc.text(tl, x + stepW/2, titleY, { align: 'center' });
+            const tlW = doc.getTextWidth(tl);
+            doc.line(x + stepW/2 - tlW/2, titleY + 1.2, x + stepW/2 + tlW/2, titleY + 1.2);
+          });
+          
+          // Champs Date / Signature
+          const fieldStartY = stepY + 8 + titleLines.length * 9 + 8;
+          step.fields.forEach((field, fi) => {
+            const fY = fieldStartY + fi * 14;
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(7.5);
+            doc.text(field, x + 4, fY);
+            const fW = doc.getTextWidth(field);
+            doc.line(x + 4, fY + 1, x + 4 + fW, fY + 1);
+            
+            // Pré-remplissage Étape 1 uniquement
+            if (step.prefill) {
+              doc.setFont('helvetica', 'normal');
+              doc.setFontSize(8);
+              if (field === 'Date :' && step.prefill.date) {
+                doc.text(step.prefill.date, x + 4 + fW + 4, fY);
+              } else if (field === 'Signature :' && step.prefill.signature) {
+                doc.text(step.prefill.signature, x + 4 + fW + 4, fY);
+              }
+            }
+          });
+        });
+      }
     }
     
-    rows.push([
-      { content: 'TOTAL HEBDOMADAIRE', colSpan: 11, styles: { fillColor: [136,136,136], textColor: [255,255,255], fontStyle: 'bold', halign: 'right' } },
-      { content: `${totalKm.toFixed(0)} km`, colSpan: 3, styles: { fillColor: [136,136,136], textColor: [255,255,255], fontStyle: 'bold', halign: 'center' } },
-      { content: fmtDuration(totalTrajetMs), styles: { fillColor: [136,136,136], textColor: [255,255,255], fontStyle: 'bold', halign: 'center' } }
-    ]);
-    
-    doc.autoTable({
-      head: headers, body: rows, startY: 36, theme: 'grid',
-      styles: { fontSize: 6.5, cellPadding: 1, valign: 'middle', halign: 'center' },
-      headStyles: { fillColor: [208,208,208], textColor: [0,0,0], fontSize: 6.5, fontStyle: 'bold' },
-      columnStyles: {
-        0: { cellWidth: 6 }, 1: { cellWidth: 14 }, 2: { cellWidth: 20 },
-        3: { cellWidth: 22 }, 4: { cellWidth: 13 }, 5: { cellWidth: 8 },
-        6: { cellWidth: 8 }, 7: { cellWidth: 20 }, 8: { cellWidth: 13 },
-        9: { cellWidth: 13 }, 10: { cellWidth: 13 }, 11: { cellWidth: 10 },
-        12: { cellWidth: 16 }, 13: { cellWidth: 16 }, 14: { cellWidth: 18 }
-      },
-      margin: { left: 10, right: 10 }
-    });
-    
-    const finalY = doc.lastAutoTable.finalY + 4;
-    doc.setFontSize(6);
-    doc.setFont('helvetica', 'italic');
-    doc.text('* Mention obligatoire — En cas d\'impossibilité d\'intervention du titulaire, celui-ci doit appeler son suppléant dans l\'heure qui suit l\'appel du client !!!', 10, finalY);
-    
-    const valY = finalY + 3;
-    const valW = 67;
-    const valH = 26;
-    for (let i = 0; i < 4; i++) doc.rect(10 + i * (valW + 3), valY, valW, valH);
-    
-    doc.setFontSize(6.5);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Étape n°1\nValidation du Salarié', 10 + valW/2, valY + 4, { align: 'center' });
-    doc.text('Étape n°2\nContrôle Agent Administratif', 10 + valW + 3 + valW/2, valY + 4, { align: 'center' });
-    doc.text('Étape n°3\nValidation Responsable Service', 10 + 2*(valW + 3) + valW/2, valY + 4, { align: 'center' });
-    doc.text('Étape n°4\nRéception Service RH', 10 + 3*(valW + 3) + valW/2, valY + 4, { align: 'center' });
-    
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(6);
-    for (let i = 0; i < 4; i++) {
-      doc.text('Date :', 12 + i * (valW + 3), valY + 18);
-      if (i < 3) doc.text('Signature :', 12 + i * (valW + 3), valY + 23);
+    // ─────────────────────────────────────────────────────────────────
+    // Boucle pour générer les pages
+    // ─────────────────────────────────────────────────────────────────
+    for (let p = 1; p <= nbPages; p++) {
+      if (p > 1) doc.addPage();
+      const startIdx = (p - 1) * ROWS_PER_PAGE;
+      const pageRows = dossierRows.slice(startIdx, startIdx + ROWS_PER_PAGE);
+      renderPage(p, pageRows);
     }
     
     const filename = `G1-0-8_S${week.weekNumber}_${(state.settings.technicien || 'tech').replace(/\s+/g, '_')}.pdf`;
@@ -4653,7 +5084,7 @@ function generatePDF() {
     toast(`PDF généré : ${filename}`, 'success');
   } catch (err) {
     console.error(err);
-    toast('Erreur génération PDF', 'error');
+    toast('Erreur génération PDF : ' + err.message, 'error');
   }
 }
 
@@ -4705,67 +5136,85 @@ function buildEmail(dossiers, subject) {
   // Période couverte
   const firstDate = new Date(dossiers[0].dateAppel);
   const lastDate = new Date(dossiers[dossiers.length - 1].dateAppel);
+  const nbInterventions = dossiers.filter(d => d.type === 'deplacement').length;
+  const nbTelephone = dossiers.filter(d => d.type === 'telephone').length;
+  const totalKm = dossiers.reduce((s, d) => s + (parseFloat(d.km) || 0), 0);
   
-  let body = `Bonjour,\n\n`;
-  body += `Veuillez trouver ci-dessous le compte-rendu d'astreinte couvrant la période du `;
-  body += `${fmtDate(firstDate)} au ${fmtDate(lastDate)}.\n\n`;
+  // === V2.9.8 — Email pro Outlook (texte brut épuré) ===
+  let body = `Bonjour,\r\n\r\n`;
+  body += `Veuillez trouver ci-dessous le compte-rendu de l'astreinte couvrant la période du `;
+  body += `${fmtDate(firstDate)} au ${fmtDate(lastDate)}.\r\n\r\n`;
   
-  body += `${dossiers.length} dossier${dossiers.length > 1 ? 's' : ''} traité${dossiers.length > 1 ? 's' : ''} `;
-  body += `: ${dossiers.filter(d => d.type === 'deplacement').length} intervention${dossiers.filter(d => d.type === 'deplacement').length > 1 ? 's' : ''} sur site `;
-  body += `et ${dossiers.filter(d => d.type === 'telephone').length} résolution${dossiers.filter(d => d.type === 'telephone').length > 1 ? 's' : ''} téléphonique${dossiers.filter(d => d.type === 'telephone').length > 1 ? 's' : ''}.\n\n`;
+  // Récapitulatif au début (pratique pour la lecture rapide)
+  body += `RÉCAPITULATIF\r\n`;
+  body += `─────────────────────────────────────────────\r\n`;
+  body += `   Total dossiers     : ${dossiers.length}\r\n`;
+  body += `   Interventions site : ${nbInterventions}\r\n`;
+  body += `   Résolution tel.    : ${nbTelephone}\r\n`;
+  if (totalKm > 0) body += `   Kilomètres parcourus : ${totalKm.toFixed(1)} km\r\n`;
+  body += `\r\n`;
   
-  body += `═══════════════════════════════════════════\n`;
-  body += `DÉTAIL DES INTERVENTIONS\n`;
-  body += `═══════════════════════════════════════════\n\n`;
+  body += `DÉTAIL DES INTERVENTIONS\r\n`;
+  body += `═════════════════════════════════════════════\r\n\r\n`;
   
   dossiers.forEach((d, i) => {
     const num = String(i + 1).padStart(2, '0');
     const isPhone = d.type === 'telephone';
     
-    body += `── DOSSIER N°${num} ${isPhone ? '☎' : '🚗'} ──────────────────\n\n`;
-    body += `  Date         : ${fmtDate(d.dateAppel)}`;
+    body += `─── DOSSIER N°${num} ─── ${isPhone ? 'Résolution téléphonique' : 'Intervention sur site'} ───\r\n\r\n`;
+    
+    // Date et réception
+    body += `   Date          : ${fmtDate(d.dateAppel)}`;
     if (!d.bureau) body += ` à ${fmtTime(d.dateAppel)}`;
-    body += `\n`;
+    body += `\r\n`;
     
-    if (d.bureau) body += `  Réception    : Transmis par le bureau\n`;
+    body += `   Réception     : ${d.bureau ? 'Transmis par le bureau' : 'Appel direct'}\r\n`;
     
-    body += `  Établissement: ${d.etablissement}\n`;
+    // Code astreinte (important)
+    body += `   Code astreinte: ${d.codeAstreinte || '—'}\r\n`;
     
-    if (d.codeAstreinte) body += `  Code         : ${d.codeAstreinte}\n`;
+    body += `   Établissement : ${d.etablissement || '—'}\r\n`;
     
+    // Motif
+    body += `\r\n   Motif de l'appel :\r\n`;
     if (d.motif) {
-      body += `\n  Motif de l'appel :\n`;
       d.motif.split('\n').forEach(line => {
-        body += `    ${line}\n`;
+        body += `      ${line}\r\n`;
       });
+    } else {
+      body += `      (non renseigné)\r\n`;
     }
     
+    // Traitement
     if (isPhone) {
-      body += `\n  → Traitement : Résolu par téléphone\n`;
+      body += `\r\n   Traitement    : Résolu par téléphone\r\n`;
     } else {
-      body += `\n  → Traitement : Intervention sur site\n`;
-      if (d.rapportN) body += `  Rapport      : ${d.rapportN}\n`;
+      body += `\r\n   Traitement    : Intervention sur site\r\n`;
+      body += `   N° rapport    : ${d.rapportN || '—'}\r\n`;
       
+      // Compte-rendu
+      body += `\r\n   Compte-rendu d'intervention :\r\n`;
       if (d.compteRendu) {
-        body += `\n  Compte-rendu d'intervention :\n`;
         d.compteRendu.split('\n').forEach(line => {
-          body += `    ${line}\n`;
+          body += `      ${line}\r\n`;
         });
       } else {
-        body += `\n  Compte-rendu : (non renseigné)\n`;
+        body += `      (non renseigné)\r\n`;
       }
     }
     
-    body += `\n`;
+    body += `\r\n\r\n`;
   });
   
-  body += `═══════════════════════════════════════════\n\n`;
-  body += `Restant à votre disposition pour tout complément d'information,\n\n`;
-  body += `Cordialement,`;
+  body += `═════════════════════════════════════════════\r\n\r\n`;
+  body += `Restant à votre disposition pour tout complément d'information.\r\n\r\n`;
+  body += `Cordialement,\r\n`;
   
-  const mailto = `mailto:${state.settings.emailDestinataire}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  // Copie dans le presse-papier pour Outlook si besoin
   navigator.clipboard.writeText(body).then(() => toast('Texte copié + Outlook ouvert', 'success'))
     .catch(() => toast('Outlook ouvert', 'success'));
+  
+  const mailto = `mailto:${state.settings.emailDestinataire || ''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   window.location.href = mailto;
 }
 
