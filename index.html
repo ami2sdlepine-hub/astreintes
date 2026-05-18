@@ -2682,10 +2682,11 @@ function renderExport() {
               <div class="export-stat-label">Interv.</div>
             </div>
           </div>
-          <button data-action="export-period-custom" style="margin-top:10px;width:100%;padding:8px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-secondary);font-size:12px;cursor:pointer;font-weight:500">
-            ⏰ Modifier la période
-          </button>
         </div>
+        <!-- V2.9.11 — Bouton SORTI de la carte parente pour éviter le bubbling de l'event -->
+        <button data-action="export-period-custom" style="margin-top:-8px;margin-bottom:12px;width:100%;padding:10px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:13px;cursor:pointer;font-weight:600;display:flex;align-items:center;justify-content:center;gap:6px">
+          ⏰ Modifier la période du rapport
+        </button>
         
         <div class="export-card" data-action="export-email-custom">
           <div class="export-card-header">
@@ -3041,7 +3042,7 @@ function renderSettings() {
       </div>
       
       <div class="text-center" style="padding:24px 0;font-size:11px;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace">
-        Astreintes AMI2S v2.9.10<br>
+        Astreintes AMI2S v2.9.11<br>
         ${state.dossiers.length} dossier(s) • ${new Date().toISOString().substring(0,10)}
       </div>
     </div>
@@ -5061,23 +5062,79 @@ function generatePDF() {
     // ═══════════════════════════════════════════════════════════════════
     // PRÉPARATION DES DONNÉES — calcul des séquences et totaux
     // ═══════════════════════════════════════════════════════════════════
+    // V2.9.11 — Algorithme tolérant qui détecte les chaînages par leur STRUCTURE
+    // (départ='X' / retour='X') plutôt que par le sequenceId qui peut être cassé.
+    // 
+    // Principe :
+    // 1. Tri des dossiers déplacement par horaire d'intervention réel (arrivée site)
+    // 2. Parcours linéaire : on identifie des "groupes de chaînage" consécutifs
+    //    - Un groupe DÉMARRE par un dossier avec departDomicile != 'X' (vrai départ)
+    //    - Un groupe SE TERMINE par un dossier avec retourDomicile != 'X' (vrai retour)
+    //    - Entre les deux : tous les dossiers font partie du même groupe
     let totalTrajetMs = 0;
     let totalKm = 0;
     
-    // Identifier les groupes de séquences (chaînages)
-    const seqGroups = {};
-    allWeekDossiers.forEach(d => {
-      if (d.sequenceId) {
-        if (!seqGroups[d.sequenceId]) seqGroups[d.sequenceId] = [];
-        seqGroups[d.sequenceId].push(d);
+    // Helper : horaire d'intervention réel (priorité arrivée site > departDomicile > dateAppel)
+    function getInterventionTime(d) {
+      if (d.arriveeSite) return new Date(d.arriveeSite);
+      if (d.departDomicile && d.departDomicile !== 'X') return new Date(d.departDomicile);
+      return new Date(d.dateAppel);
+    }
+    
+    // Tri des dossiers déplacement par horaire d'intervention
+    const deplacementsTries = allWeekDossiers
+      .filter(d => d.type === 'deplacement')
+      .sort((a, b) => getInterventionTime(a) - getInterventionTime(b));
+    
+    // Construction des groupes de chaînage (par structure)
+    const chainGroups = [];   // [{ dossiers: [...], firstDepart, lastRetour }]
+    let currentGroup = null;
+    
+    for (const d of deplacementsTries) {
+      const isRealDepart = d.departDomicile && d.departDomicile !== 'X';
+      const isRealRetour = d.retourDomicile && d.retourDomicile !== 'X';
+      const isChainEntry = d.departDomicile === 'X';
+      const isChainExit = d.retourDomicile === 'X';
+      
+      if (isRealDepart) {
+        // Démarrage d'un nouveau groupe
+        // (si un groupe précédent est resté ouvert sans retour, on le pousse aussi)
+        if (currentGroup) chainGroups.push(currentGroup);
+        currentGroup = { dossiers: [d], firstDepart: d.departDomicile, lastRetour: null };
+      } else if (isChainEntry && currentGroup) {
+        // Continuation du groupe en cours
+        currentGroup.dossiers.push(d);
+      } else if (isChainEntry && !currentGroup) {
+        // Chaînage entrant orphelin (sequenceId cassé) : créer un nouveau groupe
+        currentGroup = { dossiers: [d], firstDepart: null, lastRetour: null };
+      } else {
+        // Cas anormal (pas de départ + pas de chaînage) : isolé
+        if (currentGroup) chainGroups.push(currentGroup);
+        currentGroup = { dossiers: [d], firstDepart: null, lastRetour: null };
       }
-    });
-    // Trier chaque groupe par horaire d'intervention réel
-    Object.keys(seqGroups).forEach(k => {
-      seqGroups[k].sort((a, b) => {
-        const tA = a.arriveeSite ? new Date(a.arriveeSite) : new Date(a.dateAppel);
-        const tB = b.arriveeSite ? new Date(b.arriveeSite) : new Date(b.dateAppel);
-        return tA - tB;
+      
+      if (isRealRetour && currentGroup) {
+        currentGroup.lastRetour = d.retourDomicile;
+        chainGroups.push(currentGroup);
+        currentGroup = null;
+      }
+    }
+    if (currentGroup) chainGroups.push(currentGroup);
+    
+    // Index : dossierId → { group, isFirst, isLast, totalGroupMs }
+    const dossierGroupInfo = {};
+    chainGroups.forEach(g => {
+      const seqMs = (g.firstDepart && g.lastRetour) ? safeDiffMs(g.firstDepart, g.lastRetour) : 0;
+      if (g.firstDepart && g.lastRetour) totalTrajetMs += seqMs;
+      
+      g.dossiers.forEach((d, idx) => {
+        dossierGroupInfo[d.id] = {
+          group: g,
+          isFirst: idx === 0,
+          isLast: idx === g.dossiers.length - 1,
+          isSingle: g.dossiers.length === 1,
+          totalGroupMs: seqMs
+        };
       });
     });
     
@@ -5087,29 +5144,23 @@ function generatePDF() {
       let retourDom = d.retourDomicile === 'X' ? 'X' : (d.retourDomicile ? fmtTime(d.retourDomicile) : '');
       let totalTrajet = '';
       
-      if (d.sequenceId && seqGroups[d.sequenceId] && seqGroups[d.sequenceId].length > 1) {
-        const seq = seqGroups[d.sequenceId];
-        const isFirst = seq[0].id === d.id;
-        const isLast = seq[seq.length - 1].id === d.id;
-        
-        if (!isFirst && d.departDomicile !== 'X') departDom = 'X';
-        if (!isLast) { retourDom = 'X'; totalTrajet = 'X'; }
-        else if (d.retourDomicile && d.retourDomicile !== 'X') {
-          // Dernier de la séquence : calcul du total depuis le premier départ
-          const seqFirstWithRealDeparture = seq.find(s => s.departDomicile && s.departDomicile !== 'X');
-          if (seqFirstWithRealDeparture) {
-            const ms = safeDiffMs(seqFirstWithRealDeparture.departDomicile, d.retourDomicile);
-            totalTrajet = fmtDuration(ms);
-            totalTrajetMs += ms;
+      if (!isPhone) {
+        const info = dossierGroupInfo[d.id];
+        if (info && !info.isSingle) {
+          // Dossier dans une séquence de plusieurs
+          if (!info.isLast) {
+            totalTrajet = 'X';
+          } else if (info.totalGroupMs > 0) {
+            totalTrajet = fmtDuration(info.totalGroupMs);
           }
+        } else if (d.departDomicile && d.retourDomicile && d.departDomicile !== 'X' && d.retourDomicile !== 'X') {
+          // Dossier isolé classique
+          const ms = safeDiffMs(d.departDomicile, d.retourDomicile);
+          totalTrajet = fmtDuration(ms);
+          // Note : totalTrajetMs déjà compté via dossierGroupInfo (groupe isolé d'1 dossier)
+        } else if (d.retourDomicile === 'X' || d.departDomicile === 'X') {
+          totalTrajet = 'X';
         }
-      } else if (d.departDomicile && d.retourDomicile && d.departDomicile !== 'X' && d.retourDomicile !== 'X') {
-        // Dossier isolé classique
-        const ms = safeDiffMs(d.departDomicile, d.retourDomicile);
-        totalTrajet = fmtDuration(ms);
-        totalTrajetMs += ms;
-      } else if (d.retourDomicile === 'X' || d.departDomicile === 'X') {
-        totalTrajet = 'X';
       }
       
       if (d.km && !isPhone) totalKm += parseFloat(d.km) || 0;
