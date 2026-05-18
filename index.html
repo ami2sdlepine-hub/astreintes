@@ -1815,8 +1815,39 @@ async function authLogout() {
   if (authState.token) {
     await authCall('logout', {});
   }
+  // V2.10.3 — Nettoyage complet pour éviter les fuites de données entre comptes
+  await wipeLocalUserData();
   authClearStorage();
   renderLoginScreen();
+}
+
+// V2.10.3 — Vider toutes les données utilisateur du device (IndexedDB + état mémoire)
+async function wipeLocalUserData() {
+  try {
+    if (db) {
+      await dbClear('dossiers');
+      await dbClear('settings');
+    }
+  } catch (e) {
+    console.error('wipeLocalUserData IDB error', e);
+  }
+  // Reset mémoire
+  state.dossiers = [];
+  state.settings = { ...DEFAULT_SETTINGS };
+  // Reset flag migration (chaque user a sa propre migration)
+  try {
+    localStorage.removeItem('astreintes_migration_done_v1');
+  } catch (e) {}
+  // Reset état admin
+  adminState.users = [];
+  adminState.logs = [];
+  adminState.editingUser = null;
+  adminState.creatingUser = false;
+  // Reset état cloud
+  cloudSyncState.status = 'idle';
+  cloudSyncState.lastSync = null;
+  cloudSyncState.pendingChanges = 0;
+  cloudSyncState.lastError = null;
 }
 
 async function authValidate() {
@@ -1935,7 +1966,7 @@ function renderLoginScreen() {
           ${authState.loading ? '⏳ Connexion...' : '🔓 Se connecter'}
         </button>
         <div class="login-footer">
-          Astreintes AMI2S V2.10.2 • Session 7 jours
+          Astreintes AMI2S V2.10.3 • Session 7 jours
         </div>
       </div>
     </div>
@@ -1968,7 +1999,37 @@ function renderLoginScreen() {
 
 async function startMainApp() {
   try {
+    // V2.10.3 — Vérifier que les données locales appartiennent bien au user connecté
+    await openDB();
+    const lastUserRow = await dbGet('settings', '_last_user');
+    const currentUserId = authState.user && authState.user.id;
+    if (lastUserRow && lastUserRow.value !== currentUserId) {
+      // L'appareil a été utilisé par un autre user avant → vider les données
+      console.log('Changement d\'utilisateur détecté, nettoyage local...');
+      await wipeLocalUserData();
+    }
+    // Marquer le user courant comme propriétaire des données locales
+    if (currentUserId) {
+      await dbPut('settings', { key: '_last_user', value: currentUserId });
+    }
+
     await loadState();
+
+    // V2.10.3 — Récupérer les settings personnels depuis le cloud
+    if (authState.isAuthenticated) {
+      try {
+        const cloudSettings = await cloudGetUserSettings();
+        if (cloudSettings) {
+          // Fusionner avec les settings actuels (cloud prioritaire sur les champs personnels)
+          state.settings = { ...DEFAULT_SETTINGS, ...state.settings, ...cloudSettings };
+          await dbPut('settings', { key: 'main', value: state.settings });
+        }
+      } catch (e) {
+        console.error('cloudGetUserSettings error', e);
+      }
+    }
+
+    applyTheme();
     render();
 
     if ('serviceWorker' in navigator) {
@@ -1987,7 +2048,7 @@ async function startMainApp() {
       requestGeolocationPermission();
     }
 
-    // V2.10.1 — Cloud pull au démarrage (récupère les modifs faites depuis un autre device)
+    // V2.10.1 — Cloud pull au démarrage (récupère uniquement les dossiers du user connecté)
     if (authState.isAuthenticated) {
       setTimeout(() => cloudPull(false), 1500);
     }
@@ -2245,6 +2306,41 @@ async function cloudMapsGeocode(lat, lng) {
     return { success: false, error: 'Non connecté' };
   }
   return await cloudCall('geocode', { lat, lng });
+}
+
+// ── V2.10.3 — Settings cloud par user ──────────────────────────
+async function cloudGetUserSettings() {
+  if (!authState.isAuthenticated) return null;
+  const res = await cloudCall('getUserSettings', {});
+  if (res.success) return res.settings; // null si pas encore de settings cloud
+  return null;
+}
+
+let userSettingsSyncTimeout = null;
+function scheduleUserSettingsSave() {
+  if (!authState.isAuthenticated) return;
+  if (userSettingsSyncTimeout) clearTimeout(userSettingsSyncTimeout);
+  userSettingsSyncTimeout = setTimeout(async () => {
+    // On ne sauvegarde QUE les settings personnels (pas les credentials de sync legacy)
+    const personal = {
+      technicien: state.settings.technicien,
+      email: state.settings.email,
+      emailDestinataire: state.settings.emailDestinataire,
+      adresseDomicile: state.settings.adresseDomicile,
+      statutSemaine: state.settings.statutSemaine,
+      arrondi: state.settings.arrondi,
+      rappelHeure: state.settings.rappelHeure,
+      rappelActif: state.settings.rappelActif,
+      alertesActives: state.settings.alertesActives,
+      favorisEtablissements: state.settings.favorisEtablissements,
+      agence: state.settings.agence
+    };
+    try {
+      await cloudCall('saveUserSettings', { settings: personal });
+    } catch (e) {
+      console.error('cloudSaveUserSettings error', e);
+    }
+  }, 1500);
 }
 
 // ============================================================================
@@ -2817,6 +2913,10 @@ async function loadState() {
 
 async function saveSettings() {
   await dbPut('settings', { key: 'main', value: state.settings });
+  // V2.10.3 — Sync settings personnels vers le cloud (debounce)
+  if (typeof scheduleUserSettingsSave === 'function' && authState && authState.isAuthenticated) {
+    scheduleUserSettingsSave();
+  }
 }
 
 async function saveDossier(d) {
