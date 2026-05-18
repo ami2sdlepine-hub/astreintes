@@ -1966,7 +1966,7 @@ function renderLoginScreen() {
           ${authState.loading ? '⏳ Connexion...' : '🔓 Se connecter'}
         </button>
         <div class="login-footer">
-          Astreintes AMI2S V2.10.3 • Session 7 jours
+          Astreintes AMI2S V2.10.4 • Session 7 jours
         </div>
       </div>
     </div>
@@ -3615,8 +3615,8 @@ function renderDeplacement(d) {
             📍 Calculer
           </button>
         </div>
-        ${!state.settings.syncEnabled ? `
-          <div class="help-text">💡 Pour le calcul auto : configure la sync Apps Script</div>
+        ${!authState.isAuthenticated ? `
+          <div class="help-text">💡 Connecte-toi pour activer le calcul automatique</div>
         ` : !state.settings.adresseDomicile ? `
           <div class="help-text">💡 Pour le calcul auto : Réglages → Adresse domicile</div>
         ` : d.pointDepart === 'domicile' ? `
@@ -4464,29 +4464,6 @@ function renderSettings() {
       </div>
       
       <div class="settings-section">
-        <div class="settings-section-title">Synchronisation Cloud</div>
-        <div class="settings-group">
-          <div class="settings-row" data-action="show-sync">
-            <div class="settings-row-icon">☁️</div>
-            <div class="settings-row-content">
-              <div class="settings-row-title">Google Sheets ${renderSyncBadge()}</div>
-              <div class="settings-row-value">${s.syncEnabled ? (s.lastSync ? 'Dernière sync : ' + fmtDateTime(s.lastSync) : 'Activé, pas encore synchronisé') : 'Cliquer pour configurer'}</div>
-            </div>
-            <span class="settings-row-chevron">›</span>
-          </div>
-          ${s.syncEnabled ? `
-            <div class="settings-row" data-action="sync-now">
-              <div class="settings-row-icon">🔄</div>
-              <div class="settings-row-content">
-                <div class="settings-row-title">Synchroniser maintenant</div>
-                <div class="settings-row-value">Forcer une synchronisation manuelle</div>
-              </div>
-            </div>
-          ` : ''}
-        </div>
-      </div>
-      
-      <div class="settings-section">
         <div class="settings-section-title">Données</div>
         <div class="settings-group">
           <div class="settings-row" data-action="export-data">
@@ -4516,7 +4493,7 @@ function renderSettings() {
       </div>
       
       <div class="text-center" style="padding:24px 0;font-size:11px;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace">
-        Astreintes AMI2S V2.10.3<br>
+        Astreintes AMI2S V2.10.4<br>
         ${state.dossiers.length} dossier(s) • ${new Date().toISOString().substring(0,10)}
       </div>
     </div>
@@ -6019,8 +5996,8 @@ async function calculateDistance() {
   // L'ID du dossier en cours d'édition (pour l'exclure de la recherche du site précédent)
   const currentDossierId = workingDossier.id;
   
-  if (!state.settings.syncUrl || !state.settings.syncToken) {
-    toast('Configure d\'abord la sync Apps Script dans Réglages', 'error');
+  if (!authState.isAuthenticated) {
+    toast('Tu dois être connecté pour calculer la distance', 'error');
     return;
   }
   if (!destination) { toast('Saisis d\'abord l\'adresse du site', 'error'); return; }
