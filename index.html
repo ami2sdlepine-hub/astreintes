@@ -1741,7 +1741,7 @@ function renderLoginScreen() {
           ${authState.loading ? '⏳ Connexion...' : '🔓 Se connecter'}
         </button>
         <div class="login-footer">
-          Astreintes AMI2S V2.10.0 • Session 7 jours
+          Astreintes AMI2S V2.10.1 • Session 7 jours
         </div>
       </div>
     </div>
@@ -1793,8 +1793,9 @@ async function startMainApp() {
       requestGeolocationPermission();
     }
 
-    if (state.settings.syncEnabled && state.settings.syncUrl) {
-      setTimeout(() => doFullSync(false), 2000);
+    // V2.10.1 — Cloud pull au démarrage (récupère les modifs faites depuis un autre device)
+    if (authState.isAuthenticated) {
+      setTimeout(() => cloudPull(false), 1500);
     }
   } catch (err) {
     console.error('startMainApp error', err);
@@ -1809,6 +1810,251 @@ async function handleLogoutClick() {
 
 // ============================================================================
 // FIN MODULE AUTH V2.10.0
+// ============================================================================
+
+
+
+// ============================================================================
+// ASTREINTES AMI2S V2.10.1 — MODULE CLOUD SYNC (Patch 2)
+// ============================================================================
+// Sync bidirectionnelle dossiers avec le nouveau backend multi-tenants.
+// Migration manuelle des dossiers locaux vers le cloud (bouton Réglages).
+// ============================================================================
+
+let cloudSyncState = {
+  status: 'idle', // idle | syncing | ok | error
+  lastSync: null,
+  pendingChanges: 0,
+  lastError: null
+};
+
+// ── Appel API authentifié (réutilise authCall) ─────────────────
+async function cloudCall(action, data) {
+  if (!authState.token) {
+    return { success: false, error: 'Non authentifié' };
+  }
+  return await authCall(action, data);
+}
+
+// ── Récupérer tous les dossiers du cloud pour cet utilisateur ──
+async function cloudPull(showFeedback = false) {
+  if (!authState.isAuthenticated) return { success: false, error: 'Non connecté' };
+
+  cloudSyncState.status = 'syncing';
+  updateSyncBadge();
+
+  try {
+    const res = await cloudCall('getDossiers', {});
+    if (!res.success) throw new Error(res.error);
+
+    const remoteDossiers = res.dossiers || [];
+    const localById = {};
+    state.dossiers.forEach(d => { localById[d.id] = d; });
+
+    let added = 0, updated = 0;
+    for (const remote of remoteDossiers) {
+      // Mapper les champs cloud → local (cloud utilise snake_case parfois)
+      const adapted = adaptCloudToLocal(remote);
+      const local = localById[adapted.id];
+      if (!local) {
+        await dbPut('dossiers', adapted);
+        state.dossiers.push(adapted);
+        added++;
+      } else {
+        const localTime = new Date(local.updatedAt || local.updated_at || local.createdAt || 0).getTime();
+        const remoteTime = new Date(adapted.updatedAt || adapted.updated_at || 0).getTime();
+        if (remoteTime > localTime) {
+          await dbPut('dossiers', adapted);
+          const idx = state.dossiers.findIndex(x => x.id === adapted.id);
+          if (idx >= 0) state.dossiers[idx] = adapted;
+          updated++;
+        }
+      }
+    }
+
+    cloudSyncState.status = 'ok';
+    cloudSyncState.lastSync = new Date().toISOString();
+    cloudSyncState.lastError = null;
+    updateSyncBadge();
+
+    if (showFeedback) {
+      toast(`Cloud : ${added} ajoutés, ${updated} mis à jour`, 'success');
+    }
+    if (typeof render === 'function') render();
+    return { success: true, added, updated };
+  } catch (err) {
+    console.error('cloudPull error', err);
+    cloudSyncState.status = 'error';
+    cloudSyncState.lastError = err.message;
+    updateSyncBadge();
+    if (showFeedback) toast('Erreur cloud pull : ' + err.message, 'error');
+    return { success: false, error: err.message };
+  }
+}
+
+// ── Envoyer un dossier vers le cloud ────────────────────────────
+async function cloudPushDossier(dossier, showFeedback = false) {
+  if (!authState.isAuthenticated) return { success: false, error: 'Non connecté' };
+
+  try {
+    const adapted = adaptLocalToCloud(dossier);
+    const res = await cloudCall('saveDossier', { dossier: adapted });
+    if (!res.success) throw new Error(res.error);
+    if (showFeedback) toast('Dossier synchronisé', 'success');
+    return { success: true };
+  } catch (err) {
+    console.error('cloudPushDossier error', err);
+    if (showFeedback) toast('Erreur push : ' + err.message, 'error');
+    return { success: false, error: err.message };
+  }
+}
+
+// ── Sync auto en arrière-plan (debounce) ───────────────────────
+let cloudSyncTimeout = null;
+function scheduleCloudSync(dossier) {
+  if (!authState.isAuthenticated) return;
+  cloudSyncState.pendingChanges++;
+  updateSyncBadge();
+
+  if (cloudSyncTimeout) clearTimeout(cloudSyncTimeout);
+  cloudSyncTimeout = setTimeout(async () => {
+    if (dossier) {
+      await cloudPushDossier(dossier, false);
+    }
+    cloudSyncState.pendingChanges = 0;
+    cloudSyncState.lastSync = new Date().toISOString();
+    cloudSyncState.status = 'ok';
+    updateSyncBadge();
+  }, 3000);
+}
+
+// ── Adaptateurs entre format local et format cloud ─────────────
+function adaptLocalToCloud(d) {
+  // Cloud attend les mêmes noms de champs mais ajoute user_id/username
+  return {
+    id: d.id,
+    user_id: d.user_id || (authState.user && authState.user.id) || '',
+    username: d.username || (authState.user && authState.user.username) || '',
+    type: d.type || '',
+    dateAppel: d.dateAppel || '',
+    heureAppel: d.heureAppel || '',
+    etablissement: d.etablissement || '',
+    codeAstreinte: d.codeAstreinte || '',
+    demandeur: d.demandeur || '',
+    rapportNum: d.rapportNum || d.rapportN || '',
+    departDomicile: d.departDomicile || '',
+    arriveeSite: d.arriveeSite || '',
+    finIntervention: d.finIntervention || '',
+    retourDomicile: d.retourDomicile || '',
+    adresse: d.adresse || d.adresseSite || '',
+    km: d.km !== undefined ? d.km : '',
+    motif: d.motif || '',
+    rapport: d.rapport || '',
+    compteRendu: d.compteRendu || '',
+    sequenceId: d.sequenceId || '',
+    cloture: d.cloture || d.statut === 'cloture' || false,
+    recupereERP: d.recupereERP || false,
+    created_at: d.createdAt || d.created_at || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    deleted: d.deleted || false
+  };
+}
+
+function adaptCloudToLocal(d) {
+  // On préserve les champs natifs du local pour éviter de casser la V2.9.12
+  return {
+    id: d.id,
+    user_id: d.user_id,
+    username: d.username,
+    type: d.type,
+    dateAppel: d.dateAppel,
+    heureAppel: d.heureAppel,
+    etablissement: d.etablissement,
+    codeAstreinte: d.codeAstreinte,
+    demandeur: d.demandeur,
+    rapportNum: d.rapportNum,
+    rapportN: d.rapportNum, // alias rétrocompat
+    departDomicile: d.departDomicile,
+    arriveeSite: d.arriveeSite,
+    finIntervention: d.finIntervention,
+    retourDomicile: d.retourDomicile,
+    adresse: d.adresse,
+    adresseSite: d.adresse, // alias rétrocompat
+    km: d.km,
+    motif: d.motif,
+    rapport: d.rapport,
+    compteRendu: d.compteRendu,
+    sequenceId: d.sequenceId,
+    cloture: d.cloture,
+    statut: d.cloture ? 'cloture' : 'intervention',
+    recupereERP: d.recupereERP,
+    createdAt: d.created_at,
+    created_at: d.created_at,
+    updatedAt: d.updated_at,
+    updated_at: d.updated_at,
+    deleted: d.deleted
+  };
+}
+
+// ── Migration des dossiers locaux vers le cloud (bouton manuel) ─
+async function migrateLocalDossiersToCloud() {
+  if (!authState.isAuthenticated) {
+    toast('Vous devez être connecté', 'error');
+    return;
+  }
+
+  const localCount = state.dossiers.length;
+  if (localCount === 0) {
+    toast('Aucun dossier local à migrer', 'warning');
+    return;
+  }
+
+  if (!confirm(`Migrer ${localCount} dossier(s) local(aux) vers le cloud ?\n\nLes dossiers existants dans le cloud avec le même ID seront mis à jour.`)) {
+    return;
+  }
+
+  toast(`Migration de ${localCount} dossiers en cours...`, 'warning');
+  let success = 0, errors = 0;
+
+  for (let i = 0; i < state.dossiers.length; i++) {
+    const d = state.dossiers[i];
+    const res = await cloudPushDossier(d, false);
+    if (res.success) success++;
+    else errors++;
+    // Petit délai pour pas saturer Google
+    if (i % 5 === 4) await new Promise(r => setTimeout(r, 500));
+  }
+
+  if (errors === 0) {
+    toast(`${success} dossiers migrés avec succès`, 'success');
+    localStorage.setItem('astreintes_migration_done_v1', '1');
+  } else {
+    toast(`${success} OK, ${errors} erreurs`, 'warning');
+  }
+  if (typeof render === 'function') render();
+}
+
+function hasMigrationBeenDone() {
+  return localStorage.getItem('astreintes_migration_done_v1') === '1';
+}
+
+// ── Helper : appel Maps via nouveau backend (remplace l'ancien) ─
+async function cloudMapsDistance(origin, destination) {
+  if (!authState.isAuthenticated) {
+    return { success: false, error: 'Non connecté' };
+  }
+  return await cloudCall('calculate-distance', { origin, destination });
+}
+
+async function cloudMapsGeocode(lat, lng) {
+  if (!authState.isAuthenticated) {
+    return { success: false, error: 'Non connecté' };
+  }
+  return await cloudCall('geocode', { lat, lng });
+}
+
+// ============================================================================
+// FIN MODULE CLOUD SYNC V2.10.1
 // ============================================================================
 
 
@@ -2014,19 +2260,29 @@ async function saveDossier(d) {
   // V2.9.9 — Nettoyer le flag _isEdit (résidu d'édition) à chaque sauvegarde
   delete d._isEdit;
   d.updatedAt = new Date().toISOString();
+  d.updated_at = d.updatedAt; // alias pour compat cloud
   await dbPut('dossiers', d);
   // Update in memory
   const idx = state.dossiers.findIndex(x => x.id === d.id);
   if (idx >= 0) state.dossiers[idx] = d;
   else state.dossiers.push(d);
-  // Trigger sync if enabled
-  scheduleSync();
+  // V2.10.1 — Sync cloud (auto, debounced)
+  if (authState.isAuthenticated) {
+    scheduleCloudSync(d);
+  } else {
+    scheduleSync(); // legacy ancien backend (sera inactif si pas configuré)
+  }
 }
 
 async function deleteDossier(id) {
   await dbDelete('dossiers', id);
   state.dossiers = state.dossiers.filter(d => d.id !== id);
-  scheduleSync();
+  // V2.10.1 — Marquer deleted côté cloud aussi
+  if (authState.isAuthenticated) {
+    cloudCall('deleteDossier', { id }).catch(err => console.error('deleteDossier cloud', err));
+  } else {
+    scheduleSync();
+  }
 }
 
 // ----------------------------------------------------------------------------
@@ -2212,6 +2468,17 @@ function updateSyncBadge() {
 }
 
 function renderSyncBadge() {
+  // V2.10.1 — Prioriser l'état cloud (nouveau backend) si authentifié
+  if (typeof authState !== 'undefined' && authState.isAuthenticated && typeof cloudSyncState !== 'undefined') {
+    const map = {
+      ok:      `<span class="sync-badge ok" id="sync-badge"><span class="sync-dot"></span>☁ Synchronisé</span>`,
+      syncing: `<span class="sync-badge pending" id="sync-badge"><span class="sync-dot"></span>☁ Sync...</span>`,
+      error:   `<span class="sync-badge error" id="sync-badge"><span class="sync-dot"></span>☁ Erreur</span>`,
+      idle:    `<span class="sync-badge ok" id="sync-badge"><span class="sync-dot"></span>☁ Connecté</span>`
+    };
+    return map[cloudSyncState.status] || map.idle;
+  }
+  // Legacy : ancien backend
   if (!state.settings.syncEnabled) return `<span class="sync-badge off" id="sync-badge"><span class="sync-dot"></span>Désactivé</span>`;
   const map = {
     ok: `<span class="sync-badge ok" id="sync-badge"><span class="sync-dot"></span>Synchronisé</span>`,
@@ -2670,7 +2937,7 @@ function renderDeplacement(d) {
         <label class="form-label">Distance parcourue (km)</label>
         <div style="display:flex;gap:8px;align-items:stretch">
           <input type="number" class="form-input" data-bind="km" value="${escapeHtml(d.km)}" placeholder="Ex: 8.4" step="0.1" inputmode="decimal" style="flex:1">
-          <button class="btn btn-primary" data-action="calc-distance" style="white-space:nowrap;padding:0 14px" ${!state.settings.syncEnabled || !state.settings.adresseDomicile ? 'disabled' : ''}>
+          <button class="btn btn-primary" data-action="calc-distance" style="white-space:nowrap;padding:0 14px" ${!authState.isAuthenticated || !state.settings.adresseDomicile ? 'disabled' : ''}>
             📍 Calculer
           </button>
         </div>
@@ -2880,7 +3147,7 @@ function renderDetail() {
             </div>
           </div>
           <div style="display:flex;gap:8px;margin-top:12px">
-            <button class="btn btn-primary" style="flex:1" data-action="calc-distance" ${!state.settings.syncEnabled || !d.adresseSite ? 'disabled' : ''}>📍 Calculer km</button>
+            <button class="btn btn-primary" style="flex:1" data-action="calc-distance" ${!authState.isAuthenticated || !d.adresseSite ? 'disabled' : ''}>📍 Calculer km</button>
           </div>
         </div>
       ` : ''}
@@ -3329,6 +3596,17 @@ async function editRapportPeriodeCustom() {
 // ----- SETTINGS -----
 function renderSettings() {
   const s = state.settings;
+  // V2.10.1 — Infos compte cloud
+  const user = authState.user || {};
+  const roleLabel = {
+    admin: '🔴 Administrateur',
+    technicien: '🟢 Technicien',
+    manager: '🟡 Manager'
+  }[user.role] || user.role;
+  const localCount = state.dossiers.length;
+  const migrationDone = hasMigrationBeenDone();
+  const sessionExp = authState.expiresAt ? new Date(authState.expiresAt).toLocaleString('fr-FR') : '—';
+
   return `
     <header class="app-header">
       <div class="header-top">
@@ -3340,6 +3618,54 @@ function renderSettings() {
     </header>
     
     <div class="form-screen">
+      
+      <!-- V2.10.1 — Compte & Cloud -->
+      <div class="settings-section">
+        <div class="settings-section-title">☁ Compte & Cloud V2.10</div>
+        <div class="settings-group">
+          <div class="settings-row" style="cursor:default">
+            <div class="settings-row-icon">👤</div>
+            <div class="settings-row-content">
+              <div class="settings-row-title">${escapeHtml(user.username || '—')}</div>
+              <div class="settings-row-value">${roleLabel || '—'} • ${escapeHtml(user.nom_complet || '')}</div>
+            </div>
+          </div>
+          <div class="settings-row" style="cursor:default">
+            <div class="settings-row-icon">🔐</div>
+            <div class="settings-row-content">
+              <div class="settings-row-title">Session</div>
+              <div class="settings-row-value">Valide jusqu'au ${sessionExp}</div>
+            </div>
+            ${renderSyncBadge()}
+          </div>
+          <div class="settings-row" style="cursor:default">
+            <div class="settings-row-icon">📊</div>
+            <div class="settings-row-content">
+              <div class="settings-row-title">Données locales</div>
+              <div class="settings-row-value">${localCount} dossier(s) sur cet appareil</div>
+            </div>
+          </div>
+        </div>
+        <div style="padding:12px;display:flex;flex-direction:column;gap:8px">
+          ${!migrationDone && localCount > 0 ? `
+            <button class="btn btn-primary" data-action="migrate-cloud" style="width:100%">
+              📤 Migrer mes ${localCount} dossier(s) vers le cloud
+            </button>
+            <div style="font-size:11px;color:var(--text-tertiary);text-align:center">
+              À faire une seule fois pour basculer sur le nouveau backend
+            </div>
+          ` : `
+            <button class="btn btn-secondary" data-action="cloud-pull-now" style="width:100%">
+              🔄 Synchroniser maintenant
+            </button>
+            ${migrationDone ? '<div style="font-size:11px;color:var(--text-tertiary);text-align:center">✅ Migration déjà effectuée</div>' : ''}
+          `}
+          <button class="btn btn-secondary" data-action="logout" style="width:100%;color:#dc2626;border-color:#fecaca">
+            🚪 Se déconnecter
+          </button>
+        </div>
+      </div>
+      
       <div class="settings-section">
         <div class="settings-section-title">Apparence</div>
         <div class="settings-group">
@@ -4091,6 +4417,16 @@ async function handleAction(e) {
       await saveSettings();
       applyTheme();
       render();
+      break;
+    // V2.10.1 — Cloud & Compte
+    case 'migrate-cloud':
+      await migrateLocalDossiersToCloud();
+      break;
+    case 'cloud-pull-now':
+      await cloudPull(true);
+      break;
+    case 'logout':
+      await handleLogoutClick();
       break;
     case 'show-sync':
       showSyncModal();
@@ -4961,24 +5297,11 @@ async function performDistanceCalc(origin, destination, dossier, isExisting) {
   toast('Calcul en cours...', 'warning');
   
   try {
-    const payload = {
-      token: state.settings.syncToken,
-      action: 'calculate-distance',
-      origin: origin,
-      destination: destination
-    };
+    // V2.10.1 — Utilisation du nouveau backend authentifié
+    const data = await cloudMapsDistance(origin, destination);
     
-    const response = await fetch(state.settings.syncUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(payload)
-    });
-    
-    if (!response.ok) throw new Error('HTTP ' + response.status);
-    const data = await response.json();
-    
-    if (data.error) {
-      toast('Erreur : ' + data.error, 'error');
+    if (!data.success) {
+      toast('Erreur : ' + (data.error || 'inconnue'), 'error');
       return;
     }
     
@@ -5212,22 +5535,11 @@ async function getCurrentLocation() {
     const lat = position.coords.latitude;
     const lng = position.coords.longitude;
     
-    // Geocoder via Apps Script
-    const response = await fetch(state.settings.syncUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({
-        token: state.settings.syncToken,
-        action: 'geocode',
-        lat: lat,
-        lng: lng
-      })
-    });
+    // V2.10.1 — Geocoder via nouveau backend authentifié
+    const data = await cloudMapsGeocode(lat, lng);
     
-    const data = await response.json();
-    
-    if (data.error) {
-      toast('Geocoding : ' + data.error, 'error');
+    if (!data.success) {
+      toast('Geocoding : ' + (data.error || 'erreur'), 'error');
       return null;
     }
     
