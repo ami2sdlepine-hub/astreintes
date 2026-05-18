@@ -1503,6 +1503,200 @@ body { font-size: 15px; line-height: 1.5; }
   color: var(--text);
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   V2.10.2 — Admin : Users + Logs + Modale édition
+   ═══════════════════════════════════════════════════════════════ */
+.user-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+}
+.user-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+}
+.user-card.user-inactive {
+  opacity: 0.55;
+  background: var(--bg-secondary);
+}
+.user-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+  gap: 12px;
+}
+.user-card-username {
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--text);
+}
+.user-card-name {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+.user-card-role {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  padding: 3px 8px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.user-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-bottom: 10px;
+}
+.user-card-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.btn-sm {
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 8px;
+}
+
+/* Modale édition user */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 16px;
+}
+.user-edit-modal {
+  background: var(--surface);
+  border-radius: 14px;
+  max-width: 440px;
+  width: 100%;
+  max-height: 90vh;
+  overflow: auto;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+}
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-title {
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--text);
+}
+.modal-close {
+  background: transparent;
+  border: none;
+  font-size: 26px;
+  cursor: pointer;
+  color: var(--text-tertiary);
+  line-height: 1;
+  padding: 0 4px;
+}
+.modal-body {
+  padding: 16px 18px;
+}
+.modal-body .form-group {
+  margin-bottom: 14px;
+}
+.modal-body label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 5px;
+}
+.modal-body input,
+.modal-body select {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  box-sizing: border-box;
+}
+.modal-body input:focus,
+.modal-body select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.modal-footer {
+  display: flex;
+  gap: 8px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--border);
+  justify-content: flex-end;
+}
+
+/* Logs */
+.log-list {
+  padding: 0 12px 24px;
+}
+.log-row {
+  display: grid;
+  grid-template-columns: 100px 90px 130px 1fr;
+  gap: 10px;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+}
+.log-time {
+  color: var(--text-tertiary);
+  font-family: monospace;
+}
+.log-user {
+  font-weight: 600;
+  color: var(--text);
+}
+.log-action {
+  font-weight: 600;
+  font-family: monospace;
+}
+.log-details {
+  color: var(--text-secondary);
+  word-break: break-word;
+}
+@media (max-width: 600px) {
+  .log-row {
+    grid-template-columns: 90px 1fr;
+    grid-template-areas: "time user" "action action" "details details";
+  }
+  .log-time { grid-area: time; }
+  .log-user { grid-area: user; }
+  .log-action { grid-area: action; }
+  .log-details { grid-area: details; }
+}
+
+.header-back {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 8px;
+  margin-right: 8px;
+}
+.header-back:hover {
+  color: var(--text);
+}
+
 </style>
 </head>
 <body>
@@ -1741,7 +1935,7 @@ function renderLoginScreen() {
           ${authState.loading ? '⏳ Connexion...' : '🔓 Se connecter'}
         </button>
         <div class="login-footer">
-          Astreintes AMI2S V2.10.1 • Session 7 jours
+          Astreintes AMI2S V2.10.2 • Session 7 jours
         </div>
       </div>
     </div>
@@ -2055,6 +2249,375 @@ async function cloudMapsGeocode(lat, lng) {
 
 // ============================================================================
 // FIN MODULE CLOUD SYNC V2.10.1
+// ============================================================================
+
+
+
+// ============================================================================
+// ASTREINTES AMI2S V2.10.2 — MODULE ADMIN (Patch 3a)
+// ============================================================================
+// CRUD utilisateurs + consultation logs. Admin uniquement.
+// Filtrage côté frontend + sécurité côté backend (déjà en place).
+// ============================================================================
+
+let adminState = {
+  users: [],
+  logs: [],
+  editingUser: null,    // user en cours d'édition (modale)
+  creatingUser: false,  // true si on est en mode création
+  loading: false,
+  error: null
+};
+
+// ── Helpers d'accès admin ──────────────────────────────────────
+function isAdmin() {
+  return authState.isAuthenticated && authState.user && authState.user.role === 'admin';
+}
+
+function isManager() {
+  return authState.isAuthenticated && authState.user && authState.user.role === 'manager';
+}
+
+// ── Charger la liste des utilisateurs ───────────────────────────
+async function adminLoadUsers() {
+  if (!isAdmin()) { toast('Accès refusé', 'error'); return; }
+  adminState.loading = true;
+  adminState.error = null;
+  if (typeof render === 'function') render();
+
+  try {
+    const res = await cloudCall('listUsers', {});
+    if (!res.success) throw new Error(res.error);
+    adminState.users = res.users || [];
+    adminState.loading = false;
+    if (typeof render === 'function') render();
+  } catch (err) {
+    adminState.loading = false;
+    adminState.error = err.message;
+    toast('Erreur: ' + err.message, 'error');
+    if (typeof render === 'function') render();
+  }
+}
+
+// ── Créer un utilisateur ────────────────────────────────────────
+async function adminCreateUser(userData) {
+  if (!isAdmin()) return { success: false, error: 'Accès refusé' };
+
+  // Validation côté frontend
+  if (!userData.username || userData.username.trim().length < 2) {
+    return { success: false, error: 'Username trop court (min 2 caractères)' };
+  }
+  if (!userData.password || userData.password.length < 6) {
+    return { success: false, error: 'Mot de passe trop court (min 6 caractères)' };
+  }
+  if (!['admin', 'technicien', 'manager'].includes(userData.role)) {
+    return { success: false, error: 'Rôle invalide' };
+  }
+
+  try {
+    const res = await cloudCall('createUser', userData);
+    if (!res.success) return { success: false, error: res.error };
+    toast(`✅ Compte "${userData.username}" créé`, 'success');
+    await adminLoadUsers();
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+// ── Modifier un utilisateur ─────────────────────────────────────
+async function adminUpdateUser(userData) {
+  if (!isAdmin()) return { success: false, error: 'Accès refusé' };
+  if (!userData.id) return { success: false, error: 'ID requis' };
+
+  try {
+    const res = await cloudCall('updateUser', userData);
+    if (!res.success) return { success: false, error: res.error };
+    toast('✅ Modifications enregistrées', 'success');
+    await adminLoadUsers();
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+// ── Supprimer un utilisateur ────────────────────────────────────
+async function adminDeleteUser(id, username) {
+  if (!isAdmin()) return;
+  if (!confirm(`Supprimer définitivement le compte "${username}" ?\n\nCette action est irréversible. Les dossiers de cet utilisateur resteront dans la base mais ne seront plus accessibles.`)) {
+    return;
+  }
+
+  try {
+    const res = await cloudCall('deleteUser', { id });
+    if (!res.success) {
+      toast('Erreur: ' + res.error, 'error');
+      return;
+    }
+    toast(`🗑 Compte "${username}" supprimé`, 'success');
+    await adminLoadUsers();
+  } catch (err) {
+    toast('Erreur: ' + err.message, 'error');
+  }
+}
+
+// ── Reset password d'un utilisateur ─────────────────────────────
+async function adminResetPassword(id, username) {
+  if (!isAdmin()) return;
+
+  const newPwd = prompt(`Nouveau mot de passe pour "${username}" :\n(min 6 caractères, le user devra le changer au prochain login)`, '');
+  if (!newPwd) return;
+  if (newPwd.length < 6) {
+    toast('Mot de passe trop court (min 6 caractères)', 'error');
+    return;
+  }
+
+  try {
+    const res = await cloudCall('resetPassword', { id, newPassword: newPwd });
+    if (!res.success) {
+      toast('Erreur: ' + res.error, 'error');
+      return;
+    }
+    toast(`🔐 Mot de passe réinitialisé pour "${username}"`, 'success');
+    toast(`Communique-lui : ${newPwd}`, 'warning');
+    await adminLoadUsers();
+  } catch (err) {
+    toast('Erreur: ' + err.message, 'error');
+  }
+}
+
+// ── Charger les logs ────────────────────────────────────────────
+async function adminLoadLogs() {
+  if (!isAdmin()) { toast('Accès refusé', 'error'); return; }
+  adminState.loading = true;
+  if (typeof render === 'function') render();
+
+  try {
+    const res = await cloudCall('getLogs', { limit: 200 });
+    if (!res.success) throw new Error(res.error);
+    adminState.logs = res.logs || [];
+    adminState.loading = false;
+    if (typeof render === 'function') render();
+  } catch (err) {
+    adminState.loading = false;
+    adminState.error = err.message;
+    toast('Erreur: ' + err.message, 'error');
+    if (typeof render === 'function') render();
+  }
+}
+
+// ── Rendu : page Liste des utilisateurs ─────────────────────────
+function renderAdminUsers() {
+  const me = authState.user || {};
+  const users = adminState.users || [];
+
+  const rows = users.map(u => {
+    const roleEmoji = { admin: '🔴', technicien: '🟢', manager: '🟡' }[u.role] || '⚪';
+    const roleLabel = { admin: 'Admin', technicien: 'Technicien', manager: 'Manager' }[u.role] || u.role;
+    const isMe = u.id === me.id;
+    const isActive = u.active === true || u.active === 'TRUE';
+    const lastLogin = u.last_login ? new Date(u.last_login).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'Jamais';
+
+    return `
+      <div class="user-card ${!isActive ? 'user-inactive' : ''}">
+        <div class="user-card-header">
+          <div>
+            <div class="user-card-username">${roleEmoji} ${escapeHtml(u.username)}${isMe ? ' <span style="font-size:10px;color:var(--text-tertiary)">(moi)</span>' : ''}</div>
+            <div class="user-card-name">${escapeHtml(u.nom_complet || '—')}</div>
+          </div>
+          <div class="user-card-role">${roleLabel}${!isActive ? ' • 🚫 inactif' : ''}</div>
+        </div>
+        <div class="user-card-meta">
+          ${u.email ? `<span>📧 ${escapeHtml(u.email)}</span>` : ''}
+          <span>🕐 Dernier login : ${lastLogin}</span>
+          ${u.must_change_pwd ? '<span style="color:#f59e0b">⚠ Doit changer MDP</span>' : ''}
+        </div>
+        <div class="user-card-actions">
+          <button class="btn btn-secondary btn-sm" data-action="admin-edit-user" data-user-id="${u.id}">✏️ Modifier</button>
+          <button class="btn btn-secondary btn-sm" data-action="admin-reset-pwd" data-user-id="${u.id}" data-username="${escapeHtml(u.username)}">🔐 Reset MDP</button>
+          ${!isMe ? `<button class="btn btn-secondary btn-sm" data-action="admin-delete-user" data-user-id="${u.id}" data-username="${escapeHtml(u.username)}" style="color:#dc2626">🗑</button>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  return `
+    <header class="app-header">
+      <div class="header-top">
+        <button class="header-back" data-action="back-to-settings">← Réglages</button>
+        <div>
+          <div class="header-title">👥 Utilisateurs</div>
+          <div class="header-subtitle">${users.length} compte(s)</div>
+        </div>
+      </div>
+    </header>
+    <div class="form-screen">
+      <div style="padding:12px">
+        <button class="btn btn-primary" style="width:100%" data-action="admin-create-user">
+          ➕ Créer un nouvel utilisateur
+        </button>
+      </div>
+      ${adminState.loading ? '<div style="text-align:center;padding:40px;color:var(--text-secondary)">⏳ Chargement...</div>' : ''}
+      ${!adminState.loading && users.length === 0 ? '<div style="text-align:center;padding:40px;color:var(--text-tertiary)">Aucun utilisateur</div>' : ''}
+      <div class="user-list">
+        ${rows}
+      </div>
+    </div>
+  `;
+}
+
+// ── Rendu : modale création/édition d'user ──────────────────────
+function renderUserEditModal() {
+  const u = adminState.editingUser || {};
+  const isNew = adminState.creatingUser;
+  const title = isNew ? '➕ Créer un utilisateur' : `✏️ Modifier ${u.username}`;
+
+  return `
+    <div class="modal-overlay" data-action="close-user-modal">
+      <div class="modal-content user-edit-modal" onclick="event.stopPropagation()">
+        <div class="modal-header">
+          <div class="modal-title">${title}</div>
+          <button class="modal-close" data-action="close-user-modal">×</button>
+        </div>
+        <div class="modal-body">
+          ${isNew ? `
+            <div class="form-group">
+              <label>Username * <span style="color:var(--text-tertiary);font-weight:normal">(pas d'espace, sans accents)</span></label>
+              <input type="text" id="user-username" placeholder="Ex: jeremy" autocapitalize="off" autocorrect="off" spellcheck="false">
+            </div>
+            <div class="form-group">
+              <label>Mot de passe initial * <span style="color:var(--text-tertiary);font-weight:normal">(min 6 caractères)</span></label>
+              <input type="text" id="user-password" placeholder="Ex: bienvenue2026" value="bienvenue2026">
+              <div style="font-size:11px;color:var(--text-tertiary);margin-top:4px">⚠ L'utilisateur devra le changer à son premier login</div>
+            </div>
+          ` : ''}
+          <div class="form-group">
+            <label>Nom complet</label>
+            <input type="text" id="user-fullname" placeholder="Ex: Jeremy Mosser" value="${escapeHtml(u.nom_complet || '')}">
+          </div>
+          <div class="form-group">
+            <label>Email <span style="color:var(--text-tertiary);font-weight:normal">(optionnel)</span></label>
+            <input type="email" id="user-email" placeholder="jeremy@eurofeu.fr" value="${escapeHtml(u.email || '')}">
+          </div>
+          <div class="form-group">
+            <label>Rôle *</label>
+            <select id="user-role" class="form-input">
+              <option value="technicien" ${u.role === 'technicien' || isNew ? 'selected' : ''}>🟢 Technicien</option>
+              <option value="manager" ${u.role === 'manager' ? 'selected' : ''}>🟡 Manager (lecture seule)</option>
+              <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>🔴 Admin (accès complet)</option>
+            </select>
+          </div>
+          ${!isNew ? `
+            <div class="form-group">
+              <label>Statut</label>
+              <select id="user-active" class="form-input">
+                <option value="true" ${u.active ? 'selected' : ''}>✅ Actif</option>
+                <option value="false" ${!u.active ? 'selected' : ''}>🚫 Désactivé</option>
+              </select>
+            </div>
+          ` : ''}
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-action="close-user-modal">Annuler</button>
+          <button class="btn btn-primary" data-action="${isNew ? 'admin-save-new-user' : 'admin-save-user'}">
+            ${isNew ? '➕ Créer' : '💾 Enregistrer'}
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ── Handlers création/édition ───────────────────────────────────
+async function handleAdminSaveNewUser() {
+  const username = document.getElementById('user-username').value.trim();
+  const password = document.getElementById('user-password').value;
+  const nom_complet = document.getElementById('user-fullname').value.trim();
+  const email = document.getElementById('user-email').value.trim();
+  const role = document.getElementById('user-role').value;
+
+  if (!username || username.includes(' ')) {
+    toast('Username requis (sans espace)', 'error');
+    return;
+  }
+
+  const res = await adminCreateUser({ username, password, role, nom_complet, email });
+  if (res.success) {
+    adminState.editingUser = null;
+    adminState.creatingUser = false;
+    if (typeof render === 'function') render();
+  } else {
+    toast('Erreur: ' + res.error, 'error');
+  }
+}
+
+async function handleAdminSaveUser() {
+  const u = adminState.editingUser;
+  if (!u) return;
+
+  const nom_complet = document.getElementById('user-fullname').value.trim();
+  const email = document.getElementById('user-email').value.trim();
+  const role = document.getElementById('user-role').value;
+  const active = document.getElementById('user-active').value === 'true';
+
+  const res = await adminUpdateUser({ id: u.id, nom_complet, email, role, active });
+  if (res.success) {
+    adminState.editingUser = null;
+    if (typeof render === 'function') render();
+  } else {
+    toast('Erreur: ' + res.error, 'error');
+  }
+}
+
+// ── Rendu : page Logs ───────────────────────────────────────────
+function renderAdminLogs() {
+  const logs = adminState.logs || [];
+
+  // Codes couleur par action
+  const actionStyle = (action) => {
+    if (action.startsWith('LOGIN_FAIL') || action.includes('ERROR') || action === 'LOGIN_LOCKED') return 'color:#dc2626';
+    if (action.includes('DELETED')) return 'color:#dc2626';
+    if (action.includes('CREATED')) return 'color:#16a34a';
+    if (action === 'LOGIN_SUCCESS') return 'color:#0284c7';
+    if (action === 'LOGOUT') return 'color:#64748b';
+    return 'color:var(--text)';
+  };
+
+  const rows = logs.map(l => {
+    const ts = l.timestamp ? new Date(l.timestamp).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—';
+    return `
+      <div class="log-row">
+        <div class="log-time">${ts}</div>
+        <div class="log-user">${escapeHtml(l.username || '—')}</div>
+        <div class="log-action" style="${actionStyle(l.action || '')}">${escapeHtml(l.action || '')}</div>
+        <div class="log-details">${escapeHtml(l.details || '')}</div>
+      </div>
+    `;
+  }).join('');
+
+  return `
+    <header class="app-header">
+      <div class="header-top">
+        <button class="header-back" data-action="back-to-settings">← Réglages</button>
+        <div>
+          <div class="header-title">📜 Logs d'activité</div>
+          <div class="header-subtitle">${logs.length} dernier(s) événement(s)</div>
+        </div>
+        <button class="btn btn-secondary btn-sm" data-action="admin-refresh-logs">🔄</button>
+      </div>
+    </header>
+    <div class="form-screen">
+      ${adminState.loading ? '<div style="text-align:center;padding:40px;color:var(--text-secondary)">⏳ Chargement...</div>' : ''}
+      ${!adminState.loading && logs.length === 0 ? '<div style="text-align:center;padding:40px;color:var(--text-tertiary)">Aucun log</div>' : ''}
+      <div class="log-list">
+        ${rows}
+      </div>
+    </div>
+  `;
+}
+
+// ============================================================================
+// FIN MODULE ADMIN V2.10.2
 // ============================================================================
 
 
@@ -2609,8 +3172,19 @@ function render() {
     case 'settings': app.innerHTML = renderSettings(); break;
     case 'stats': app.innerHTML = renderStats(); break;
     case 'sequence': app.innerHTML = renderSequence(); break;
+    // V2.10.2 — Vues admin
+    case 'admin-users': app.innerHTML = renderAdminUsers(); break;
+    case 'admin-logs': app.innerHTML = renderAdminLogs(); break;
   }
   attachListeners();
+  
+  // V2.10.2 — Modale édition user par dessus si nécessaire
+  if (adminState.editingUser || adminState.creatingUser) {
+    const modalDiv = document.createElement('div');
+    modalDiv.innerHTML = renderUserEditModal();
+    app.appendChild(modalDiv.firstElementChild);
+    attachListeners();
+  }
   
   // Wake lock pendant les saisies
   if (view.current === 'new' || view.current === 'detail') {
@@ -3666,6 +4240,31 @@ function renderSettings() {
         </div>
       </div>
       
+      <!-- V2.10.2 — Administration (visible uniquement pour les admins) -->
+      ${isAdmin() ? `
+      <div class="settings-section">
+        <div class="settings-section-title">🛡 Administration</div>
+        <div class="settings-group">
+          <div class="settings-row" data-action="goto-admin-users">
+            <div class="settings-row-icon">👥</div>
+            <div class="settings-row-content">
+              <div class="settings-row-title">Gestion des utilisateurs</div>
+              <div class="settings-row-value">Créer, modifier, supprimer des comptes</div>
+            </div>
+            <span class="settings-row-chevron">›</span>
+          </div>
+          <div class="settings-row" data-action="goto-admin-logs">
+            <div class="settings-row-icon">📜</div>
+            <div class="settings-row-content">
+              <div class="settings-row-title">Logs d'activité</div>
+              <div class="settings-row-value">Historique des actions (200 dernières)</div>
+            </div>
+            <span class="settings-row-chevron">›</span>
+          </div>
+        </div>
+      </div>
+      ` : ''}
+      
       <div class="settings-section">
         <div class="settings-section-title">Apparence</div>
         <div class="settings-group">
@@ -4427,6 +5026,60 @@ async function handleAction(e) {
       break;
     case 'logout':
       await handleLogoutClick();
+      break;
+    // V2.10.2 — Admin
+    case 'goto-admin-users':
+      if (!isAdmin()) { toast('Accès refusé', 'error'); break; }
+      view.current = 'admin-users';
+      render();
+      adminLoadUsers();
+      break;
+    case 'goto-admin-logs':
+      if (!isAdmin()) { toast('Accès refusé', 'error'); break; }
+      view.current = 'admin-logs';
+      render();
+      adminLoadLogs();
+      break;
+    case 'back-to-settings':
+      view.current = 'settings';
+      adminState.editingUser = null;
+      adminState.creatingUser = false;
+      render();
+      break;
+    case 'admin-create-user':
+      adminState.creatingUser = true;
+      adminState.editingUser = null;
+      render();
+      break;
+    case 'admin-edit-user': {
+      const uid = t.dataset.userId;
+      const u = adminState.users.find(x => x.id === uid);
+      if (u) {
+        adminState.editingUser = u;
+        adminState.creatingUser = false;
+        render();
+      }
+      break;
+    }
+    case 'close-user-modal':
+      adminState.editingUser = null;
+      adminState.creatingUser = false;
+      render();
+      break;
+    case 'admin-save-new-user':
+      await handleAdminSaveNewUser();
+      break;
+    case 'admin-save-user':
+      await handleAdminSaveUser();
+      break;
+    case 'admin-delete-user':
+      await adminDeleteUser(t.dataset.userId, t.dataset.username);
+      break;
+    case 'admin-reset-pwd':
+      await adminResetPassword(t.dataset.userId, t.dataset.username);
+      break;
+    case 'admin-refresh-logs':
+      await adminLoadLogs();
       break;
     case 'show-sync':
       showSyncModal();
