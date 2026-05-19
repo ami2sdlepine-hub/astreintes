@@ -1697,6 +1697,189 @@ body { font-size: 15px; line-height: 1.5; }
   color: var(--text);
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   V2.10.7 — Manager view (dépannage)
+   ═══════════════════════════════════════════════════════════════ */
+.manager-week-banner {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.manager-week-info { display:flex; flex-direction:column; gap:4px; }
+.manager-week-num { font-weight: 700; font-size: 13px; color: var(--text); }
+.manager-week-dates { font-size: 11px; color: var(--text-secondary); font-family: monospace; }
+.manager-week-stats { display:flex; gap:14px; }
+.manager-stat { display:flex; flex-direction:column; align-items:center; }
+.manager-stat-value { font-size:20px; font-weight:800; color: var(--accent); }
+.manager-stat-label { font-size:10px; color: var(--text-tertiary); letter-spacing:0.5px; }
+
+.manager-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 0 12px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.manager-tab {
+  flex-shrink: 0;
+  padding: 7px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.manager-tab.active {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border-color: var(--accent);
+}
+.manager-tab.active.alert {
+  background: #ef4444;
+  border-color: #ef4444;
+}
+.manager-tab .badge {
+  background: rgba(0,0,0,0.15);
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.manager-tab.active .badge { background: rgba(255,255,255,0.25); }
+
+.manager-search { padding: 8px 12px; }
+.manager-search input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  box-sizing: border-box;
+}
+.manager-search input:focus { outline: none; border-color: var(--accent); }
+
+.manager-list { padding: 4px 12px 80px; }
+
+.manager-tech-block {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+.manager-tech-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.manager-tech-name { font-size: 15px; font-weight: 700; color: var(--text); }
+.manager-tech-stats { display:flex; gap:12px; font-size:12px; color: var(--text-secondary); }
+.manager-tech-stats .badge-alert {
+  background: #fef2f2;
+  color: #dc2626;
+  padding: 3px 8px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 11px;
+}
+[data-theme="dark"] .manager-tech-stats .badge-alert {
+  background: #422020;
+  color: #fca5a5;
+}
+
+.manager-tech-dossiers {
+  display: flex;
+  flex-direction: column;
+}
+
+.manager-dossier-card {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  border-left: 3px solid #3b82f6;
+}
+.manager-dossier-card:last-child { border-bottom: none; }
+.manager-dossier-card.recupered { border-left-color: #10b981; opacity: 0.85; }
+
+.manager-dossier-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.manager-dossier-meta { display:flex; gap:10px; font-size:11px; color: var(--text-tertiary); flex-wrap:wrap; }
+.manager-dossier-badge {
+  padding: 3px 10px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.manager-dossier-badge.ok { background: #dcfce7; color: #16a34a; }
+.manager-dossier-badge.alert { background: #dbeafe; color: #2563eb; }
+[data-theme="dark"] .manager-dossier-badge.ok { background: #14532d; color: #86efac; }
+[data-theme="dark"] .manager-dossier-badge.alert { background: #1e3a8a; color: #93c5fd; }
+
+.manager-dossier-title { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.manager-dossier-code { font-size: 12px; color: var(--text-secondary); font-family: monospace; margin-bottom: 4px; }
+.manager-dossier-line { font-size: 12px; color: var(--text); margin-top: 4px; line-height:1.4; }
+.manager-dossier-line .lbl { color: var(--text-tertiary); font-weight:600; }
+.manager-dossier-cr {
+  margin-top: 6px;
+  padding: 8px 10px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.manager-dossier-cr .lbl { color: var(--text-tertiary); font-weight: 600; }
+
+.manager-dossier-times {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+}
+.time-cell { display:flex; flex-direction: column; gap: 2px; }
+.time-lbl { font-size: 10px; color: var(--text-tertiary); }
+.time-val { font-size: 13px; font-weight: 700; color: var(--text); font-family: monospace; }
+
+.manager-dossier-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.manager-dossier-actions .btn { flex: 1; min-width: 140px; }
+
+.manager-recup-info {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  margin-top: 6px;
+  text-align: right;
+  font-style: italic;
+}
+
 </style>
 </head>
 <body>
@@ -1966,7 +2149,7 @@ function renderLoginScreen() {
           ${authState.loading ? '⏳ Connexion...' : '🔓 Se connecter'}
         </button>
         <div class="login-footer">
-          Astreintes AMI2S V2.10.6 • Session 7 jours
+          Astreintes AMI2S V2.10.7 • Session 7 jours
         </div>
       </div>
     </div>
@@ -2105,12 +2288,12 @@ async function cloudPull(showFeedback = false) {
     const remoteDossiers = res.dossiers || [];
     const currentUserId = authState.user && authState.user.id;
 
-    // V2.10.6 — Filtrage côté frontend : on ne traite QUE les dossiers
+    // V2.10.7 — Filtrage côté frontend : on ne traite QUE les dossiers
     // appartenant à l'utilisateur connecté (admin verra tous les dossiers
     // de l'équipe via le futur Dashboard, pas ici)
     const myRemoteDossiers = remoteDossiers.filter(d => d.user_id === currentUserId);
 
-    // V2.10.6 — Identifier les dossiers locaux à supprimer
+    // V2.10.7 — Identifier les dossiers locaux à supprimer
     // (présents en local mais plus dans le cloud OU appartenant à un autre user)
     const remoteIdsByUser = new Set(myRemoteDossiers.map(d => d.id));
     const toDelete = state.dossiers.filter(d => {
@@ -2223,7 +2406,7 @@ function adaptLocalToCloud(d) {
     rapportNum: d.rapportNum || d.rapportN || '',
     departDomicile: d.departDomicile || '',
     arriveeSite: d.arriveeSite || '',
-    // V2.10.6 — Bug fix : le champ local s'appelle "departSite" (départ du site),
+    // V2.10.7 — Bug fix : le champ local s'appelle "departSite" (départ du site),
     // on l'envoie dans la colonne cloud "finIntervention" (= heure de fin d'intervention sur site)
     finIntervention: d.departSite || d.finIntervention || '',
     retourDomicile: d.retourDomicile || '',
@@ -2257,7 +2440,7 @@ function adaptCloudToLocal(d) {
     rapportN: d.rapportNum, // alias rétrocompat
     departDomicile: d.departDomicile,
     arriveeSite: d.arriveeSite,
-    // V2.10.6 — Bug fix : on recupère "finIntervention" du cloud et on le réinjecte dans "departSite" local
+    // V2.10.7 — Bug fix : on recupère "finIntervention" du cloud et on le réinjecte dans "departSite" local
     finIntervention: d.finIntervention,
     departSite: d.finIntervention || null,
     retourDomicile: d.retourDomicile,
@@ -2286,7 +2469,7 @@ async function migrateLocalDossiersToCloud() {
     return;
   }
 
-  // V2.10.6 — Ne migrer que les dossiers qui m'appartiennent ou qui n'ont pas encore de user_id
+  // V2.10.7 — Ne migrer que les dossiers qui m'appartiennent ou qui n'ont pas encore de user_id
   const myId = authState.user && authState.user.id;
   const toMigrate = state.dossiers.filter(d => !d.user_id || d.user_id === myId);
   const localCount = toMigrate.length;
@@ -2313,7 +2496,7 @@ async function migrateLocalDossiersToCloud() {
 
   if (errors === 0) {
     toast(`${success} dossiers migrés avec succès`, 'success');
-    // V2.10.6 — Flag de migration par user (et non global)
+    // V2.10.7 — Flag de migration par user (et non global)
     if (authState.user && authState.user.id) {
       localStorage.setItem('astreintes_migration_done_' + authState.user.id, '1');
     }
@@ -2324,7 +2507,7 @@ async function migrateLocalDossiersToCloud() {
 }
 
 function hasMigrationBeenDone() {
-  // V2.10.6 — Flag par user (chaque user a sa propre migration)
+  // V2.10.7 — Flag par user (chaque user a sa propre migration)
   if (!authState.user || !authState.user.id) return false;
   return localStorage.getItem('astreintes_migration_done_' + authState.user.id) === '1';
 }
@@ -2750,6 +2933,360 @@ function renderAdminLogs() {
 
 // ============================================================================
 // FIN MODULE ADMIN V2.10.2
+// ============================================================================
+
+
+
+// ============================================================================
+// ASTREINTES AMI2S V2.10.7 — MODULE MANAGER (Patch 4)
+// ============================================================================
+// Vue dépannage pour le service ERP : tous les dossiers de tous les techniciens
+// en lecture seule, format "mail Outlook" mais en interface pro.
+// Filtre Tous / À récupérer / Récupérés. Bouton "Copier" et "Marquer récupéré".
+// ============================================================================
+
+let managerState = {
+  allDossiers: [],
+  filter: 'a-recuperer', // 'tous' | 'a-recuperer' | 'recuperes'
+  weekOffset: 0,
+  loading: false,
+  error: null,
+  searchQuery: '',
+  expandedTech: null // username du tech actuellement déplié (mobile)
+};
+
+function isManagerOrAdmin() {
+  return authState.isAuthenticated && authState.user &&
+         (authState.user.role === 'manager' || authState.user.role === 'admin');
+}
+
+// ── Charger tous les dossiers (manager voit tout, admin aussi) ──
+async function managerLoadDossiers() {
+  if (!isManagerOrAdmin()) return;
+  managerState.loading = true;
+  if (typeof render === 'function') render();
+
+  try {
+    const res = await cloudCall('getDossiers', {});
+    if (!res.success) throw new Error(res.error);
+    managerState.allDossiers = (res.dossiers || []).filter(d => !d.deleted);
+    managerState.loading = false;
+    if (typeof render === 'function') render();
+  } catch (err) {
+    managerState.loading = false;
+    managerState.error = err.message;
+    toast('Erreur chargement : ' + err.message, 'error');
+    if (typeof render === 'function') render();
+  }
+}
+
+// ── Marquer un dossier "récupéré ERP" ───────────────────────────
+async function managerMarkRecupered(id, currentValue) {
+  if (!isManagerOrAdmin()) return;
+  try {
+    const res = await cloudCall('markRecuperedERP', { id, recupere: !currentValue });
+    if (!res.success) {
+      toast('Erreur : ' + res.error, 'error');
+      return;
+    }
+    // Mettre à jour localement
+    const d = managerState.allDossiers.find(x => x.id === id);
+    if (d) {
+      d.recupereERP = !currentValue;
+      d.recupereERP_by = !currentValue ? authState.user.username : '';
+      d.recupereERP_at = !currentValue ? new Date().toISOString() : '';
+    }
+    toast(!currentValue ? '✓ Marqué comme récupéré' : '↩ Marqué comme à récupérer', 'success');
+    if (typeof render === 'function') render();
+  } catch (err) {
+    toast('Erreur : ' + err.message, 'error');
+  }
+}
+
+// ── Copier les infos du dossier dans le presse-papier ───────────
+function managerCopyDossier(id) {
+  const d = managerState.allDossiers.find(x => x.id === id);
+  if (!d) return;
+
+  const fmt = (iso) => {
+    if (!iso) return '—';
+    try {
+      const dt = new Date(iso);
+      return dt.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    } catch (e) { return iso; }
+  };
+
+  let txt = `╔════════════════════════════════════════╗\n`;
+  txt += `  DOSSIER ${d.type === 'telephone' ? '☎ TÉLÉPHONE' : '🚗 DÉPLACEMENT'}\n`;
+  txt += `  Technicien : ${d.username || '—'}\n`;
+  txt += `╚════════════════════════════════════════╝\n\n`;
+  txt += `📅 Date appel : ${fmt(d.dateAppel)}\n`;
+  txt += `🏢 Établissement : ${d.etablissement || '—'}\n`;
+  if (d.codeAstreinte) txt += `🔑 Code astreinte : ${d.codeAstreinte}\n`;
+  if (d.demandeur) txt += `👤 Demandeur : ${d.demandeur}\n`;
+  if (d.rapportNum) txt += `📄 N° rapport : ${d.rapportNum}\n`;
+  txt += `\n`;
+  txt += `📋 Motif :\n${d.motif || '—'}\n\n`;
+
+  if (d.type === 'deplacement') {
+    txt += `─── HORODATAGES ───\n`;
+    txt += `🏠 Départ domicile : ${d.departDomicile === 'X' ? '(chaînage entrant)' : fmt(d.departDomicile)}\n`;
+    txt += `📍 Arrivée site : ${fmt(d.arriveeSite)}\n`;
+    txt += `🚗 Départ site : ${fmt(d.finIntervention)}\n`;
+    txt += `🏠 Retour domicile : ${d.retourDomicile === 'X' ? '(chaînage sortant)' : fmt(d.retourDomicile)}\n\n`;
+    if (d.adresse) txt += `📍 Adresse site : ${d.adresse}\n`;
+    if (d.km) txt += `🛣 Distance : ${d.km} km\n`;
+    txt += `\n`;
+  }
+
+  if (d.rapport) txt += `📝 Rapport :\n${d.rapport}\n\n`;
+  if (d.compteRendu) txt += `📄 Compte-rendu :\n${d.compteRendu}\n`;
+
+  navigator.clipboard.writeText(txt).then(() => {
+    toast('📋 Infos copiées dans le presse-papier', 'success');
+  }).catch(() => {
+    toast('Erreur de copie', 'error');
+  });
+}
+
+// ── Helpers d'analyse ──────────────────────────────────────────
+function getManagerWeekDossiers() {
+  const base = new Date();
+  base.setDate(base.getDate() + managerState.weekOffset * 7);
+  const { start, end } = getAstreinteWeek(base);
+  return managerState.allDossiers.filter(d => {
+    const dt = new Date(d.dateAppel);
+    return dt >= start && dt < end;
+  });
+}
+
+function getManagerFiltered() {
+  let dossiers = getManagerWeekDossiers();
+
+  // Filtre statut récupération
+  if (managerState.filter === 'a-recuperer') {
+    dossiers = dossiers.filter(d => !d.recupereERP);
+  } else if (managerState.filter === 'recuperes') {
+    dossiers = dossiers.filter(d => d.recupereERP);
+  }
+
+  // Filtre recherche
+  if (managerState.searchQuery && managerState.searchQuery.trim()) {
+    const q = managerState.searchQuery.toLowerCase().trim();
+    dossiers = dossiers.filter(d =>
+      (d.etablissement || '').toLowerCase().includes(q) ||
+      (d.username || '').toLowerCase().includes(q) ||
+      (d.motif || '').toLowerCase().includes(q) ||
+      (d.codeAstreinte || '').toLowerCase().includes(q)
+    );
+  }
+
+  return dossiers.sort((a, b) => new Date(b.dateAppel) - new Date(a.dateAppel));
+}
+
+// ── Grouper les dossiers par technicien ─────────────────────────
+function groupDossiersByTech(dossiers) {
+  const byTech = {};
+  for (const d of dossiers) {
+    const tech = d.username || '?';
+    if (!byTech[tech]) byTech[tech] = [];
+    byTech[tech].push(d);
+  }
+  return byTech;
+}
+
+// ── Rendu : page Manager ────────────────────────────────────────
+function renderManagerView() {
+  if (!isManagerOrAdmin()) {
+    return `<div class="form-screen"><p style="padding:40px;text-align:center;color:#dc2626">Accès refusé</p></div>`;
+  }
+
+  const baseDate = new Date();
+  baseDate.setDate(baseDate.getDate() + managerState.weekOffset * 7);
+  const week = getAstreinteWeek(baseDate);
+  const weekDossiers = getManagerWeekDossiers();
+  const filtered = getManagerFiltered();
+  const groupedByTech = groupDossiersByTech(filtered);
+
+  const counts = {
+    tous: weekDossiers.length,
+    'a-recuperer': weekDossiers.filter(d => !d.recupereERP).length,
+    recuperes: weekDossiers.filter(d => d.recupereERP).length
+  };
+
+  const weekNum = getWeekNumber(week.start);
+  const weekLabel = managerState.weekOffset === 0 ? `(actuelle)` :
+                    managerState.weekOffset === -1 ? `(précédente)` :
+                    managerState.weekOffset < 0 ? `(il y a ${-managerState.weekOffset} sem)` :
+                    `(dans ${managerState.weekOffset} sem)`;
+
+  // Liste des techs avec leurs dossiers
+  const techNames = Object.keys(groupedByTech).sort();
+
+  return `
+    <header class="app-header">
+      <div class="header-top">
+        <button class="header-back" data-action="back-to-settings">← Réglages</button>
+        <div>
+          <div class="header-title">🚨 Dépannage</div>
+          <div class="header-subtitle">Vue manager • Lecture seule</div>
+        </div>
+        <div class="header-actions">
+          <button class="icon-btn" data-action="manager-prev-week" title="Semaine précédente">‹</button>
+          <button class="icon-btn" data-action="manager-next-week" title="Semaine suivante" ${managerState.weekOffset >= 0 ? 'disabled style="opacity:0.3"' : ''}>›</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="form-screen">
+
+      <div class="manager-week-banner">
+        <div class="manager-week-info">
+          <div class="manager-week-num">Semaine n°${weekNum} ${weekLabel}</div>
+          <div class="manager-week-dates">${fmtDateShort(week.start)} 09h → ${fmtDateShort(week.end)} 09h</div>
+        </div>
+        <div class="manager-week-stats">
+          <div class="manager-stat"><span class="manager-stat-value">${weekDossiers.length}</span><span class="manager-stat-label">DOSSIERS</span></div>
+        </div>
+      </div>
+
+      <div class="manager-tabs">
+        <button class="manager-tab ${managerState.filter === 'tous' ? 'active' : ''}" data-action="manager-filter" data-filter="tous">
+          Tous <span class="badge">${counts.tous}</span>
+        </button>
+        <button class="manager-tab ${managerState.filter === 'a-recuperer' ? 'active alert' : ''}" data-action="manager-filter" data-filter="a-recuperer">
+          🔵 À récupérer <span class="badge">${counts['a-recuperer']}</span>
+        </button>
+        <button class="manager-tab ${managerState.filter === 'recuperes' ? 'active' : ''}" data-action="manager-filter" data-filter="recuperes">
+          ✅ Récupérés <span class="badge">${counts.recuperes}</span>
+        </button>
+      </div>
+
+      <div class="manager-search">
+        <input type="search" id="manager-search-input" placeholder="🔎 Rechercher technicien, établissement, code..." value="${escapeHtml(managerState.searchQuery)}">
+      </div>
+
+      ${managerState.loading ? `
+        <div style="text-align:center;padding:40px;color:var(--text-secondary)">⏳ Chargement des dossiers...</div>
+      ` : ''}
+
+      ${!managerState.loading && filtered.length === 0 ? `
+        <div style="text-align:center;padding:60px 20px;color:var(--text-tertiary)">
+          <div style="font-size:48px;margin-bottom:12px">${managerState.filter === 'a-recuperer' ? '✅' : '📭'}</div>
+          <div style="font-weight:600;color:var(--text-secondary)">${managerState.filter === 'a-recuperer' ? 'Tous les dossiers ont été récupérés' : 'Aucun dossier'}</div>
+        </div>
+      ` : ''}
+
+      <div class="manager-list">
+        ${techNames.map(tech => renderManagerTechBlock(tech, groupedByTech[tech])).join('')}
+      </div>
+
+      <div class="text-center" style="padding:24px 0;font-size:11px;color:var(--text-tertiary);font-family:monospace">
+        Vue Manager V2.10.7 • ${filtered.length} dossier(s) affiché(s)
+      </div>
+    </div>
+  `;
+}
+
+function renderManagerTechBlock(techUsername, dossiers) {
+  const total = dossiers.length;
+  const aRecuperer = dossiers.filter(d => !d.recupereERP).length;
+  const recuperes = total - aRecuperer;
+  const deplacements = dossiers.filter(d => d.type === 'deplacement').length;
+  const telephones = total - deplacements;
+
+  return `
+    <div class="manager-tech-block">
+      <div class="manager-tech-header">
+        <div class="manager-tech-name">👤 ${escapeHtml(techUsername)}</div>
+        <div class="manager-tech-stats">
+          ${deplacements > 0 ? `<span>🚗 ${deplacements}</span>` : ''}
+          ${telephones > 0 ? `<span>☎ ${telephones}</span>` : ''}
+          ${aRecuperer > 0 ? `<span class="badge-alert">🔵 ${aRecuperer} à récupérer</span>` : ''}
+        </div>
+      </div>
+      <div class="manager-tech-dossiers">
+        ${dossiers.map(d => renderManagerDossierCard(d)).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderManagerDossierCard(d) {
+  const fmt = (iso) => {
+    if (!iso) return '—';
+    if (iso === 'X') return '(chaînage)';
+    try {
+      const dt = new Date(iso);
+      return dt.toLocaleString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    } catch (e) { return iso; }
+  };
+  const fmtDateOnly = (iso) => {
+    if (!iso) return '—';
+    try {
+      return new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+    } catch (e) { return iso; }
+  };
+
+  const typeIcon = d.type === 'telephone' ? '☎' : '🚗';
+  const typeLabel = d.type === 'telephone' ? 'Téléphone' : 'Déplacement';
+
+  const recupSinceText = d.recupereERP && d.recupereERP_at ?
+    'Récupéré par ' + (d.recupereERP_by || '?') + ' le ' + fmtDateOnly(d.recupereERP_at) :
+    '';
+
+  return `
+    <div class="manager-dossier-card ${d.recupereERP ? 'recupered' : ''}">
+      <div class="manager-dossier-head">
+        <div class="manager-dossier-meta">
+          <span class="manager-dossier-date">📅 ${fmtDateOnly(d.dateAppel)} • ${fmt(d.dateAppel)}</span>
+          <span class="manager-dossier-type">${typeIcon} ${typeLabel}</span>
+        </div>
+        ${d.recupereERP ? `<div class="manager-dossier-badge ok">✅ Récupéré</div>` : `<div class="manager-dossier-badge alert">🔵 À récupérer</div>`}
+      </div>
+
+      <div class="manager-dossier-title">${escapeHtml(d.etablissement || 'Sans nom')}</div>
+      ${d.codeAstreinte ? `<div class="manager-dossier-code">🔑 Code : ${escapeHtml(d.codeAstreinte)}</div>` : ''}
+      ${d.demandeur ? `<div class="manager-dossier-line"><span class="lbl">Demandeur :</span> ${escapeHtml(d.demandeur)}</div>` : ''}
+      ${d.motif ? `<div class="manager-dossier-line"><span class="lbl">Motif :</span> ${escapeHtml(d.motif)}</div>` : ''}
+
+      ${d.type === 'deplacement' ? `
+        <div class="manager-dossier-times">
+          <div class="time-cell"><span class="time-lbl">🏠 Départ dom.</span><span class="time-val">${d.departDomicile === 'X' ? '⚓ chaînage' : fmt(d.departDomicile)}</span></div>
+          <div class="time-cell"><span class="time-lbl">📍 Arrivée site</span><span class="time-val">${fmt(d.arriveeSite)}</span></div>
+          <div class="time-cell"><span class="time-lbl">🚗 Départ site</span><span class="time-val">${fmt(d.finIntervention)}</span></div>
+          <div class="time-cell"><span class="time-lbl">🏠 Retour dom.</span><span class="time-val">${d.retourDomicile === 'X' ? '⚓ chaînage' : fmt(d.retourDomicile)}</span></div>
+        </div>
+        <div class="manager-dossier-line">
+          ${d.adresse ? `<span class="lbl">📍 Adresse :</span> ${escapeHtml(d.adresse)} ` : ''}
+          ${d.km ? `<span style="margin-left:8px">🛣 ${d.km} km</span>` : ''}
+        </div>
+      ` : ''}
+
+      ${d.rapport ? `<div class="manager-dossier-line"><span class="lbl">📝 Rapport :</span> ${escapeHtml(d.rapport)}</div>` : ''}
+      ${d.compteRendu ? `<div class="manager-dossier-cr"><span class="lbl">📄 CR :</span><br>${escapeHtml(d.compteRendu)}</div>` : ''}
+
+      <div class="manager-dossier-actions">
+        <button class="btn btn-secondary btn-sm" data-action="manager-copy" data-id="${d.id}">📋 Copier tout</button>
+        <button class="btn ${d.recupereERP ? 'btn-secondary' : 'btn-primary'} btn-sm" data-action="manager-toggle-recupered" data-id="${d.id}" data-current="${d.recupereERP ? '1' : '0'}">
+          ${d.recupereERP ? '↩ Annuler récupération' : '✓ Marquer récupéré ERP'}
+        </button>
+      </div>
+      ${recupSinceText ? `<div class="manager-recup-info">${recupSinceText}</div>` : ''}
+    </div>
+  `;
+}
+
+function getWeekNumber(date) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+}
+
+// ============================================================================
+// FIN MODULE MANAGER V2.10.7
 // ============================================================================
 
 
@@ -3191,7 +3728,7 @@ function renderSyncBadge() {
 // ----------------------------------------------------------------------------
 // BUSINESS LOGIC
 // ----------------------------------------------------------------------------
-// V2.10.6 — Source unique de vérité : dossiers du user connecté uniquement
+// V2.10.7 — Source unique de vérité : dossiers du user connecté uniquement
 // Les vues Dossiers/Stats/Export utilisent toutes cette fonction.
 // Les rôles Manager/Admin auront accès aux dossiers de toute l'équipe via
 // des vues dédiées (Patch 4 Manager / Patch 3b Dashboard).
@@ -3262,7 +3799,7 @@ function findOpenSequence() {
   // - clôturé avec retourDomicile = 'X' (chaînage en cours, n'a pas encore enregistré retour)
   // ET qui n'a PAS de retour domicile horodaté (sinon la séquence est fermée)
   
-  // V2.10.6 — Ne chercher que dans les dossiers du user connecté
+  // V2.10.7 — Ne chercher que dans les dossiers du user connecté
   const myDossiers = getMyDossiers();
   
   const candidatesEnCours = myDossiers.filter(d => 
@@ -3328,6 +3865,8 @@ function render() {
     // V2.10.2 — Vues admin
     case 'admin-users': app.innerHTML = renderAdminUsers(); break;
     case 'admin-logs': app.innerHTML = renderAdminLogs(); break;
+    // V2.10.7 — Vue manager (dépannage)
+    case 'manager-view': app.innerHTML = renderManagerView(); break;
   }
   attachListeners();
   
@@ -4037,7 +4576,7 @@ function renderExport() {
   
   // === Rapport nuit/période avec jours fériés FR ===
   const nightPeriod = computeNightPeriod();
-  // V2.10.6 — Rapport de nuit limité aux dossiers du user
+  // V2.10.7 — Rapport de nuit limité aux dossiers du user
   const nightDossiers = getMyDossiers().filter(d => {
     const dt = new Date(d.dateAppel);
     return dt >= nightPeriod.start && dt <= nightPeriod.end;
@@ -4375,24 +4914,49 @@ function renderSettings() {
           </div>
         </div>
         <div style="padding:12px;display:flex;flex-direction:column;gap:8px">
-          ${!migrationDone && localCount > 0 ? `
-            <button class="btn btn-primary" data-action="migrate-cloud" style="width:100%">
-              📤 Migrer mes ${localCount} dossier(s) vers le cloud
-            </button>
-            <div style="font-size:11px;color:var(--text-tertiary);text-align:center">
-              À faire une seule fois pour basculer sur le nouveau backend
-            </div>
-          ` : `
-            <button class="btn btn-secondary" data-action="cloud-pull-now" style="width:100%">
-              🔄 Synchroniser maintenant
-            </button>
-            ${migrationDone ? '<div style="font-size:11px;color:var(--text-tertiary);text-align:center">✅ Migration déjà effectuée</div>' : ''}
-          `}
+          ${(() => {
+            // V2.10.7 — Détection intelligente : dossiers locaux sans user_id (orphelins)
+            const myId = authState.user && authState.user.id;
+            const orphans = state.dossiers.filter(d => !d.user_id);
+            const orphansCount = orphans.length;
+            if (orphansCount > 0) {
+              return `
+                <button class="btn btn-primary" data-action="migrate-cloud" style="width:100%">
+                  📤 Migrer ${orphansCount} dossier(s) sans propriétaire vers mon compte
+                </button>
+                <div style="font-size:11px;color:var(--text-tertiary);text-align:center">
+                  Dossiers créés avant connexion. Cliquez pour les rattacher à votre compte cloud.
+                </div>
+              `;
+            }
+            return `
+              <button class="btn btn-secondary" data-action="cloud-pull-now" style="width:100%">
+                🔄 Synchroniser maintenant
+              </button>
+            `;
+          })()}
           <button class="btn btn-secondary" data-action="logout" style="width:100%;color:#dc2626;border-color:#fecaca">
             🚪 Se déconnecter
           </button>
         </div>
       </div>
+      
+      <!-- V2.10.7 — Service dépannage (visible pour admin ET manager) -->
+      ${isManagerOrAdmin() ? `
+      <div class="settings-section">
+        <div class="settings-section-title">🚨 Service Dépannage</div>
+        <div class="settings-group">
+          <div class="settings-row" data-action="goto-manager">
+            <div class="settings-row-icon">🚨</div>
+            <div class="settings-row-content">
+              <div class="settings-row-title">Vue Dépannage (tous techniciens)</div>
+              <div class="settings-row-value">Récupérer les infos d'astreinte pour l'ERP</div>
+            </div>
+            <span class="settings-row-chevron">›</span>
+          </div>
+        </div>
+      </div>
+      ` : ''}
       
       <!-- V2.10.2 — Administration (visible uniquement pour les admins) -->
       ${isAdmin() ? `
@@ -4547,7 +5111,7 @@ function renderSettings() {
       </div>
       
       <div class="text-center" style="padding:24px 0;font-size:11px;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace">
-        Astreintes AMI2S V2.10.6<br>
+        Astreintes AMI2S V2.10.7<br>
         ${getMyDossiers().length} dossier(s) • ${new Date().toISOString().substring(0,10)}
       </div>
     </div>
@@ -5211,6 +5775,33 @@ async function handleAction(e) {
       break;
     case 'admin-refresh-logs':
       await adminLoadLogs();
+      break;
+    // V2.10.7 — Manager (dépannage)
+    case 'goto-manager':
+      if (!isManagerOrAdmin()) { toast('Accès refusé', 'error'); break; }
+      view.current = 'manager-view';
+      render();
+      managerLoadDossiers();
+      break;
+    case 'manager-filter':
+      managerState.filter = t.dataset.filter;
+      render();
+      break;
+    case 'manager-prev-week':
+      managerState.weekOffset--;
+      render();
+      break;
+    case 'manager-next-week':
+      if (managerState.weekOffset < 0) {
+        managerState.weekOffset++;
+        render();
+      }
+      break;
+    case 'manager-copy':
+      managerCopyDossier(t.dataset.id);
+      break;
+    case 'manager-toggle-recupered':
+      await managerMarkRecupered(t.dataset.id, t.dataset.current === '1');
       break;
     case 'show-sync':
       showSyncModal();
