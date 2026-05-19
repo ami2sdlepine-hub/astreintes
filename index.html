@@ -1698,7 +1698,7 @@ body { font-size: 15px; line-height: 1.5; }
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   V2.10.7 — Manager view (dépannage)
+   V2.10.8 — Manager view (dépannage)
    ═══════════════════════════════════════════════════════════════ */
 .manager-week-banner {
   background: var(--surface);
@@ -1713,6 +1713,14 @@ body { font-size: 15px; line-height: 1.5; }
 .manager-week-info { display:flex; flex-direction:column; gap:4px; }
 .manager-week-num { font-weight: 700; font-size: 13px; color: var(--text); }
 .manager-week-dates { font-size: 11px; color: var(--text-secondary); font-family: monospace; }
+.manager-mini-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
 .manager-week-stats { display:flex; gap:14px; }
 .manager-stat { display:flex; flex-direction:column; align-items:center; }
 .manager-stat-value { font-size:20px; font-weight:800; color: var(--accent); }
@@ -2149,7 +2157,7 @@ function renderLoginScreen() {
           ${authState.loading ? '⏳ Connexion...' : '🔓 Se connecter'}
         </button>
         <div class="login-footer">
-          Astreintes AMI2S V2.10.7 • Session 7 jours
+          Astreintes AMI2S V2.10.8 • Session 7 jours
         </div>
       </div>
     </div>
@@ -2213,7 +2221,16 @@ async function startMainApp() {
     }
 
     applyTheme();
-    render();
+    
+    // V2.10.8 — Page d'accueil selon le rôle
+    if (authState.user && authState.user.role === 'manager') {
+      view.current = 'manager-view';
+      render();
+      // Charger les dossiers de toute l'équipe
+      managerLoadDossiers();
+    } else {
+      render();
+    }
 
     if ('serviceWorker' in navigator) {
       const swCode = `
@@ -2231,8 +2248,8 @@ async function startMainApp() {
       requestGeolocationPermission();
     }
 
-    // V2.10.1 — Cloud pull au démarrage (récupère uniquement les dossiers du user connecté)
-    if (authState.isAuthenticated) {
+    // V2.10.1 — Cloud pull au démarrage (uniquement pour les techs/admin qui ont leurs propres dossiers)
+    if (authState.isAuthenticated && authState.user && authState.user.role !== 'manager') {
       setTimeout(() => cloudPull(false), 1500);
     }
   } catch (err) {
@@ -2288,12 +2305,12 @@ async function cloudPull(showFeedback = false) {
     const remoteDossiers = res.dossiers || [];
     const currentUserId = authState.user && authState.user.id;
 
-    // V2.10.7 — Filtrage côté frontend : on ne traite QUE les dossiers
+    // V2.10.8 — Filtrage côté frontend : on ne traite QUE les dossiers
     // appartenant à l'utilisateur connecté (admin verra tous les dossiers
     // de l'équipe via le futur Dashboard, pas ici)
     const myRemoteDossiers = remoteDossiers.filter(d => d.user_id === currentUserId);
 
-    // V2.10.7 — Identifier les dossiers locaux à supprimer
+    // V2.10.8 — Identifier les dossiers locaux à supprimer
     // (présents en local mais plus dans le cloud OU appartenant à un autre user)
     const remoteIdsByUser = new Set(myRemoteDossiers.map(d => d.id));
     const toDelete = state.dossiers.filter(d => {
@@ -2406,7 +2423,7 @@ function adaptLocalToCloud(d) {
     rapportNum: d.rapportNum || d.rapportN || '',
     departDomicile: d.departDomicile || '',
     arriveeSite: d.arriveeSite || '',
-    // V2.10.7 — Bug fix : le champ local s'appelle "departSite" (départ du site),
+    // V2.10.8 — Bug fix : le champ local s'appelle "departSite" (départ du site),
     // on l'envoie dans la colonne cloud "finIntervention" (= heure de fin d'intervention sur site)
     finIntervention: d.departSite || d.finIntervention || '',
     retourDomicile: d.retourDomicile || '',
@@ -2440,7 +2457,7 @@ function adaptCloudToLocal(d) {
     rapportN: d.rapportNum, // alias rétrocompat
     departDomicile: d.departDomicile,
     arriveeSite: d.arriveeSite,
-    // V2.10.7 — Bug fix : on recupère "finIntervention" du cloud et on le réinjecte dans "departSite" local
+    // V2.10.8 — Bug fix : on recupère "finIntervention" du cloud et on le réinjecte dans "departSite" local
     finIntervention: d.finIntervention,
     departSite: d.finIntervention || null,
     retourDomicile: d.retourDomicile,
@@ -2469,7 +2486,7 @@ async function migrateLocalDossiersToCloud() {
     return;
   }
 
-  // V2.10.7 — Ne migrer que les dossiers qui m'appartiennent ou qui n'ont pas encore de user_id
+  // V2.10.8 — Ne migrer que les dossiers qui m'appartiennent ou qui n'ont pas encore de user_id
   const myId = authState.user && authState.user.id;
   const toMigrate = state.dossiers.filter(d => !d.user_id || d.user_id === myId);
   const localCount = toMigrate.length;
@@ -2496,7 +2513,7 @@ async function migrateLocalDossiersToCloud() {
 
   if (errors === 0) {
     toast(`${success} dossiers migrés avec succès`, 'success');
-    // V2.10.7 — Flag de migration par user (et non global)
+    // V2.10.8 — Flag de migration par user (et non global)
     if (authState.user && authState.user.id) {
       localStorage.setItem('astreintes_migration_done_' + authState.user.id, '1');
     }
@@ -2507,7 +2524,7 @@ async function migrateLocalDossiersToCloud() {
 }
 
 function hasMigrationBeenDone() {
-  // V2.10.7 — Flag par user (chaque user a sa propre migration)
+  // V2.10.8 — Flag par user (chaque user a sa propre migration)
   if (!authState.user || !authState.user.id) return false;
   return localStorage.getItem('astreintes_migration_done_' + authState.user.id) === '1';
 }
@@ -2938,7 +2955,7 @@ function renderAdminLogs() {
 
 
 // ============================================================================
-// ASTREINTES AMI2S V2.10.7 — MODULE MANAGER (Patch 4)
+// ASTREINTES AMI2S V2.10.8 — MODULE MANAGER (Patch 4)
 // ============================================================================
 // Vue dépannage pour le service ERP : tous les dossiers de tous les techniciens
 // en lecture seule, format "mail Outlook" mais en interface pro.
@@ -3081,10 +3098,14 @@ function getManagerFiltered() {
     );
   }
 
-  return dossiers.sort((a, b) => new Date(b.dateAppel) - new Date(a.dateAppel));
+  return dossiers.sort((a, b) => {
+    // V2.10.8 — Tri intelligent : non-récupérés en premier, puis date décroissante
+    const aRecup = a.recupereERP ? 1 : 0;
+    const bRecup = b.recupereERP ? 1 : 0;
+    if (aRecup !== bRecup) return aRecup - bRecup; // 0 (non-récup) avant 1 (récup)
+    return new Date(b.dateAppel) - new Date(a.dateAppel);
+  });
 }
-
-// ── Grouper les dossiers par technicien ─────────────────────────
 function groupDossiersByTech(dossiers) {
   const byTech = {};
   for (const d of dossiers) {
@@ -3126,10 +3147,10 @@ function renderManagerView() {
   return `
     <header class="app-header">
       <div class="header-top">
-        <button class="header-back" data-action="back-to-settings">← Réglages</button>
+        ${authState.user && authState.user.role !== 'manager' ? '<button class="header-back" data-action="back-to-settings">← Réglages</button>' : '<div style="width:8px"></div>'}
         <div>
           <div class="header-title">🚨 Dépannage</div>
-          <div class="header-subtitle">Vue manager • Lecture seule</div>
+          <div class="header-subtitle">${authState.user && authState.user.role === 'manager' ? 'Service dépannage' : 'Vue manager'} • Lecture seule</div>
         </div>
         <div class="header-actions">
           <button class="icon-btn" data-action="manager-prev-week" title="Semaine précédente">‹</button>
@@ -3144,6 +3165,20 @@ function renderManagerView() {
         <div class="manager-week-info">
           <div class="manager-week-num">Semaine n°${weekNum} ${weekLabel}</div>
           <div class="manager-week-dates">${fmtDateShort(week.start)} 09h → ${fmtDateShort(week.end)} 09h</div>
+          ${(() => {
+            // V2.10.8 — Mini-stats équipe
+            const techsActifs = new Set(weekDossiers.map(d => d.username || '?')).size;
+            const recupered = weekDossiers.filter(d => d.recupereERP).length;
+            const total = weekDossiers.length;
+            const pct = total > 0 ? Math.round((recupered / total) * 100) : 0;
+            if (total === 0) return '';
+            return `
+              <div class="manager-mini-stats">
+                <span>👥 ${techsActifs} tech${techsActifs > 1 ? 's' : ''} actif${techsActifs > 1 ? 's' : ''}</span>
+                <span>📊 ${recupered}/${total} récupérés (${pct}%)</span>
+              </div>
+            `;
+          })()}
         </div>
         <div class="manager-week-stats">
           <div class="manager-stat"><span class="manager-stat-value">${weekDossiers.length}</span><span class="manager-stat-label">DOSSIERS</span></div>
@@ -3165,6 +3200,12 @@ function renderManagerView() {
       <div class="manager-search">
         <input type="search" id="manager-search-input" placeholder="🔎 Rechercher technicien, établissement, code..." value="${escapeHtml(managerState.searchQuery)}">
       </div>
+      
+      <div style="padding: 0 12px 8px">
+        <button class="btn btn-secondary" data-action="manager-export-csv" style="width:100%">
+          📊 Exporter Excel (semaine actuelle)
+        </button>
+      </div>
 
       ${managerState.loading ? `
         <div style="text-align:center;padding:40px;color:var(--text-secondary)">⏳ Chargement des dossiers...</div>
@@ -3182,9 +3223,10 @@ function renderManagerView() {
       </div>
 
       <div class="text-center" style="padding:24px 0;font-size:11px;color:var(--text-tertiary);font-family:monospace">
-        Vue Manager V2.10.7 • ${filtered.length} dossier(s) affiché(s)
+        Vue Manager V2.10.8 • ${filtered.length} dossier(s) affiché(s)
       </div>
     </div>
+    ${authState.user && authState.user.role === 'manager' ? renderBottomNav() : ''}
   `;
 }
 
@@ -3285,8 +3327,79 @@ function getWeekNumber(date) {
   return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
 }
 
+// ── V2.10.8 — Export Excel/CSV de la semaine ────────────────────
+function managerExportWeekCSV() {
+  const weekDossiers = getManagerWeekDossiers();
+  if (weekDossiers.length === 0) {
+    toast('Aucun dossier sur cette semaine', 'warning');
+    return;
+  }
+
+  const fmt = (iso) => {
+    if (!iso || iso === 'X') return iso === 'X' ? 'chaînage' : '';
+    try {
+      const dt = new Date(iso);
+      return dt.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch (e) { return iso; }
+  };
+  const escape = (v) => {
+    if (v === null || v === undefined) return '';
+    const s = String(v).replace(/"/g, '""').replace(/\r?\n/g, ' / ');
+    return /[",;]/.test(s) ? `"${s}"` : s;
+  };
+
+  const headers = [
+    'Technicien', 'Date appel', 'Type', 'Établissement', 'Code astreinte',
+    'Demandeur', 'N° rapport', 'Motif',
+    'Départ domicile', 'Arrivée site', 'Départ site', 'Retour domicile',
+    'Adresse site', 'Km', 'Rapport', 'Compte-rendu',
+    'Récupéré ERP', 'Récupéré par', 'Récupéré le'
+  ];
+
+  const lines = [headers.map(escape).join(';')];
+  for (const d of weekDossiers) {
+    const row = [
+      d.username || '',
+      fmt(d.dateAppel),
+      d.type === 'telephone' ? 'Téléphone' : 'Déplacement',
+      d.etablissement || '',
+      d.codeAstreinte || '',
+      d.demandeur || '',
+      d.rapportNum || '',
+      d.motif || '',
+      fmt(d.departDomicile),
+      fmt(d.arriveeSite),
+      fmt(d.finIntervention),
+      fmt(d.retourDomicile),
+      d.adresse || '',
+      d.km || '',
+      d.rapport || '',
+      d.compteRendu || '',
+      d.recupereERP ? 'Oui' : 'Non',
+      d.recupereERP_by || '',
+      d.recupereERP_at ? fmt(d.recupereERP_at) : ''
+    ];
+    lines.push(row.map(escape).join(';'));
+  }
+
+  // BOM UTF-8 pour Excel
+  const csv = '\uFEFF' + lines.join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const baseDate = new Date();
+  baseDate.setDate(baseDate.getDate() + managerState.weekOffset * 7);
+  const week = getAstreinteWeek(baseDate);
+  const fname = `astreintes_AMI2S_${week.start.toISOString().substring(0,10)}_au_${week.end.toISOString().substring(0,10)}.csv`;
+  a.href = url;
+  a.download = fname;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast(`📊 Export téléchargé : ${weekDossiers.length} dossier(s)`, 'success');
+}
+
 // ============================================================================
-// FIN MODULE MANAGER V2.10.7
+// FIN MODULE MANAGER V2.10.8
 // ============================================================================
 
 
@@ -3728,7 +3841,7 @@ function renderSyncBadge() {
 // ----------------------------------------------------------------------------
 // BUSINESS LOGIC
 // ----------------------------------------------------------------------------
-// V2.10.7 — Source unique de vérité : dossiers du user connecté uniquement
+// V2.10.8 — Source unique de vérité : dossiers du user connecté uniquement
 // Les vues Dossiers/Stats/Export utilisent toutes cette fonction.
 // Les rôles Manager/Admin auront accès aux dossiers de toute l'équipe via
 // des vues dédiées (Patch 4 Manager / Patch 3b Dashboard).
@@ -3799,7 +3912,7 @@ function findOpenSequence() {
   // - clôturé avec retourDomicile = 'X' (chaînage en cours, n'a pas encore enregistré retour)
   // ET qui n'a PAS de retour domicile horodaté (sinon la séquence est fermée)
   
-  // V2.10.7 — Ne chercher que dans les dossiers du user connecté
+  // V2.10.8 — Ne chercher que dans les dossiers du user connecté
   const myDossiers = getMyDossiers();
   
   const candidatesEnCours = myDossiers.filter(d => 
@@ -3865,7 +3978,7 @@ function render() {
     // V2.10.2 — Vues admin
     case 'admin-users': app.innerHTML = renderAdminUsers(); break;
     case 'admin-logs': app.innerHTML = renderAdminLogs(); break;
-    // V2.10.7 — Vue manager (dépannage)
+    // V2.10.8 — Vue manager (dépannage)
     case 'manager-view': app.innerHTML = renderManagerView(); break;
   }
   attachListeners();
@@ -3904,12 +4017,23 @@ function render() {
 }
 
 function renderBottomNav() {
-  const items = [
-    ['list', '📋', 'Dossiers'],
-    ['export', '📤', 'Export'],
-    ['stats', '📊', 'Stats'],
-    ['settings', '⚙️', 'Réglages']
-  ];
+  // V2.10.8 — Bottom nav adapté au rôle
+  let items;
+  if (authState.user && authState.user.role === 'manager') {
+    // Manager : interface dépannage uniquement
+    items = [
+      ['manager-view', '🚨', 'Dépannage'],
+      ['settings', '⚙️', 'Réglages']
+    ];
+  } else {
+    // Technicien ou Admin : interface complète
+    items = [
+      ['list', '📋', 'Dossiers'],
+      ['export', '📤', 'Export'],
+      ['stats', '📊', 'Stats'],
+      ['settings', '⚙️', 'Réglages']
+    ];
+  }
   return `<nav class="bottom-nav">${items.map(([key, icon, label]) => `
     <button class="nav-item ${view.current === key ? 'active' : ''}" data-action="nav" data-view="${key}">
       <span class="nav-icon">${icon}</span>
@@ -4576,7 +4700,7 @@ function renderExport() {
   
   // === Rapport nuit/période avec jours fériés FR ===
   const nightPeriod = computeNightPeriod();
-  // V2.10.7 — Rapport de nuit limité aux dossiers du user
+  // V2.10.8 — Rapport de nuit limité aux dossiers du user
   const nightDossiers = getMyDossiers().filter(d => {
     const dt = new Date(d.dateAppel);
     return dt >= nightPeriod.start && dt <= nightPeriod.end;
@@ -4915,7 +5039,7 @@ function renderSettings() {
         </div>
         <div style="padding:12px;display:flex;flex-direction:column;gap:8px">
           ${(() => {
-            // V2.10.7 — Détection intelligente : dossiers locaux sans user_id (orphelins)
+            // V2.10.8 — Détection intelligente : dossiers locaux sans user_id (orphelins)
             const myId = authState.user && authState.user.id;
             const orphans = state.dossiers.filter(d => !d.user_id);
             const orphansCount = orphans.length;
@@ -4941,7 +5065,7 @@ function renderSettings() {
         </div>
       </div>
       
-      <!-- V2.10.7 — Service dépannage (visible pour admin ET manager) -->
+      <!-- V2.10.8 — Service dépannage (visible pour admin ET manager) -->
       ${isManagerOrAdmin() ? `
       <div class="settings-section">
         <div class="settings-section-title">🚨 Service Dépannage</div>
@@ -5003,6 +5127,8 @@ function renderSettings() {
         </div>
       </div>
       
+      <!-- V2.10.8 — Sections spécifiques techniciens & admins (cachées au manager) -->
+      ${authState.user && authState.user.role !== 'manager' ? `
       <div class="settings-section">
         <div class="settings-section-title">Identité technicien</div>
         <div class="settings-group">
@@ -5109,9 +5235,10 @@ function renderSettings() {
           </div>
         </div>
       </div>
+      ` : ''}
       
       <div class="text-center" style="padding:24px 0;font-size:11px;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace">
-        Astreintes AMI2S V2.10.7<br>
+        Astreintes AMI2S V2.10.8<br>
         ${getMyDossiers().length} dossier(s) • ${new Date().toISOString().substring(0,10)}
       </div>
     </div>
@@ -5491,6 +5618,22 @@ function renderSequence() {
 // ----------------------------------------------------------------------------
 function attachListeners() {
   $$('[data-action]').forEach(el => el.addEventListener('click', handleAction));
+  
+  // V2.10.8 — Binding pour la recherche dans la vue Manager
+  const mgrSearch = document.getElementById('manager-search-input');
+  if (mgrSearch) {
+    mgrSearch.addEventListener('input', (e) => {
+      managerState.searchQuery = e.target.value;
+      // Re-render mais on garde le focus
+      const cursorPos = e.target.selectionStart;
+      render();
+      const newInput = document.getElementById('manager-search-input');
+      if (newInput) {
+        newInput.focus();
+        newInput.setSelectionRange(cursorPos, cursorPos);
+      }
+    });
+  }
   $$('[data-bind]').forEach(el => {
     el.addEventListener('input', (e) => {
       if (tempDossier) tempDossier[e.target.dataset.bind] = e.target.value;
@@ -5569,7 +5712,13 @@ async function handleAction(e) {
     case 'nav':
       view.current = t.dataset.view;
       if (view.current === 'list') view.dossierId = null;
-      render();
+      // V2.10.8 — Si on navigue vers manager-view, charger les dossiers
+      if (view.current === 'manager-view' && isManagerOrAdmin()) {
+        render();
+        managerLoadDossiers();
+      } else {
+        render();
+      }
       break;
     case 'new':
       tempDossier = null;
@@ -5776,7 +5925,7 @@ async function handleAction(e) {
     case 'admin-refresh-logs':
       await adminLoadLogs();
       break;
-    // V2.10.7 — Manager (dépannage)
+    // V2.10.8 — Manager (dépannage)
     case 'goto-manager':
       if (!isManagerOrAdmin()) { toast('Accès refusé', 'error'); break; }
       view.current = 'manager-view';
@@ -5802,6 +5951,9 @@ async function handleAction(e) {
       break;
     case 'manager-toggle-recupered':
       await managerMarkRecupered(t.dataset.id, t.dataset.current === '1');
+      break;
+    case 'manager-export-csv':
+      managerExportWeekCSV();
       break;
     case 'show-sync':
       showSyncModal();
