@@ -1966,7 +1966,7 @@ function renderLoginScreen() {
           ${authState.loading ? '⏳ Connexion...' : '🔓 Se connecter'}
         </button>
         <div class="login-footer">
-          Astreintes AMI2S V2.10.4 • Session 7 jours
+          Astreintes AMI2S V2.10.6 • Session 7 jours
         </div>
       </div>
     </div>
@@ -2103,12 +2103,35 @@ async function cloudPull(showFeedback = false) {
     if (!res.success) throw new Error(res.error);
 
     const remoteDossiers = res.dossiers || [];
+    const currentUserId = authState.user && authState.user.id;
+
+    // V2.10.6 — Filtrage côté frontend : on ne traite QUE les dossiers
+    // appartenant à l'utilisateur connecté (admin verra tous les dossiers
+    // de l'équipe via le futur Dashboard, pas ici)
+    const myRemoteDossiers = remoteDossiers.filter(d => d.user_id === currentUserId);
+
+    // V2.10.6 — Identifier les dossiers locaux à supprimer
+    // (présents en local mais plus dans le cloud OU appartenant à un autre user)
+    const remoteIdsByUser = new Set(myRemoteDossiers.map(d => d.id));
+    const toDelete = state.dossiers.filter(d => {
+      // Dossier d'un autre user → à supprimer du local
+      if (d.user_id && d.user_id !== currentUserId) return true;
+      // Dossier déjà synchronisé qui n'existe plus côté cloud → à supprimer du local
+      // (sauf s'il n'a pas encore été pushé : pas de user_id du tout)
+      if (d.user_id === currentUserId && !remoteIdsByUser.has(d.id)) return true;
+      return false;
+    });
+
+    for (const d of toDelete) {
+      try { await dbDelete('dossiers', d.id); } catch (e) {}
+    }
+    state.dossiers = state.dossiers.filter(d => !toDelete.includes(d));
+
     const localById = {};
     state.dossiers.forEach(d => { localById[d.id] = d; });
 
     let added = 0, updated = 0;
-    for (const remote of remoteDossiers) {
-      // Mapper les champs cloud → local (cloud utilise snake_case parfois)
+    for (const remote of myRemoteDossiers) {
       const adapted = adaptCloudToLocal(remote);
       const local = localById[adapted.id];
       if (!local) {
@@ -2133,7 +2156,8 @@ async function cloudPull(showFeedback = false) {
     updateSyncBadge();
 
     if (showFeedback) {
-      toast(`Cloud : ${added} ajoutés, ${updated} mis à jour`, 'success');
+      const removed = toDelete.length;
+      toast(`Cloud : ${added} ajouté(s), ${updated} mis à jour${removed ? ', ' + removed + ' supprimé(s) du local' : ''}`, 'success');
     }
     if (typeof render === 'function') render();
     return { success: true, added, updated };
@@ -2199,7 +2223,9 @@ function adaptLocalToCloud(d) {
     rapportNum: d.rapportNum || d.rapportN || '',
     departDomicile: d.departDomicile || '',
     arriveeSite: d.arriveeSite || '',
-    finIntervention: d.finIntervention || '',
+    // V2.10.6 — Bug fix : le champ local s'appelle "departSite" (départ du site),
+    // on l'envoie dans la colonne cloud "finIntervention" (= heure de fin d'intervention sur site)
+    finIntervention: d.departSite || d.finIntervention || '',
     retourDomicile: d.retourDomicile || '',
     adresse: d.adresse || d.adresseSite || '',
     km: d.km !== undefined ? d.km : '',
@@ -2231,7 +2257,9 @@ function adaptCloudToLocal(d) {
     rapportN: d.rapportNum, // alias rétrocompat
     departDomicile: d.departDomicile,
     arriveeSite: d.arriveeSite,
+    // V2.10.6 — Bug fix : on recupère "finIntervention" du cloud et on le réinjecte dans "departSite" local
     finIntervention: d.finIntervention,
+    departSite: d.finIntervention || null,
     retourDomicile: d.retourDomicile,
     adresse: d.adresse,
     adresseSite: d.adresse, // alias rétrocompat
@@ -2258,7 +2286,10 @@ async function migrateLocalDossiersToCloud() {
     return;
   }
 
-  const localCount = state.dossiers.length;
+  // V2.10.6 — Ne migrer que les dossiers qui m'appartiennent ou qui n'ont pas encore de user_id
+  const myId = authState.user && authState.user.id;
+  const toMigrate = state.dossiers.filter(d => !d.user_id || d.user_id === myId);
+  const localCount = toMigrate.length;
   if (localCount === 0) {
     toast('Aucun dossier local à migrer', 'warning');
     return;
@@ -2271,8 +2302,8 @@ async function migrateLocalDossiersToCloud() {
   toast(`Migration de ${localCount} dossiers en cours...`, 'warning');
   let success = 0, errors = 0;
 
-  for (let i = 0; i < state.dossiers.length; i++) {
-    const d = state.dossiers[i];
+  for (let i = 0; i < toMigrate.length; i++) {
+    const d = toMigrate[i];
     const res = await cloudPushDossier(d, false);
     if (res.success) success++;
     else errors++;
@@ -2282,7 +2313,10 @@ async function migrateLocalDossiersToCloud() {
 
   if (errors === 0) {
     toast(`${success} dossiers migrés avec succès`, 'success');
-    localStorage.setItem('astreintes_migration_done_v1', '1');
+    // V2.10.6 — Flag de migration par user (et non global)
+    if (authState.user && authState.user.id) {
+      localStorage.setItem('astreintes_migration_done_' + authState.user.id, '1');
+    }
   } else {
     toast(`${success} OK, ${errors} erreurs`, 'warning');
   }
@@ -2290,7 +2324,9 @@ async function migrateLocalDossiersToCloud() {
 }
 
 function hasMigrationBeenDone() {
-  return localStorage.getItem('astreintes_migration_done_v1') === '1';
+  // V2.10.6 — Flag par user (chaque user a sa propre migration)
+  if (!authState.user || !authState.user.id) return false;
+  return localStorage.getItem('astreintes_migration_done_' + authState.user.id) === '1';
 }
 
 // ── Helper : appel Maps via nouveau backend (remplace l'ancien) ─
@@ -3155,18 +3191,32 @@ function renderSyncBadge() {
 // ----------------------------------------------------------------------------
 // BUSINESS LOGIC
 // ----------------------------------------------------------------------------
+// V2.10.6 — Source unique de vérité : dossiers du user connecté uniquement
+// Les vues Dossiers/Stats/Export utilisent toutes cette fonction.
+// Les rôles Manager/Admin auront accès aux dossiers de toute l'équipe via
+// des vues dédiées (Patch 4 Manager / Patch 3b Dashboard).
+function getMyDossiers() {
+  const myId = authState.user && authState.user.id;
+  if (!myId) return [];
+  return state.dossiers.filter(d => {
+    // Inclure les dossiers sans user_id (anciens dossiers locaux non encore migrés)
+    // et ceux qui appartiennent au user connecté
+    return !d.user_id || d.user_id === myId;
+  });
+}
+
 function getWeekDossiers(offset = 0) {
   const base = new Date();
   base.setDate(base.getDate() + offset * 7);
   const { start, end } = getAstreinteWeek(base);
-  return state.dossiers.filter(d => {
+  return getMyDossiers().filter(d => {
     const dt = new Date(d.dateAppel);
     return dt >= start && dt < end;
   });
 }
 
 function getFilteredDossiers() {
-  let dossiers = view.weekOffset !== null ? getWeekDossiers(view.weekOffset) : state.dossiers;
+  let dossiers = view.weekOffset !== null ? getWeekDossiers(view.weekOffset) : getMyDossiers();
   dossiers = [...dossiers].sort((a, b) => new Date(b.dateAppel) - new Date(a.dateAppel));
   
   // Filtre catégorie
@@ -3212,11 +3262,14 @@ function findOpenSequence() {
   // - clôturé avec retourDomicile = 'X' (chaînage en cours, n'a pas encore enregistré retour)
   // ET qui n'a PAS de retour domicile horodaté (sinon la séquence est fermée)
   
-  const candidatesEnCours = state.dossiers.filter(d => 
+  // V2.10.6 — Ne chercher que dans les dossiers du user connecté
+  const myDossiers = getMyDossiers();
+  
+  const candidatesEnCours = myDossiers.filter(d => 
     d.statut === 'intervention' && d.retourDomicile !== 'X' && !d.retourDomicile && d.type === 'deplacement'
   );
   
-  const candidatesChaines = state.dossiers.filter(d =>
+  const candidatesChaines = myDossiers.filter(d =>
     d.retourDomicile === 'X' && d.type === 'deplacement'
   );
   
@@ -3234,7 +3287,7 @@ function findOpenSequence() {
   }
   
   // Vérifier qu'aucun dossier de la séquence n'a un retour domicile horodaté
-  const seqDossiers = state.dossiers.filter(d => d.sequenceId === seqId);
+  const seqDossiers = myDossiers.filter(d => d.sequenceId === seqId);
   const hasRealRetour = seqDossiers.some(d => d.retourDomicile && d.retourDomicile !== 'X');
   if (hasRealRetour) return null;
   
@@ -3336,7 +3389,7 @@ function renderList() {
   
   const counts = {
     all: weekDossiers.length,
-    'en-cours': state.dossiers.filter(d => d.statut === 'intervention').length,
+    'en-cours': getMyDossiers().filter(d => d.statut === 'intervention').length,
     appels: weekDossiers.filter(d => d.type === 'telephone').length,
     clotures: weekDossiers.filter(d => d.statut === 'cloture').length
   };
@@ -3416,7 +3469,7 @@ function renderList() {
 
 function renderDossierCard(d) {
   const b = getBadge(d);
-  const isChained = d.sequenceId && state.dossiers.filter(x => x.sequenceId === d.sequenceId).length > 1;
+  const isChained = d.sequenceId && getMyDossiers().filter(x => x.sequenceId === d.sequenceId).length > 1;
   
   return `
     <div class="dossier ${b.card}" data-action="detail" data-id="${d.id}">
@@ -3984,7 +4037,8 @@ function renderExport() {
   
   // === Rapport nuit/période avec jours fériés FR ===
   const nightPeriod = computeNightPeriod();
-  const nightDossiers = state.dossiers.filter(d => {
+  // V2.10.6 — Rapport de nuit limité aux dossiers du user
+  const nightDossiers = getMyDossiers().filter(d => {
     const dt = new Date(d.dateAppel);
     return dt >= nightPeriod.start && dt <= nightPeriod.end;
   });
@@ -4277,7 +4331,7 @@ function renderSettings() {
     technicien: '🟢 Technicien',
     manager: '🟡 Manager'
   }[user.role] || user.role;
-  const localCount = state.dossiers.length;
+  const localCount = getMyDossiers().length;
   const migrationDone = hasMigrationBeenDone();
   const sessionExp = authState.expiresAt ? new Date(authState.expiresAt).toLocaleString('fr-FR') : '—';
 
@@ -4493,8 +4547,8 @@ function renderSettings() {
       </div>
       
       <div class="text-center" style="padding:24px 0;font-size:11px;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace">
-        Astreintes AMI2S V2.10.4<br>
-        ${state.dossiers.length} dossier(s) • ${new Date().toISOString().substring(0,10)}
+        Astreintes AMI2S V2.10.6<br>
+        ${getMyDossiers().length} dossier(s) • ${new Date().toISOString().substring(0,10)}
       </div>
     </div>
     
