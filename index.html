@@ -1698,7 +1698,7 @@ body { font-size: 15px; line-height: 1.5; }
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   V2.10.13 — Manager view (dépannage)
+   V2.10.14 — Manager view (dépannage)
    ═══════════════════════════════════════════════════════════════ */
 .manager-week-banner {
   background: var(--surface);
@@ -2157,7 +2157,7 @@ function renderLoginScreen() {
           ${authState.loading ? '⏳ Connexion...' : '🔓 Se connecter'}
         </button>
         <div class="login-footer">
-          Astreintes AMI2S V2.10.13 • Session 7 jours
+          Astreintes AMI2S V2.10.14 • Session 7 jours
         </div>
       </div>
     </div>
@@ -2222,7 +2222,7 @@ async function startMainApp() {
 
     applyTheme();
     
-    // V2.10.13 — Page d'accueil selon le rôle
+    // V2.10.14 — Page d'accueil selon le rôle
     if (authState.user && authState.user.role === 'manager') {
       view.current = 'manager-view';
       render();
@@ -2305,12 +2305,12 @@ async function cloudPull(showFeedback = false) {
     const remoteDossiers = res.dossiers || [];
     const currentUserId = authState.user && authState.user.id;
 
-    // V2.10.13 — Filtrage côté frontend : on ne traite QUE les dossiers
+    // V2.10.14 — Filtrage côté frontend : on ne traite QUE les dossiers
     // appartenant à l'utilisateur connecté (admin verra tous les dossiers
     // de l'équipe via le futur Dashboard, pas ici)
     const myRemoteDossiers = remoteDossiers.filter(d => d.user_id === currentUserId);
 
-    // V2.10.13 — Identifier les dossiers locaux à supprimer
+    // V2.10.14 — Identifier les dossiers locaux à supprimer
     // (présents en local mais plus dans le cloud OU appartenant à un autre user)
     const remoteIdsByUser = new Set(myRemoteDossiers.map(d => d.id));
     const toDelete = state.dossiers.filter(d => {
@@ -2331,7 +2331,7 @@ async function cloudPull(showFeedback = false) {
     state.dossiers.forEach(d => { localById[d.id] = d; });
 
     let added = 0, updated = 0, repaired = 0, restored = 0;
-    const toRepair = []; // V2.10.13 — dossiers à re-pousser vers le cloud
+    const toRepair = []; // V2.10.14 — dossiers à re-pousser vers le cloud
 
     for (const remote of myRemoteDossiers) {
       const adapted = adaptCloudToLocal(remote);
@@ -2342,7 +2342,7 @@ async function cloudPull(showFeedback = false) {
         added++;
       } else {
         // ────────────────────────────────────────────────────────────
-        // V2.10.13 — RÉPARATION PRIORITAIRE : récupérer departSite depuis le cloud
+        // V2.10.14 — RÉPARATION PRIORITAIRE : récupérer departSite depuis le cloud
         // ────────────────────────────────────────────────────────────
         // Si le cloud a finIntervention rempli MAIS le local n'a pas departSite,
         // c'est que le local a été corrompu (bug pré-V2.10.6). On restaure depuis le cloud.
@@ -2360,7 +2360,7 @@ async function cloudPull(showFeedback = false) {
           continue;
         }
 
-        // V2.10.13 — Réparation inverse : local a departSite mais cloud a finIntervention vide
+        // V2.10.14 — Réparation inverse : local a departSite mais cloud a finIntervention vide
         // On re-pousse vers le cloud
         if (localHasDepartSite && !cloudHasFinInter) {
           toRepair.push(local);
@@ -2380,7 +2380,7 @@ async function cloudPull(showFeedback = false) {
       }
     }
 
-    // V2.10.13 — Toast informatif sur la restauration
+    // V2.10.14 — Toast informatif sur la restauration
     if (restored > 0) {
       console.log(`✅ Restauration : ${restored} dossier(s) ont récupéré leur "Départ du site" depuis le cloud`);
       setTimeout(() => {
@@ -2388,7 +2388,7 @@ async function cloudPull(showFeedback = false) {
       }, 500);
     }
 
-    // V2.10.13 — Re-pousser les dossiers à réparer (en arrière-plan, pas bloquant)
+    // V2.10.14 — Re-pousser les dossiers à réparer (en arrière-plan, pas bloquant)
     if (toRepair.length > 0) {
       console.log(`Réparation : ${toRepair.length} dossier(s) avec departSite manquant côté cloud`);
       (async () => {
@@ -2473,7 +2473,7 @@ function adaptLocalToCloud(d) {
     rapportNum: d.rapportNum || d.rapportN || '',
     departDomicile: d.departDomicile || '',
     arriveeSite: d.arriveeSite || '',
-    // V2.10.13 — Bug fix : le champ local s'appelle "departSite" (départ du site),
+    // V2.10.14 — Bug fix : le champ local s'appelle "departSite" (départ du site),
     // on l'envoie dans la colonne cloud "finIntervention" (= heure de fin d'intervention sur site)
     finIntervention: d.departSite || d.finIntervention || '',
     retourDomicile: d.retourDomicile || '',
@@ -2493,7 +2493,7 @@ function adaptLocalToCloud(d) {
 
 function adaptCloudToLocal(d) {
   // On préserve les champs natifs du local pour éviter de casser la V2.9.12
-  // V2.10.13 — Forcer la conversion en string pour les champs texte
+  // V2.10.14 — Forcer la conversion en string pour les champs texte
   // (Google Sheets peut retourner des nombres pour codeAstreinte, rapportNum, etc.)
   const toStr = (v) => (v === null || v === undefined || v === '') ? '' : String(v);
   return {
@@ -2510,14 +2510,14 @@ function adaptCloudToLocal(d) {
     rapportN: toStr(d.rapportNum), // alias rétrocompat
     departDomicile: d.departDomicile,
     arriveeSite: d.arriveeSite,
-    // V2.10.13 — Bug fix : on recupère "finIntervention" du cloud et on le réinjecte dans "departSite" local
+    // V2.10.14 — Bug fix : on recupère "finIntervention" du cloud et on le réinjecte dans "departSite" local
     finIntervention: d.finIntervention,
     departSite: d.finIntervention || null,
     retourDomicile: d.retourDomicile,
     adresse: toStr(d.adresse),
     adresseSite: toStr(d.adresse), // alias rétrocompat
-    // V2.10.13 — Sécurité : km doit être un nombre valide, sinon null
-    km: (() => { const n = parseFloat(d.km); return !isNaN(n) && n > 0 ? n : null; })(),
+    // V2.10.14 — Sécurité : km doit être un nombre valide, sinon null
+    km: (() => { const n = safeKm(d.km); return n > 0 ? n : null; })(),
     motif: toStr(d.motif),
     rapport: toStr(d.rapport),
     compteRendu: toStr(d.compteRendu),
@@ -2540,7 +2540,7 @@ async function migrateLocalDossiersToCloud() {
     return;
   }
 
-  // V2.10.13 — Ne migrer que les dossiers qui m'appartiennent ou qui n'ont pas encore de user_id
+  // V2.10.14 — Ne migrer que les dossiers qui m'appartiennent ou qui n'ont pas encore de user_id
   const myId = authState.user && authState.user.id;
   const toMigrate = state.dossiers.filter(d => !d.user_id || d.user_id === myId);
   const localCount = toMigrate.length;
@@ -2567,7 +2567,7 @@ async function migrateLocalDossiersToCloud() {
 
   if (errors === 0) {
     toast(`${success} dossiers migrés avec succès`, 'success');
-    // V2.10.13 — Flag de migration par user (et non global)
+    // V2.10.14 — Flag de migration par user (et non global)
     if (authState.user && authState.user.id) {
       localStorage.setItem('astreintes_migration_done_' + authState.user.id, '1');
     }
@@ -2578,7 +2578,7 @@ async function migrateLocalDossiersToCloud() {
 }
 
 function hasMigrationBeenDone() {
-  // V2.10.13 — Flag par user (chaque user a sa propre migration)
+  // V2.10.14 — Flag par user (chaque user a sa propre migration)
   if (!authState.user || !authState.user.id) return false;
   return localStorage.getItem('astreintes_migration_done_' + authState.user.id) === '1';
 }
@@ -3009,7 +3009,7 @@ function renderAdminLogs() {
 
 
 // ============================================================================
-// ASTREINTES AMI2S V2.10.13 — MODULE MANAGER (Patch 4)
+// ASTREINTES AMI2S V2.10.14 — MODULE MANAGER (Patch 4)
 // ============================================================================
 // Vue dépannage pour le service ERP : tous les dossiers de tous les techniciens
 // en lecture seule, format "mail Outlook" mais en interface pro.
@@ -3153,7 +3153,7 @@ function getManagerFiltered() {
   }
 
   return dossiers.sort((a, b) => {
-    // V2.10.13 — Tri intelligent : non-récupérés en premier, puis date décroissante
+    // V2.10.14 — Tri intelligent : non-récupérés en premier, puis date décroissante
     const aRecup = a.recupereERP ? 1 : 0;
     const bRecup = b.recupereERP ? 1 : 0;
     if (aRecup !== bRecup) return aRecup - bRecup; // 0 (non-récup) avant 1 (récup)
@@ -3220,7 +3220,7 @@ function renderManagerView() {
           <div class="manager-week-num">Semaine n°${weekNum} ${weekLabel}</div>
           <div class="manager-week-dates">${fmtDateShort(week.start)} 09h → ${fmtDateShort(week.end)} 09h</div>
           ${(() => {
-            // V2.10.13 — Mini-stats équipe
+            // V2.10.14 — Mini-stats équipe
             const techsActifs = new Set(weekDossiers.map(d => d.username || '?')).size;
             const recupered = weekDossiers.filter(d => d.recupereERP).length;
             const total = weekDossiers.length;
@@ -3277,7 +3277,7 @@ function renderManagerView() {
       </div>
 
       <div class="text-center" style="padding:24px 0;font-size:11px;color:var(--text-tertiary);font-family:monospace">
-        Vue Manager V2.10.13 • ${filtered.length} dossier(s) affiché(s)
+        Vue Manager V2.10.14 • ${filtered.length} dossier(s) affiché(s)
       </div>
     </div>
     ${authState.user && authState.user.role === 'manager' ? renderBottomNav() : ''}
@@ -3381,7 +3381,7 @@ function getWeekNumber(date) {
   return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
 }
 
-// ── V2.10.13 — Export Excel/CSV de la semaine ────────────────────
+// ── V2.10.14 — Export Excel/CSV de la semaine ────────────────────
 function managerExportWeekCSV() {
   const weekDossiers = getManagerWeekDossiers();
   if (weekDossiers.length === 0) {
@@ -3453,7 +3453,7 @@ function managerExportWeekCSV() {
 }
 
 // ============================================================================
-// FIN MODULE MANAGER V2.10.13
+// FIN MODULE MANAGER V2.10.14
 // ============================================================================
 
 
@@ -3496,6 +3496,16 @@ function fmtDateShort(d) {
 function fmtTime(d) {
   if (!d) return '—';
   return new Date(d).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+}
+// V2.10.14 — Helper sécurisé pour parser un km : refuse les dates et valeurs absurdes
+function safeKm(v) {
+  if (v === null || v === undefined || v === '') return 0;
+  const s = String(v);
+  // Refuser les dates ISO (caractères T, Z, ou tiret avec longueur > 4)
+  if (s.includes('T') || s.includes('Z') || (s.includes('-') && s.length > 4)) return 0;
+  const n = parseFloat(s);
+  if (isNaN(n) || n < 0 || n > 10000) return 0;
+  return n;
 }
 function fmtDateTime(d) { return fmtDate(d) + ' • ' + fmtTime(d); }
 
@@ -3895,7 +3905,7 @@ function renderSyncBadge() {
 // ----------------------------------------------------------------------------
 // BUSINESS LOGIC
 // ----------------------------------------------------------------------------
-// V2.10.13 — Source unique de vérité : dossiers du user connecté uniquement
+// V2.10.14 — Source unique de vérité : dossiers du user connecté uniquement
 // Les vues Dossiers/Stats/Export utilisent toutes cette fonction.
 // Les rôles Manager/Admin auront accès aux dossiers de toute l'équipe via
 // des vues dédiées (Patch 4 Manager / Patch 3b Dashboard).
@@ -3931,7 +3941,7 @@ function getFilteredDossiers() {
   // Filtre recherche
   if (view.searchQuery && view.searchQuery.trim()) {
     const q = view.searchQuery.toLowerCase().trim();
-    // V2.10.13 — Bug fix : String() systématique pour éviter le crash sur les champs numériques (codeAstreinte, rapportNum)
+    // V2.10.14 — Bug fix : String() systématique pour éviter le crash sur les champs numériques (codeAstreinte, rapportNum)
     dossiers = dossiers.filter(d =>
       String(d.etablissement || '').toLowerCase().includes(q) ||
       String(d.motif || '').toLowerCase().includes(q) ||
@@ -3967,7 +3977,7 @@ function findOpenSequence() {
   // - clôturé avec retourDomicile = 'X' (chaînage en cours, n'a pas encore enregistré retour)
   // ET qui n'a PAS de retour domicile horodaté (sinon la séquence est fermée)
   
-  // V2.10.13 — Ne chercher que dans les dossiers du user connecté
+  // V2.10.14 — Ne chercher que dans les dossiers du user connecté
   const myDossiers = getMyDossiers();
   
   const candidatesEnCours = myDossiers.filter(d => 
@@ -4033,7 +4043,7 @@ function render() {
     // V2.10.2 — Vues admin
     case 'admin-users': app.innerHTML = renderAdminUsers(); break;
     case 'admin-logs': app.innerHTML = renderAdminLogs(); break;
-    // V2.10.13 — Vue manager (dépannage)
+    // V2.10.14 — Vue manager (dépannage)
     case 'manager-view': app.innerHTML = renderManagerView(); break;
   }
   attachListeners();
@@ -4072,7 +4082,7 @@ function render() {
 }
 
 function renderBottomNav() {
-  // V2.10.13 — Bottom nav adapté au rôle
+  // V2.10.14 — Bottom nav adapté au rôle
   let items;
   if (authState.user && authState.user.role === 'manager') {
     // Manager : interface dépannage uniquement
@@ -4381,7 +4391,7 @@ function renderDeplacement(d) {
       <div class="form-group">
         <label class="form-label">Distance parcourue (km)</label>
         <div style="display:flex;gap:8px;align-items:stretch">
-          <input type="number" class="form-input" data-bind="km" value="${(() => { const n = parseFloat(d.km); return !isNaN(n) && n > 0 ? n : ''; })()}" placeholder="Ex: 8.4" step="0.1" inputmode="decimal" style="flex:1">
+          <input type="number" class="form-input" data-bind="km" value="${(() => { const n = safeKm(d.km); return n > 0 ? n : ''; })()}" placeholder="Ex: 8.4" step="0.1" inputmode="decimal" style="flex:1">
           <button class="btn btn-primary" data-action="calc-distance" style="white-space:nowrap;padding:0 14px" ${!authState.isAuthenticated || !state.settings.adresseDomicile ? 'disabled' : ''}>
             📍 Calculer
           </button>
@@ -4587,7 +4597,7 @@ function renderDetail() {
           <div class="detail-row">
             <span class="detail-label">Distance</span>
             <div style="display:flex;align-items:center;gap:6px">
-              <input type="number" class="detail-input mono" data-bind-edit="km" value="${(() => { const n = parseFloat(d.km); return !isNaN(n) && n > 0 ? n : ''; })()}" placeholder="0.0" step="0.1" inputmode="decimal" style="width:80px;text-align:right">
+              <input type="number" class="detail-input mono" data-bind-edit="km" value="${(() => { const n = safeKm(d.km); return n > 0 ? n : ''; })()}" placeholder="0.0" step="0.1" inputmode="decimal" style="width:80px;text-align:right">
               <span style="color:var(--text-secondary)">km</span>
             </div>
           </div>
@@ -4755,13 +4765,13 @@ function renderExport() {
   
   // === Rapport nuit/période avec jours fériés FR ===
   const nightPeriod = computeNightPeriod();
-  // V2.10.13 — Rapport de nuit limité aux dossiers du user
+  // V2.10.14 — Rapport de nuit limité aux dossiers du user
   const nightDossiers = getMyDossiers().filter(d => {
     const dt = new Date(d.dateAppel);
     return dt >= nightPeriod.start && dt <= nightPeriod.end;
   });
   
-  const totalKm = weekDossiers.reduce((s, d) => s + (parseFloat(d.km) || 0), 0);
+  const totalKm = weekDossiers.reduce((s, d) => s + safeKm(d.km), 0);
   let totalMs = 0;
   weekDossiers.forEach(d => {
     if (d.departDomicile && d.retourDomicile && d.departDomicile !== 'X' && d.retourDomicile !== 'X') {
@@ -5094,7 +5104,7 @@ function renderSettings() {
         </div>
         <div style="padding:12px;display:flex;flex-direction:column;gap:8px">
           ${(() => {
-            // V2.10.13 — Détection intelligente : dossiers locaux sans user_id (orphelins)
+            // V2.10.14 — Détection intelligente : dossiers locaux sans user_id (orphelins)
             const myId = authState.user && authState.user.id;
             const orphans = state.dossiers.filter(d => !d.user_id);
             const orphansCount = orphans.length;
@@ -5120,7 +5130,7 @@ function renderSettings() {
         </div>
       </div>
       
-      <!-- V2.10.13 — Service dépannage (visible pour admin ET manager) -->
+      <!-- V2.10.14 — Service dépannage (visible pour admin ET manager) -->
       ${isManagerOrAdmin() ? `
       <div class="settings-section">
         <div class="settings-section-title">🚨 Service Dépannage</div>
@@ -5182,7 +5192,7 @@ function renderSettings() {
         </div>
       </div>
       
-      <!-- V2.10.13 — Sections spécifiques techniciens & admins (cachées au manager) -->
+      <!-- V2.10.14 — Sections spécifiques techniciens & admins (cachées au manager) -->
       ${authState.user && authState.user.role !== 'manager' ? `
       <div class="settings-section">
         <div class="settings-section-title">Identité technicien</div>
@@ -5293,7 +5303,7 @@ function renderSettings() {
       ` : ''}
       
       <div class="text-center" style="padding:24px 0;font-size:11px;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace">
-        Astreintes AMI2S V2.10.13<br>
+        Astreintes AMI2S V2.10.14<br>
         ${getMyDossiers().length} dossier(s) • ${new Date().toISOString().substring(0,10)}
       </div>
     </div>
@@ -5310,7 +5320,7 @@ function renderStats() {
   baseDate.setDate(baseDate.getDate() + offset * 7);
   const week = getAstreinteWeek(baseDate);
   const weekDossiers = getWeekDossiers(offset);
-  const totalKm = weekDossiers.reduce((s, d) => s + (parseFloat(d.km) || 0), 0);
+  const totalKm = weekDossiers.reduce((s, d) => s + safeKm(d.km), 0);
   
   // V2.9.3 — Algorithme tolérant aux dates incohérentes
   // Calcul par groupes en se basant sur l'ORDRE des dossiers (par dateAppel) et non les dates des timestamps
@@ -5574,7 +5584,7 @@ function renderSequence() {
   }
   
   dossiers.forEach(d => {
-    if (d.km) totalKm += parseFloat(d.km) || 0;
+    totalKm += safeKm(d.km);
     if (d.tempsSiteMs) totalTimeSiteMs += d.tempsSiteMs;
   });
   
@@ -5674,7 +5684,7 @@ function renderSequence() {
 function attachListeners() {
   $$('[data-action]').forEach(el => el.addEventListener('click', handleAction));
   
-  // V2.10.13 — Binding pour la recherche dans la vue Manager
+  // V2.10.14 — Binding pour la recherche dans la vue Manager
   const mgrSearch = document.getElementById('manager-search-input');
   if (mgrSearch) {
     mgrSearch.addEventListener('input', (e) => {
@@ -5767,7 +5777,7 @@ async function handleAction(e) {
     case 'nav':
       view.current = t.dataset.view;
       if (view.current === 'list') view.dossierId = null;
-      // V2.10.13 — Si on navigue vers manager-view, charger les dossiers
+      // V2.10.14 — Si on navigue vers manager-view, charger les dossiers
       if (view.current === 'manager-view' && isManagerOrAdmin()) {
         render();
         managerLoadDossiers();
@@ -5980,7 +5990,7 @@ async function handleAction(e) {
     case 'admin-refresh-logs':
       await adminLoadLogs();
       break;
-    // V2.10.13 — Manager (dépannage)
+    // V2.10.14 — Manager (dépannage)
     case 'goto-manager':
       if (!isManagerOrAdmin()) { toast('Accès refusé', 'error'); break; }
       view.current = 'manager-view';
@@ -6244,7 +6254,7 @@ async function editTimestamp(field) {
   if (!newDate) return;
   let finalDate = roundTo5(newDate);
   
-  // V2.10.13 — GARDE-FOU 1 (refonte) : forcer la date sur la BONNE référence
+  // V2.10.14 — GARDE-FOU 1 (refonte) : forcer la date sur la BONNE référence
   // - Pour departDomicile : date de dateAppel (premier événement)
   // - Pour arriveeSite : date de departDomicile (sinon dateAppel)
   // - Pour departSite : date d'arriveeSite (sinon dateAppel)
@@ -6310,7 +6320,7 @@ async function editTimestamp(field) {
     }
   }
   
-  // V2.10.13 — GARDE-FOU 2 : alerte si la date est > 36h de dateAppel
+  // V2.10.14 — GARDE-FOU 2 : alerte si la date est > 36h de dateAppel
   // (sauf chaînage sur weekend long, qui peut effectivement durer ~64h)
   if (d.dateAppel && field !== 'dateAppel') {
     const appel = new Date(d.dateAppel);
@@ -7571,12 +7581,12 @@ function generatePDF() {
         }
       }
       
-      if (d.km && !isPhone) totalKm += parseFloat(d.km) || 0;
+      if (!isPhone) totalKm += safeKm(d.km);
       
       return {
         d, isPhone,
         date: fmtDateShort(d.dateAppel),
-        // V2.10.13 — Forcer la conversion en string pour éviter les erreurs jsPDF
+        // V2.10.14 — Forcer la conversion en string pour éviter les erreurs jsPDF
         code: String(d.codeAstreinte || ''),
         demandeur: String(d.etablissement || ''),
         heureAppel: d.bureau ? 'BUREAU' : fmtTime(d.dateAppel),
@@ -7586,7 +7596,8 @@ function generatePDF() {
         arrSite: d.arriveeSite ? fmtTime(d.arriveeSite) : '',
         depSite: d.departSite ? fmtTime(d.departSite) : (d.finIntervention ? fmtTime(d.finIntervention) : ''),
         tpsSite: String(d.tempsSiteCalcule || ''),
-        km: d.km || '',
+        // V2.10.14 — Sécurité : ne garder que les valeurs numériques valides
+        km: (() => { const n = safeKm(d.km); return n > 0 ? n : ''; })(),
         departDom, retourDom, totalTrajet
       };
     });
@@ -7805,7 +7816,7 @@ function generatePDF() {
             if (val === null || val === undefined || val === '') return;
             const x = GRID.x[idx];
             const w = GRID.x[idx + 1] - GRID.x[idx];
-            // V2.10.13 — Bug fix : forcer la conversion en string pour éviter l'erreur jsPDF
+            // V2.10.14 — Bug fix : forcer la conversion en string pour éviter l'erreur jsPDF
             let display = String(val);
             if (truncate && display.length > truncate) display = display.substring(0, truncate - 2) + '..';
             doc.text(display, x + w/2, rowY + ROW_H/2 + 2.5, { align: 'center', maxWidth: w - 2 });
@@ -7880,9 +7891,9 @@ function generatePDF() {
       doc.text(warn3, 19 + warn1W + warn2W, warningY);
       
       // ─────────────────────────────────────────────────────────
-      // 8. 4 CADRES ÉTAPES — uniquement sur la dernière page
+      // 8. 4 CADRES ÉTAPES — V2.10.14 : sur TOUTES les pages (comme l'original Eurofeu)
       // ─────────────────────────────────────────────────────────
-      if (isLastPage) {
+      {
         // Position : y débute à warningY + 18 pour bien séparer
         const stepY = warningY + 18;  // ≈ 503
         const stepGap = 8;
@@ -8039,7 +8050,7 @@ function buildEmail(dossiers, subject) {
   const lastDate = new Date(dossiers[dossiers.length - 1].dateAppel);
   const nbInterventions = dossiers.filter(d => d.type === 'deplacement').length;
   const nbTelephone = dossiers.filter(d => d.type === 'telephone').length;
-  const totalKm = dossiers.reduce((s, d) => s + (parseFloat(d.km) || 0), 0);
+  const totalKm = dossiers.reduce((s, d) => s + safeKm(d.km), 0);
   
   // === V2.9.8 — Email pro Outlook (texte brut épuré) ===
   let body = `Bonjour,\r\n\r\n`;
