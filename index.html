@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
 
-<!-- V2.10.16 — jsPDF chargé en différé (lazy) via loadJsPDF() au moment du besoin -->
+<!-- V2.11.0 — jsPDF chargé en différé (lazy) via loadJsPDF() au moment du besoin -->
 <!-- Ancien chargement bloquant supprimé pour accélérer le démarrage de ~250 Ko -->
 
 <style>
@@ -1698,7 +1698,7 @@ body { font-size: 15px; line-height: 1.5; }
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   V2.10.16 — Manager view (dépannage)
+   V2.11.0 — Manager view (dépannage)
    ═══════════════════════════════════════════════════════════════ */
 .manager-week-banner {
   background: var(--surface);
@@ -1889,7 +1889,7 @@ body { font-size: 15px; line-height: 1.5; }
 }
 
 /* ============================================================ */
-/* V2.10.16 — SPLASH SCREEN (affiché immédiatement au démarrage)  */
+/* V2.11.0 — SPLASH SCREEN (affiché immédiatement au démarrage)  */
 /* ============================================================ */
 #splash-screen {
   position: fixed;
@@ -1952,7 +1952,7 @@ body { font-size: 15px; line-height: 1.5; }
 }
 
 /* ============================================================ */
-/* V2.10.16 — BANDEAU "ASTREINTE EN COURS"                       */
+/* V2.11.0 — BANDEAU "ASTREINTE EN COURS"                       */
 /* ============================================================ */
 .astreinte-active {
   background: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(220, 38, 38, 0.06) 100%);
@@ -2063,7 +2063,202 @@ body { font-size: 15px; line-height: 1.5; }
 }
 
 /* ============================================================ */
-/* V2.10.16 — INDICATEUR ONLINE/OFFLINE                          */
+/* V2.11 — PAGE MAINTENANCE BLOQUANTE                            */
+/* ============================================================ */
+#maintenance-screen {
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(135deg, #0a0e1a 0%, #1a2238 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 99998;
+  padding: 20px;
+}
+.maintenance-icon {
+  font-size: 64px;
+  margin-bottom: 20px;
+  animation: maint-rotate 4s linear infinite;
+}
+@keyframes maint-rotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+.maintenance-title {
+  color: #fff;
+  font-size: 24px;
+  font-weight: 800;
+  margin-bottom: 12px;
+  text-align: center;
+}
+.maintenance-message {
+  color: #94a3b8;
+  font-size: 15px;
+  line-height: 1.5;
+  text-align: center;
+  max-width: 400px;
+  margin-bottom: 28px;
+}
+.maintenance-retry {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: white;
+  border: none;
+  padding: 12px 28px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+.maintenance-retry:active { transform: scale(0.97); }
+.maintenance-info {
+  margin-top: 24px;
+  font-size: 11px;
+  color: #64748b;
+  text-align: center;
+}
+
+/* ============================================================ */
+/* V2.11 — BANDEAU/MODAL MISE À JOUR                             */
+/* ============================================================ */
+#update-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: white;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  z-index: 9999;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+  font-size: 13px;
+  font-weight: 600;
+}
+#update-banner .update-text {
+  flex: 1;
+  min-width: 0;
+}
+#update-banner .update-version {
+  font-weight: 800;
+  letter-spacing: 0.3px;
+}
+#update-banner .update-btn {
+  background: white;
+  color: #2563eb;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+#update-banner .update-btn:active { transform: scale(0.96); }
+#update-banner .update-dismiss {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Modal MAJ obligatoire */
+#update-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99997;
+  padding: 20px;
+}
+#update-modal .update-modal-content {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  max-width: 440px;
+  width: 100%;
+  padding: 28px;
+  text-align: center;
+}
+#update-modal .update-modal-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+#update-modal .update-modal-title {
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+#update-modal .update-modal-version {
+  display: inline-block;
+  background: var(--accent);
+  color: white;
+  padding: 3px 10px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  margin-bottom: 16px;
+  letter-spacing: 0.5px;
+}
+#update-modal .update-modal-message {
+  color: var(--text-tertiary);
+  font-size: 14px;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+#update-modal .update-modal-changelog {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 20px;
+  text-align: left;
+  font-size: 12px;
+  color: var(--text);
+  max-height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+#update-modal .update-modal-btn-primary {
+  width: 100%;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: white;
+  border: none;
+  padding: 14px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-bottom: 8px;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+#update-modal .update-modal-btn-secondary {
+  width: 100%;
+  background: transparent;
+  color: var(--text-tertiary);
+  border: 1px solid var(--border);
+  padding: 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* ============================================================ */
+/* V2.11.0 — INDICATEUR ONLINE/OFFLINE                          */
 /* ============================================================ */
 .network-badge {
   display: inline-flex;
@@ -2101,7 +2296,7 @@ body { font-size: 15px; line-height: 1.5; }
 </style>
 </head>
 <body>
-<!-- V2.10.16 — Splash screen affiché immédiatement, masqué quand l'app est prête -->
+<!-- V2.11.0 — Splash screen affiché immédiatement, masqué quand l'app est prête -->
 <div id="splash-screen">
   <svg class="splash-logo" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
     <circle cx="50" cy="50" r="45" fill="none" stroke="#2563eb" stroke-width="3" opacity="0.3"/>
@@ -2123,7 +2318,7 @@ const AMI2S_LOGO_BASE64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAI
 
 
 // ============================================================================
-// V2.10.16 — LOGO PERSONNALISABLE
+// V2.11.0 — LOGO PERSONNALISABLE
 // ============================================================================
 // Helper pour obtenir le logo actuel (custom si défini, sinon défaut AMI2S)
 function getLogo() {
@@ -2136,7 +2331,7 @@ function getLogo() {
 }
 
 // ============================================================================
-// V2.10.16 — DÉTECTION RÉSEAU ONLINE/OFFLINE
+// V2.11.0 — DÉTECTION RÉSEAU ONLINE/OFFLINE
 // ============================================================================
 const networkState = {
   online: navigator.onLine,
@@ -2144,7 +2339,7 @@ const networkState = {
 };
 
 // ============================================================================
-// V2.10.16 — LAZY LOAD jsPDF (chargement différé pour accélérer le démarrage)
+// V2.11.0 — LAZY LOAD jsPDF (chargement différé pour accélérer le démarrage)
 // ============================================================================
 let _jsPdfLoadPromise = null;
 function loadJsPDF() {
@@ -2167,6 +2362,281 @@ function loadJsPDF() {
     document.head.appendChild(s1);
   });
   return _jsPdfLoadPromise;
+}
+
+// ============================================================================
+// V2.11 — CONFIG APP (Maintenance + Version)
+// ============================================================================
+// Version actuelle de cette app (à incrémenter à chaque déploiement)
+const APP_VERSION = '2.11.0';
+
+// État global de la config app (récupérée depuis le cloud au démarrage)
+const appConfig = {
+  loaded: false,
+  maintenanceMode: false,
+  maintenanceMessage: 'Maintenance en cours, retour prévu sous peu.',
+  latestVersion: APP_VERSION,
+  updateMessage: 'Une nouvelle version est disponible.',
+  forceUpdate: false,
+  changelog: ''
+};
+
+// Appel public à getAppConfig (pas besoin de token)
+async function publicCall(action, data) {
+  try {
+    const response = await fetch(AUTH_CONFIG.BACKEND_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action,
+        data: data || {}
+      })
+    });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    return await response.json();
+  } catch (err) {
+    return { ok: false, error: 'Erreur reseau : ' + err.message };
+  }
+}
+
+// Récupérer la config app depuis le cloud
+async function fetchAppConfig() {
+  try {
+    const res = await publicCall('getAppConfig', {});
+    if (res.ok && res.config) {
+      appConfig.maintenanceMode = res.config.maintenanceMode === true || res.config.maintenanceMode === 'true';
+      appConfig.maintenanceMessage = res.config.maintenanceMessage || appConfig.maintenanceMessage;
+      appConfig.latestVersion = res.config.latestVersion || APP_VERSION;
+      appConfig.updateMessage = res.config.updateMessage || appConfig.updateMessage;
+      appConfig.forceUpdate = res.config.forceUpdate === true || res.config.forceUpdate === 'true';
+      appConfig.changelog = res.config.changelog || '';
+      appConfig.loaded = true;
+      // Mettre en cache localStorage pour fallback offline
+      try { localStorage.setItem('_appConfig', JSON.stringify(appConfig)); } catch(e) {}
+      return true;
+    }
+  } catch (e) {
+    console.warn('fetchAppConfig failed:', e);
+  }
+  // Fallback : lire depuis localStorage si dispo
+  try {
+    const cached = localStorage.getItem('_appConfig');
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      Object.assign(appConfig, parsed);
+      appConfig.loaded = true;
+    }
+  } catch(e) {}
+  return false;
+}
+
+// Mettre à jour une clé de config (admin uniquement)
+async function setAppConfigValue(key, value) {
+  try {
+    const res = await cloudCall('setAppConfig', { key, value });
+    if (res.ok || res.success) {
+      // Mettre à jour le local
+      appConfig[key] = value;
+      try { localStorage.setItem('_appConfig', JSON.stringify(appConfig)); } catch(e) {}
+      return true;
+    } else {
+      toast('Erreur : ' + (res.error || 'inconnu'), 'error');
+      return false;
+    }
+  } catch (e) {
+    toast('Erreur réseau : ' + e.message, 'error');
+    return false;
+  }
+}
+
+// Comparer 2 versions semver-like (ex: "2.11.0" vs "2.10.16")
+function compareVersions(a, b) {
+  const pa = String(a || '0').split('.').map(n => parseInt(n, 10) || 0);
+  const pb = String(b || '0').split('.').map(n => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const da = pa[i] || 0;
+    const db = pb[i] || 0;
+    if (da > db) return 1;
+    if (da < db) return -1;
+  }
+  return 0;
+}
+
+// Vérifier si une MAJ est disponible
+function isUpdateAvailable() {
+  return appConfig.loaded && compareVersions(appConfig.latestVersion, APP_VERSION) > 0;
+}
+
+// Forcer le rechargement avec cache vidé
+async function forceAppReload() {
+  try {
+    // 1. Désinscrire le Service Worker
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for (const reg of regs) await reg.unregister();
+    }
+    // 2. Vider tous les caches
+    if (window.caches) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+    // 3. Vider sessionStorage et localStorage SAUF auth (sinon déconnexion)
+    const authBackup = localStorage.getItem('_auth_token_v210');
+    sessionStorage.clear();
+    // Note : on ne vide PAS localStorage pour conserver la session
+    if (authBackup) localStorage.setItem('_auth_token_v210', authBackup);
+  } catch (e) {
+    console.warn('forceAppReload cleanup failed:', e);
+  }
+  // 4. Recharger avec timestamp pour bypass cache HTTP
+  const url = new URL(window.location.href);
+  url.searchParams.set('_v', Date.now());
+  window.location.href = url.toString();
+}
+
+// Rendu de la page maintenance (bloquante pour les non-admins)
+function renderMaintenanceScreen() {
+  // Vérifier si déjà affiché
+  if (document.getElementById('maintenance-screen')) return;
+  
+  const screen = document.createElement('div');
+  screen.id = 'maintenance-screen';
+  screen.innerHTML = `
+    <div class="maintenance-icon">🚧</div>
+    <div class="maintenance-title">Maintenance en cours</div>
+    <div class="maintenance-message">${escapeHtml(appConfig.maintenanceMessage)}</div>
+    <button class="maintenance-retry" id="maint-retry-btn">Réessayer</button>
+    <div class="maintenance-info">L'application sera disponible à nouveau dès que la maintenance sera terminée.<br>Version ${APP_VERSION}</div>
+  `;
+  document.body.appendChild(screen);
+  
+  document.getElementById('maint-retry-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('maint-retry-btn');
+    btn.textContent = 'Vérification...';
+    btn.disabled = true;
+    await fetchAppConfig();
+    if (!appConfig.maintenanceMode || (authState.user && authState.user.role === 'admin')) {
+      // Sortie de maintenance
+      screen.remove();
+      window.location.reload();
+    } else {
+      btn.textContent = 'Toujours en maintenance';
+      setTimeout(() => {
+        btn.textContent = 'Réessayer';
+        btn.disabled = false;
+      }, 2000);
+    }
+  });
+}
+
+// Vérifier si on doit afficher la maintenance (bloque les non-admins)
+function checkMaintenanceBlock() {
+  if (!appConfig.maintenanceMode) {
+    // Sortir si on était en maintenance
+    const screen = document.getElementById('maintenance-screen');
+    if (screen) screen.remove();
+    return false;
+  }
+  // Admin : bypass total
+  if (authState.user && authState.user.role === 'admin') {
+    return false;
+  }
+  // Autres : bloquer
+  renderMaintenanceScreen();
+  return true;
+}
+
+// Rendu du bandeau MAJ (en haut de l'app, non bloquant)
+function renderUpdateBanner() {
+  // Supprimer si déjà présent
+  const existing = document.getElementById('update-banner');
+  if (existing) existing.remove();
+  
+  if (!isUpdateAvailable()) return;
+  
+  // Si forceUpdate → afficher la modal, pas le bandeau
+  if (appConfig.forceUpdate) {
+    renderUpdateModal();
+    return;
+  }
+  
+  // Si déjà dismissed pour cette version, on ne réaffiche pas
+  try {
+    const dismissed = localStorage.getItem('_updateDismissed');
+    if (dismissed === appConfig.latestVersion) return;
+  } catch(e) {}
+  
+  const banner = document.createElement('div');
+  banner.id = 'update-banner';
+  banner.innerHTML = `
+    <div class="update-text">
+      🎉 Nouvelle version <span class="update-version">${escapeHtml(appConfig.latestVersion)}</span> disponible !
+    </div>
+    <button class="update-btn" id="update-btn-now">Mettre à jour</button>
+    <button class="update-dismiss" id="update-btn-dismiss" title="Plus tard">×</button>
+  `;
+  document.body.appendChild(banner);
+  
+  document.getElementById('update-btn-now').addEventListener('click', async () => {
+    const btn = document.getElementById('update-btn-now');
+    btn.textContent = 'Mise à jour...';
+    btn.disabled = true;
+    if (typeof toast === 'function') toast('🔄 Application en cours de mise à jour...', 'info');
+    await forceAppReload();
+  });
+  
+  document.getElementById('update-btn-dismiss').addEventListener('click', () => {
+    try { localStorage.setItem('_updateDismissed', appConfig.latestVersion); } catch(e) {}
+    banner.remove();
+  });
+}
+
+// Rendu de la modal MAJ obligatoire (forceUpdate = true)
+function renderUpdateModal() {
+  // Supprimer si déjà présente
+  const existing = document.getElementById('update-modal');
+  if (existing) existing.remove();
+  
+  if (!isUpdateAvailable() || !appConfig.forceUpdate) return;
+  
+  const modal = document.createElement('div');
+  modal.id = 'update-modal';
+  modal.innerHTML = `
+    <div class="update-modal-content">
+      <div class="update-modal-icon">🎉</div>
+      <div class="update-modal-title">Mise à jour disponible</div>
+      <div class="update-modal-version">VERSION ${escapeHtml(appConfig.latestVersion)}</div>
+      <div class="update-modal-message">${escapeHtml(appConfig.updateMessage || 'Une nouvelle version est disponible.')}</div>
+      ${appConfig.changelog ? `<div class="update-modal-changelog">${escapeHtml(appConfig.changelog)}</div>` : ''}
+      <button class="update-modal-btn-primary" id="update-modal-btn-now">
+        🔄 Mettre à jour maintenant
+      </button>
+      <div style="font-size:11px;color:var(--text-tertiary);margin-top:8px">⚠️ Mise à jour obligatoire pour continuer</div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  
+  document.getElementById('update-modal-btn-now').addEventListener('click', async () => {
+    const btn = document.getElementById('update-modal-btn-now');
+    btn.textContent = '🔄 Application en cours...';
+    btn.disabled = true;
+    await forceAppReload();
+  });
+}
+
+// Vérifier périodiquement la config app (toutes les 5 min)
+function startAppConfigPolling() {
+  setInterval(async () => {
+    await fetchAppConfig();
+    checkMaintenanceBlock();
+    if (isUpdateAvailable()) {
+      if (appConfig.forceUpdate) {
+        renderUpdateModal();
+      } else if (!document.getElementById('update-banner')) {
+        renderUpdateBanner();
+      }
+    }
+  }, 5 * 60 * 1000); // 5 min
 }
 
 function renderNetworkBadge() {
@@ -2294,6 +2764,212 @@ function openLogoModal() {
     };
     reader.onerror = () => toast('Erreur lecture fichier', 'error');
     reader.readAsDataURL(file);
+  });
+}
+
+// ============================================================================
+// V2.11 — MODALE MODE MAINTENANCE
+// ============================================================================
+function openMaintenanceModal() {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay visible';
+  
+  const renderContent = () => {
+    overlay.innerHTML = `
+      <div class="modal" style="max-width:520px">
+        <div class="modal-header">
+          <div class="modal-title">🚧 Mode maintenance</div>
+          <button class="modal-close" data-action="maint-modal-close">×</button>
+        </div>
+        <div class="modal-body" style="padding:20px">
+          <div style="background:${appConfig.maintenanceMode ? 'rgba(239,68,68,0.1)' : 'rgba(34,197,94,0.1)'};border:1px solid ${appConfig.maintenanceMode ? 'rgba(239,68,68,0.4)' : 'rgba(34,197,94,0.4)'};border-radius:10px;padding:14px;margin-bottom:18px;text-align:center">
+            <div style="font-size:32px;margin-bottom:8px">${appConfig.maintenanceMode ? '🔴' : '🟢'}</div>
+            <div style="font-weight:700;font-size:15px;color:${appConfig.maintenanceMode ? '#ef4444' : '#22c55e'};margin-bottom:4px">
+              ${appConfig.maintenanceMode ? 'Maintenance ACTIVE' : 'Application accessible'}
+            </div>
+            <div style="font-size:12px;color:var(--text-tertiary)">
+              ${appConfig.maintenanceMode 
+                ? 'Tous les techniciens et managers voient la page maintenance. Toi (admin) tu gardes accès normal.' 
+                : 'L\'app fonctionne normalement pour tous les utilisateurs.'}
+            </div>
+          </div>
+          
+          <div style="margin-bottom:18px">
+            <label style="display:block;font-size:11px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;margin-bottom:6px;letter-spacing:0.5px">Message affiché aux users</label>
+            <textarea id="maint-msg" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;min-height:80px;resize:vertical;font-family:inherit" placeholder="Ex: Maintenance en cours, retour prévu à 22h">${escapeHtml(appConfig.maintenanceMessage)}</textarea>
+          </div>
+          
+          <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:18px;font-size:12px;color:var(--text-tertiary)">
+            💡 <strong>Conseil :</strong> mets un message clair avec l'heure de retour estimée. Les users verront ce message + un bouton "Réessayer".
+          </div>
+        </div>
+        <div class="modal-footer" style="padding:14px 20px;display:flex;gap:8px;justify-content:flex-end;border-top:1px solid var(--border)">
+          <button class="btn btn-secondary" data-action="maint-modal-close">Annuler</button>
+          ${appConfig.maintenanceMode 
+            ? `<button class="btn btn-primary" data-action="maint-disable" style="background:#22c55e">🟢 Désactiver maintenance</button>`
+            : `<button class="btn btn-primary" data-action="maint-enable" style="background:#ef4444">🔴 Activer maintenance</button>`}
+        </div>
+      </div>
+    `;
+  };
+  
+  renderContent();
+  document.body.appendChild(overlay);
+  
+  overlay.addEventListener('click', async (e) => {
+    const action = e.target.dataset.action || e.target.closest('[data-action]')?.dataset.action;
+    
+    if (action === 'maint-modal-close' || e.target === overlay) {
+      overlay.remove();
+      return;
+    }
+    
+    if (action === 'maint-enable') {
+      const msg = overlay.querySelector('#maint-msg').value.trim() || 'Maintenance en cours, retour prévu sous peu.';
+      const btn = e.target;
+      btn.textContent = '⏳ Activation...';
+      btn.disabled = true;
+      
+      const ok1 = await setAppConfigValue('maintenanceMessage', msg);
+      const ok2 = await setAppConfigValue('maintenanceMode', true);
+      
+      if (ok1 && ok2) {
+        toast('🔴 Mode maintenance ACTIVÉ', 'success');
+        overlay.remove();
+        render();
+      } else {
+        btn.textContent = '🔴 Activer maintenance';
+        btn.disabled = false;
+        toast('Erreur lors de l\'activation', 'error');
+      }
+    }
+    
+    if (action === 'maint-disable') {
+      const btn = e.target;
+      btn.textContent = '⏳ Désactivation...';
+      btn.disabled = true;
+      
+      const ok = await setAppConfigValue('maintenanceMode', false);
+      
+      if (ok) {
+        toast('🟢 Mode maintenance DÉSACTIVÉ', 'success');
+        overlay.remove();
+        render();
+      } else {
+        btn.textContent = '🟢 Désactiver maintenance';
+        btn.disabled = false;
+        toast('Erreur lors de la désactivation', 'error');
+      }
+    }
+  });
+}
+
+// ============================================================================
+// V2.11 — MODALE GESTION DE VERSION
+// ============================================================================
+function openVersionModal() {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay visible';
+  
+  const currentApp = APP_VERSION;
+  const currentCloud = appConfig.latestVersion || APP_VERSION;
+  const isOutdated = compareVersions(currentCloud, currentApp) > 0;
+  
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:560px">
+      <div class="modal-header">
+        <div class="modal-title">📦 Version & Mise à jour</div>
+        <button class="modal-close" data-action="ver-modal-close">×</button>
+      </div>
+      <div class="modal-body" style="padding:20px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px">
+          <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
+            <div style="font-size:10px;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:4px">Cette app</div>
+            <div style="font-size:20px;font-weight:800;color:var(--text)">${currentApp}</div>
+          </div>
+          <div style="background:${isOutdated ? 'rgba(239,68,68,0.1)' : 'rgba(34,197,94,0.1)'};border:1px solid ${isOutdated ? 'rgba(239,68,68,0.4)' : 'rgba(34,197,94,0.4)'};border-radius:10px;padding:12px;text-align:center">
+            <div style="font-size:10px;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:4px">Cloud</div>
+            <div style="font-size:20px;font-weight:800;color:${isOutdated ? '#ef4444' : '#22c55e'}">${currentCloud}</div>
+          </div>
+        </div>
+        
+        <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:18px;font-size:13px;color:var(--text)">
+          <strong>Comment utiliser :</strong><br>
+          <span style="color:var(--text-tertiary)">1.</span> Déploie ta nouvelle version sur GitHub<br>
+          <span style="color:var(--text-tertiary)">2.</span> Renseigne ici le numéro de version + le message + le changelog<br>
+          <span style="color:var(--text-tertiary)">3.</span> Coche "Mise à jour obligatoire" si tu veux forcer<br>
+          <span style="color:var(--text-tertiary)">4.</span> Clique "Publier" → tous les users verront un bandeau/modal au prochain démarrage
+        </div>
+        
+        <div style="margin-bottom:14px">
+          <label style="display:block;font-size:11px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;margin-bottom:6px;letter-spacing:0.5px">Numéro de version (ex: 2.11.0)</label>
+          <input type="text" id="ver-num" value="${escapeHtml(currentCloud)}" placeholder="2.11.0" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:15px">
+        </div>
+        
+        <div style="margin-bottom:14px">
+          <label style="display:block;font-size:11px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;margin-bottom:6px;letter-spacing:0.5px">Message court (titre de la MAJ)</label>
+          <input type="text" id="ver-msg" value="${escapeHtml(appConfig.updateMessage || '')}" placeholder="Ex: Nouvelle version avec dashboard équipe" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px">
+        </div>
+        
+        <div style="margin-bottom:14px">
+          <label style="display:block;font-size:11px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;margin-bottom:6px;letter-spacing:0.5px">Changelog (détails - optionnel)</label>
+          <textarea id="ver-changelog" placeholder="• Nouveau dashboard équipe\n• Mode maintenance\n• Corrections diverses" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;min-height:80px;resize:vertical;font-family:inherit">${escapeHtml(appConfig.changelog || '')}</textarea>
+        </div>
+        
+        <label style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--bg-subtle);border:1px solid var(--border);border-radius:8px;cursor:pointer">
+          <input type="checkbox" id="ver-force" ${appConfig.forceUpdate ? 'checked' : ''} style="width:18px;height:18px">
+          <div>
+            <div style="font-size:13px;font-weight:600;color:var(--text)">⚠️ Mise à jour obligatoire</div>
+            <div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">Les users ne pourront pas utiliser l'app sans avoir mis à jour</div>
+          </div>
+        </label>
+      </div>
+      <div class="modal-footer" style="padding:14px 20px;display:flex;gap:8px;justify-content:flex-end;border-top:1px solid var(--border)">
+        <button class="btn btn-secondary" data-action="ver-modal-close">Annuler</button>
+        <button class="btn btn-primary" data-action="ver-publish">📢 Publier</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  
+  overlay.addEventListener('click', async (e) => {
+    const action = e.target.dataset.action || e.target.closest('[data-action]')?.dataset.action;
+    
+    if (action === 'ver-modal-close' || e.target === overlay) {
+      overlay.remove();
+      return;
+    }
+    
+    if (action === 'ver-publish') {
+      const newVer = overlay.querySelector('#ver-num').value.trim();
+      const newMsg = overlay.querySelector('#ver-msg').value.trim();
+      const newChangelog = overlay.querySelector('#ver-changelog').value.trim();
+      const forceUpd = overlay.querySelector('#ver-force').checked;
+      
+      if (!newVer || !/^\d+\.\d+(\.\d+)?$/.test(newVer)) {
+        toast('Format de version invalide (ex: 2.11.0)', 'error');
+        return;
+      }
+      
+      const btn = e.target;
+      btn.textContent = '⏳ Publication...';
+      btn.disabled = true;
+      
+      const ok1 = await setAppConfigValue('latestVersion', newVer);
+      const ok2 = await setAppConfigValue('updateMessage', newMsg || 'Une nouvelle version est disponible.');
+      const ok3 = await setAppConfigValue('changelog', newChangelog);
+      const ok4 = await setAppConfigValue('forceUpdate', forceUpd);
+      
+      if (ok1 && ok2 && ok3 && ok4) {
+        toast('📢 Version ' + newVer + ' publiée ! Les users vont être notifiés.', 'success');
+        overlay.remove();
+        render();
+      } else {
+        btn.textContent = '📢 Publier';
+        btn.disabled = false;
+        toast('Erreur lors de la publication', 'error');
+      }
+    }
   });
 }
 
@@ -2555,7 +3231,7 @@ function renderLoginScreen() {
           ${authState.loading ? '⏳ Connexion...' : '🔓 Se connecter'}
         </button>
         <div class="login-footer">
-          Astreintes AMI2S V2.10.16 • Session 7 jours
+          Astreintes AMI2S V2.11.0 • Session 7 jours
         </div>
       </div>
     </div>
@@ -2604,7 +3280,7 @@ async function startMainApp() {
 
     await loadState();
 
-    // V2.10.16 — Précharge cloudPull EN PARALLÈLE (non bloquant)
+    // V2.11.0 — Précharge cloudPull EN PARALLÈLE (non bloquant)
     // On lance le pull cloud immédiatement, sans attendre, pour gagner du temps perçu
     let cloudPullPromise = null;
     if (authState.isAuthenticated && authState.user && authState.user.role !== 'manager') {
@@ -2629,7 +3305,7 @@ async function startMainApp() {
 
     applyTheme();
     
-    // V2.10.16 — Page d'accueil selon le rôle
+    // V2.11.0 — Page d'accueil selon le rôle
     if (authState.user && authState.user.role === 'manager') {
       view.current = 'manager-view';
       render();
@@ -2640,7 +3316,7 @@ async function startMainApp() {
     }
 
     if ('serviceWorker' in navigator) {
-      // V2.10.16 — Service Worker minimal
+      // V2.11.0 — Service Worker minimal
       // NOTE : créé via Blob URL, donc scope limité (ne peut PAS intercepter les fetches
       // de la page principale dans un déploiement single-file GitHub Pages).
       // Pour un vrai cache PWA, il faudrait un fichier sw.js séparé hébergé.
@@ -2660,7 +3336,7 @@ async function startMainApp() {
       requestGeolocationPermission();
     }
 
-    // V2.10.16 — Attendre la fin du pull cloud lancé en parallèle, puis re-render
+    // V2.11.0 — Attendre la fin du pull cloud lancé en parallèle, puis re-render
     if (cloudPullPromise) {
       cloudPullPromise.then(() => {
         if (typeof render === 'function') render();
@@ -2719,12 +3395,12 @@ async function cloudPull(showFeedback = false) {
     const remoteDossiers = res.dossiers || [];
     const currentUserId = authState.user && authState.user.id;
 
-    // V2.10.16 — Filtrage côté frontend : on ne traite QUE les dossiers
+    // V2.11.0 — Filtrage côté frontend : on ne traite QUE les dossiers
     // appartenant à l'utilisateur connecté (admin verra tous les dossiers
     // de l'équipe via le futur Dashboard, pas ici)
     const myRemoteDossiers = remoteDossiers.filter(d => d.user_id === currentUserId);
 
-    // V2.10.16 — Identifier les dossiers locaux à supprimer
+    // V2.11.0 — Identifier les dossiers locaux à supprimer
     // (présents en local mais plus dans le cloud OU appartenant à un autre user)
     const remoteIdsByUser = new Set(myRemoteDossiers.map(d => d.id));
     const toDelete = state.dossiers.filter(d => {
@@ -2745,7 +3421,7 @@ async function cloudPull(showFeedback = false) {
     state.dossiers.forEach(d => { localById[d.id] = d; });
 
     let added = 0, updated = 0, repaired = 0, restored = 0;
-    const toRepair = []; // V2.10.16 — dossiers à re-pousser vers le cloud
+    const toRepair = []; // V2.11.0 — dossiers à re-pousser vers le cloud
 
     for (const remote of myRemoteDossiers) {
       const adapted = adaptCloudToLocal(remote);
@@ -2756,7 +3432,7 @@ async function cloudPull(showFeedback = false) {
         added++;
       } else {
         // ────────────────────────────────────────────────────────────
-        // V2.10.16 — RÉPARATION PRIORITAIRE : récupérer departSite depuis le cloud
+        // V2.11.0 — RÉPARATION PRIORITAIRE : récupérer departSite depuis le cloud
         // ────────────────────────────────────────────────────────────
         // Si le cloud a finIntervention rempli MAIS le local n'a pas departSite,
         // c'est que le local a été corrompu (bug pré-V2.10.6). On restaure depuis le cloud.
@@ -2774,7 +3450,7 @@ async function cloudPull(showFeedback = false) {
           continue;
         }
 
-        // V2.10.16 — Réparation inverse : local a departSite mais cloud a finIntervention vide
+        // V2.11.0 — Réparation inverse : local a departSite mais cloud a finIntervention vide
         // On re-pousse vers le cloud
         if (localHasDepartSite && !cloudHasFinInter) {
           toRepair.push(local);
@@ -2794,7 +3470,7 @@ async function cloudPull(showFeedback = false) {
       }
     }
 
-    // V2.10.16 — Toast informatif sur la restauration
+    // V2.11.0 — Toast informatif sur la restauration
     if (restored > 0) {
       console.log(`✅ Restauration : ${restored} dossier(s) ont récupéré leur "Départ du site" depuis le cloud`);
       setTimeout(() => {
@@ -2802,7 +3478,7 @@ async function cloudPull(showFeedback = false) {
       }, 500);
     }
 
-    // V2.10.16 — Re-pousser les dossiers à réparer (en arrière-plan, pas bloquant)
+    // V2.11.0 — Re-pousser les dossiers à réparer (en arrière-plan, pas bloquant)
     if (toRepair.length > 0) {
       console.log(`Réparation : ${toRepair.length} dossier(s) avec departSite manquant côté cloud`);
       (async () => {
@@ -2887,7 +3563,7 @@ function adaptLocalToCloud(d) {
     rapportNum: d.rapportNum || d.rapportN || '',
     departDomicile: d.departDomicile || '',
     arriveeSite: d.arriveeSite || '',
-    // V2.10.16 — Bug fix : le champ local s'appelle "departSite" (départ du site),
+    // V2.11.0 — Bug fix : le champ local s'appelle "departSite" (départ du site),
     // on l'envoie dans la colonne cloud "finIntervention" (= heure de fin d'intervention sur site)
     finIntervention: d.departSite || d.finIntervention || '',
     retourDomicile: d.retourDomicile || '',
@@ -2907,7 +3583,7 @@ function adaptLocalToCloud(d) {
 
 function adaptCloudToLocal(d) {
   // On préserve les champs natifs du local pour éviter de casser la V2.9.12
-  // V2.10.16 — Forcer la conversion en string pour les champs texte
+  // V2.11.0 — Forcer la conversion en string pour les champs texte
   // (Google Sheets peut retourner des nombres pour codeAstreinte, rapportNum, etc.)
   const toStr = (v) => (v === null || v === undefined || v === '') ? '' : String(v);
   return {
@@ -2924,13 +3600,13 @@ function adaptCloudToLocal(d) {
     rapportN: toStr(d.rapportNum), // alias rétrocompat
     departDomicile: d.departDomicile,
     arriveeSite: d.arriveeSite,
-    // V2.10.16 — Bug fix : on recupère "finIntervention" du cloud et on le réinjecte dans "departSite" local
+    // V2.11.0 — Bug fix : on recupère "finIntervention" du cloud et on le réinjecte dans "departSite" local
     finIntervention: d.finIntervention,
     departSite: d.finIntervention || null,
     retourDomicile: d.retourDomicile,
     adresse: toStr(d.adresse),
     adresseSite: toStr(d.adresse), // alias rétrocompat
-    // V2.10.16 — Sécurité : km doit être un nombre valide, sinon null
+    // V2.11.0 — Sécurité : km doit être un nombre valide, sinon null
     km: (() => { const n = safeKm(d.km); return n > 0 ? n : null; })(),
     motif: toStr(d.motif),
     rapport: toStr(d.rapport),
@@ -2954,7 +3630,7 @@ async function migrateLocalDossiersToCloud() {
     return;
   }
 
-  // V2.10.16 — Ne migrer que les dossiers qui m'appartiennent ou qui n'ont pas encore de user_id
+  // V2.11.0 — Ne migrer que les dossiers qui m'appartiennent ou qui n'ont pas encore de user_id
   const myId = authState.user && authState.user.id;
   const toMigrate = state.dossiers.filter(d => !d.user_id || d.user_id === myId);
   const localCount = toMigrate.length;
@@ -2981,7 +3657,7 @@ async function migrateLocalDossiersToCloud() {
 
   if (errors === 0) {
     toast(`${success} dossiers migrés avec succès`, 'success');
-    // V2.10.16 — Flag de migration par user (et non global)
+    // V2.11.0 — Flag de migration par user (et non global)
     if (authState.user && authState.user.id) {
       localStorage.setItem('astreintes_migration_done_' + authState.user.id, '1');
     }
@@ -2992,7 +3668,7 @@ async function migrateLocalDossiersToCloud() {
 }
 
 function hasMigrationBeenDone() {
-  // V2.10.16 — Flag par user (chaque user a sa propre migration)
+  // V2.11.0 — Flag par user (chaque user a sa propre migration)
   if (!authState.user || !authState.user.id) return false;
   return localStorage.getItem('astreintes_migration_done_' + authState.user.id) === '1';
 }
@@ -3038,7 +3714,7 @@ function scheduleUserSettingsSave() {
       alertesActives: state.settings.alertesActives,
       favorisEtablissements: state.settings.favorisEtablissements,
       agence: state.settings.agence,
-      // V2.10.16 — Logo personnalisé (admin)
+      // V2.11.0 — Logo personnalisé (admin)
       customLogo: state.settings.customLogo
     };
     try {
@@ -3070,6 +3746,457 @@ let adminState = {
   loading: false,
   error: null
 };
+
+// ============================================================================
+// V2.11 — DASHBOARD ÉQUIPE ADMIN
+// ============================================================================
+let dashboardState = {
+  allDossiers: [],
+  users: [],
+  loading: false,
+  error: null,
+  tab: 'overview', // overview | stats | validation
+  weekOffset: 0, // 0 = semaine actuelle, -1 = précédente, etc.
+  filterTech: null // null = tous, sinon username du tech à filtrer
+};
+
+// Charger toutes les données du dashboard (dossiers + users)
+async function dashboardLoadData() {
+  if (!isAdmin()) { toast('Accès refusé', 'error'); return; }
+  dashboardState.loading = true;
+  if (typeof render === 'function') render();
+  
+  try {
+    const [resDossiers, resUsers] = await Promise.all([
+      cloudCall('getDossiers', {}),
+      cloudCall('listUsers', {})
+    ]);
+    
+    if (!resDossiers.success) throw new Error(resDossiers.error);
+    if (!resUsers.success) throw new Error(resUsers.error);
+    
+    dashboardState.allDossiers = (resDossiers.dossiers || []).filter(d => !d.deleted);
+    dashboardState.users = resUsers.users || [];
+    dashboardState.loading = false;
+    if (typeof render === 'function') render();
+  } catch (err) {
+    dashboardState.loading = false;
+    dashboardState.error = err.message;
+    toast('Erreur chargement dashboard : ' + err.message, 'error');
+    if (typeof render === 'function') render();
+  }
+}
+
+// Récupérer les dossiers de la semaine pour le dashboard
+function dashboardGetWeekDossiers(offset = 0) {
+  const base = new Date();
+  base.setDate(base.getDate() + offset * 7);
+  const { start, end } = getAstreinteWeek(base);
+  return dashboardState.allDossiers.filter(d => {
+    const dt = new Date(d.dateAppel);
+    return dt >= start && dt < end;
+  });
+}
+
+// Calculer les minutes de travail d'un dossier
+function dashboardDossierMinutes(d) {
+  let totalMinutes = 0;
+  if (d.dureeMinutes) {
+    totalMinutes = parseInt(d.dureeMinutes, 10) || 0;
+  } else if (d.type === 'phone' && d.dureeAppel) {
+    const match = String(d.dureeAppel).match(/(\d+)h(\d+)?/);
+    if (match) {
+      totalMinutes = parseInt(match[1], 10) * 60 + (parseInt(match[2], 10) || 0);
+    }
+  } else if (d.departDomicile && d.retourDomicile) {
+    // Calcul depuis horaires
+    try {
+      const t1 = new Date(d.departDomicile);
+      const t2 = new Date(d.retourDomicile);
+      totalMinutes = Math.round((t2 - t1) / 60000);
+      if (totalMinutes < 0 || totalMinutes > 1440) totalMinutes = 0;
+    } catch(e) {}
+  }
+  return totalMinutes;
+}
+
+// Formater minutes en "Xh YYm"
+function dashboardFmtMinutes(min) {
+  if (!min || min === 0) return '0h00';
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return `${h}h${String(m).padStart(2, '0')}`;
+}
+
+// Rendu principal du dashboard
+function renderDashboardAdmin() {
+  if (dashboardState.loading) {
+    return `
+      <header class="header">
+        <div class="header-top">
+          <button class="header-back" data-action="back-to-settings">← Réglages</button>
+          <div>
+            <div class="header-title">📊 Dashboard équipe</div>
+          </div>
+          <div style="width:80px"></div>
+        </div>
+      </header>
+      <div style="padding:60px 20px;text-align:center;color:var(--text-tertiary)">
+        <div style="font-size:32px;margin-bottom:12px">⏳</div>
+        <div>Chargement des données équipe...</div>
+      </div>
+    `;
+  }
+  
+  if (dashboardState.error) {
+    return `
+      <header class="header">
+        <div class="header-top">
+          <button class="header-back" data-action="back-to-settings">← Réglages</button>
+          <div><div class="header-title">📊 Dashboard équipe</div></div>
+          <div style="width:80px"></div>
+        </div>
+      </header>
+      <div style="padding:40px 20px;text-align:center;color:#ef4444">
+        <div style="font-size:32px;margin-bottom:12px">❌</div>
+        <div>${escapeHtml(dashboardState.error)}</div>
+        <button class="btn btn-primary" data-action="dashboard-reload" style="margin-top:16px">Réessayer</button>
+      </div>
+    `;
+  }
+  
+  return `
+    <header class="header">
+      <div class="header-top">
+        <button class="header-back" data-action="back-to-settings">← Réglages</button>
+        <div>
+          <div class="header-title">📊 Dashboard équipe</div>
+          <div class="header-subtitle">Vue d'ensemble admin</div>
+        </div>
+        <button class="icon-btn" data-action="dashboard-reload" title="Rafraîchir">⟳</button>
+      </div>
+    </header>
+    
+    <div class="filter-tabs" style="padding:0 10px;margin-bottom:14px">
+      <button class="filter-tab ${dashboardState.tab === 'overview' ? 'active' : ''}" data-action="dashboard-tab" data-tab="overview">
+        📋 Vue d'ensemble
+      </button>
+      <button class="filter-tab ${dashboardState.tab === 'stats' ? 'active' : ''}" data-action="dashboard-tab" data-tab="stats">
+        📈 Statistiques
+      </button>
+      <button class="filter-tab ${dashboardState.tab === 'validation' ? 'active' : ''}" data-action="dashboard-tab" data-tab="validation">
+        ✅ Validation
+      </button>
+    </div>
+    
+    ${dashboardState.tab === 'overview' ? renderDashboardOverview() : ''}
+    ${dashboardState.tab === 'stats' ? renderDashboardStats() : ''}
+    ${dashboardState.tab === 'validation' ? renderDashboardValidation() : ''}
+  `;
+}
+
+// Tab 1 : Vue d'ensemble (qui est d'astreinte + alertes)
+function renderDashboardOverview() {
+  const weekDossiers = dashboardGetWeekDossiers(dashboardState.weekOffset);
+  const week = getAstreinteWeek(new Date(Date.now() + dashboardState.weekOffset * 7 * 86400000));
+  const weekNum = getWeekNumber(week.start);
+  
+  // Grouper par tech
+  const byTech = {};
+  weekDossiers.forEach(d => {
+    const username = d.user_username || d.user_id || 'Inconnu';
+    if (!byTech[username]) {
+      byTech[username] = { dossiers: [], totalMinutes: 0, totalKm: 0, clotures: 0, enCours: 0 };
+    }
+    byTech[username].dossiers.push(d);
+    byTech[username].totalMinutes += dashboardDossierMinutes(d);
+    byTech[username].totalKm += parseFloat(d.distance) || parseFloat(d.km) || 0;
+    if (d.statut === 'cloture') byTech[username].clotures++;
+    else byTech[username].enCours++;
+  });
+  
+  // Détecter les alertes : dossiers > 24h non clôturés
+  const now = new Date();
+  const alertes = weekDossiers.filter(d => {
+    if (d.statut === 'cloture') return false;
+    const dt = new Date(d.dateAppel);
+    return (now - dt) > 24 * 3600 * 1000;
+  });
+  
+  // Compteur global
+  const totalDossiers = weekDossiers.length;
+  const totalClotures = weekDossiers.filter(d => d.statut === 'cloture').length;
+  const totalEnCours = totalDossiers - totalClotures;
+  const totalMinutes = Object.values(byTech).reduce((s, t) => s + t.totalMinutes, 0);
+  const totalKm = Object.values(byTech).reduce((s, t) => s + t.totalKm, 0);
+  
+  return `
+    <div style="padding:0 12px 80px">
+      <!-- Sélecteur semaine -->
+      <div class="week-banner" style="margin-bottom:14px">
+        <div class="week-info">
+          <div class="week-label">Semaine n°${weekNum}${dashboardState.weekOffset === 0 ? ' (actuelle)' : dashboardState.weekOffset === -1 ? ' (précédente)' : ''}</div>
+          <div class="week-dates">${fmtDateShort(week.start)} 09h → ${fmtDateShort(week.end)} 09h</div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="icon-btn" data-action="dashboard-prev-week">‹</button>
+          <button class="icon-btn" data-action="dashboard-next-week" ${dashboardState.weekOffset >= 0 ? 'disabled style="opacity:0.3"' : ''}>›</button>
+        </div>
+      </div>
+      
+      <!-- KPIs globaux -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
+        <div class="astreinte-stat">
+          <div class="astreinte-stat-value">${totalDossiers}</div>
+          <div class="astreinte-stat-label">Dossiers</div>
+        </div>
+        <div class="astreinte-stat" style="background:rgba(34,197,94,0.06)">
+          <div class="astreinte-stat-value" style="color:#22c55e">${totalClotures}</div>
+          <div class="astreinte-stat-label">Clôturés</div>
+        </div>
+        <div class="astreinte-stat" style="background:rgba(234,179,8,0.06)">
+          <div class="astreinte-stat-value" style="color:#eab308">${totalEnCours}</div>
+          <div class="astreinte-stat-label">En cours</div>
+        </div>
+        <div class="astreinte-stat">
+          <div class="astreinte-stat-value">${dashboardFmtMinutes(totalMinutes)}</div>
+          <div class="astreinte-stat-label">Travail</div>
+        </div>
+      </div>
+      
+      <!-- Alertes -->
+      ${alertes.length > 0 ? `
+        <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.4);border-radius:10px;padding:14px;margin-bottom:14px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;color:#ef4444;font-weight:700;font-size:13px">
+            ⚠️ ${alertes.length} dossier${alertes.length > 1 ? 's' : ''} non clôturé${alertes.length > 1 ? 's' : ''} depuis +24h
+          </div>
+          ${alertes.slice(0, 5).map(d => `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:rgba(255,255,255,0.04);border-radius:8px;margin-bottom:6px;font-size:12px">
+              <div>
+                <strong>${escapeHtml(d.etablissement || 'Sans nom')}</strong> — ${escapeHtml(d.user_username || 'Inconnu')}
+                <div style="color:var(--text-tertiary);font-size:11px;margin-top:2px">
+                  ${fmtDateShort(new Date(d.dateAppel))} ${new Date(d.dateAppel).toTimeString().slice(0,5)}
+                </div>
+              </div>
+              <button class="btn btn-secondary" data-action="dashboard-view-dossier" data-id="${d.id}" style="padding:6px 12px;font-size:11px">Voir</button>
+            </div>
+          `).join('')}
+          ${alertes.length > 5 ? `<div style="font-size:11px;color:var(--text-tertiary);margin-top:6px;text-align:center">+${alertes.length - 5} autres...</div>` : ''}
+        </div>
+      ` : ''}
+      
+      <!-- Liste des techs -->
+      <div class="settings-section-title" style="margin:10px 0">Équipe — ${Object.keys(byTech).length} technicien${Object.keys(byTech).length > 1 ? 's' : ''} actif${Object.keys(byTech).length > 1 ? 's' : ''}</div>
+      
+      ${Object.keys(byTech).length === 0 ? `
+        <div style="text-align:center;padding:40px 20px;color:var(--text-tertiary);font-size:13px">
+          📭 Aucune activité cette semaine
+        </div>
+      ` : Object.entries(byTech).sort((a, b) => b[1].dossiers.length - a[1].dossiers.length).map(([username, data]) => `
+        <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <div style="font-weight:700;font-size:14px">👤 ${escapeHtml(username)}</div>
+            <div style="display:flex;gap:6px">
+              ${data.enCours > 0 ? `<span style="background:rgba(234,179,8,0.15);color:#eab308;padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700">${data.enCours} en cours</span>` : ''}
+              ${data.clotures > 0 ? `<span style="background:rgba(34,197,94,0.15);color:#22c55e;padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700">${data.clotures} clôturés</span>` : ''}
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-size:11px">
+            <div style="text-align:center"><div style="font-weight:700;font-size:14px;color:var(--accent)">${data.dossiers.length}</div><div style="color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.3px">Dossiers</div></div>
+            <div style="text-align:center"><div style="font-weight:700;font-size:14px;color:var(--accent)">${dashboardFmtMinutes(data.totalMinutes)}</div><div style="color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.3px">Heures</div></div>
+            <div style="text-align:center"><div style="font-weight:700;font-size:14px;color:var(--accent)">${data.totalKm.toFixed(0)} km</div><div style="color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.3px">Distance</div></div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+// Tab 2 : Statistiques équipe
+function renderDashboardStats() {
+  // Stats sur les 30 derniers jours
+  const now = new Date();
+  const limit30 = new Date(now.getTime() - 30 * 86400000);
+  const dossiers30 = dashboardState.allDossiers.filter(d => new Date(d.dateAppel) >= limit30);
+  
+  // Top établissements
+  const sitesMap = {};
+  dossiers30.forEach(d => {
+    const site = d.etablissement || 'Inconnu';
+    sitesMap[site] = (sitesMap[site] || 0) + 1;
+  });
+  const topSites = Object.entries(sitesMap).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  
+  // Répartition téléphone / déplacement
+  const totalPhone = dossiers30.filter(d => d.type === 'phone').length;
+  const totalDep = dossiers30.filter(d => d.type === 'deplacement').length;
+  const pctPhone = dossiers30.length > 0 ? Math.round(totalPhone * 100 / dossiers30.length) : 0;
+  const pctDep = 100 - pctPhone;
+  
+  // Total heures + km
+  let totalMinutes = 0, totalKm = 0;
+  dossiers30.forEach(d => {
+    totalMinutes += dashboardDossierMinutes(d);
+    totalKm += parseFloat(d.distance) || parseFloat(d.km) || 0;
+  });
+  
+  // Comparatif techniciens
+  const techMap = {};
+  dossiers30.forEach(d => {
+    const u = d.user_username || 'Inconnu';
+    if (!techMap[u]) techMap[u] = { dossiers: 0, minutes: 0, km: 0 };
+    techMap[u].dossiers++;
+    techMap[u].minutes += dashboardDossierMinutes(d);
+    techMap[u].km += parseFloat(d.distance) || parseFloat(d.km) || 0;
+  });
+  const techRanking = Object.entries(techMap).sort((a, b) => b[1].dossiers - a[1].dossiers);
+  
+  return `
+    <div style="padding:0 12px 80px">
+      <div style="text-align:center;padding:10px;background:var(--bg-subtle);border-radius:8px;margin-bottom:14px;font-size:12px;color:var(--text-tertiary)">
+        📅 Statistiques sur les <strong style="color:var(--text)">30 derniers jours</strong>
+      </div>
+      
+      <!-- KPIs principaux -->
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px">
+        <div class="astreinte-stat" style="padding:14px"><div class="astreinte-stat-value">${dossiers30.length}</div><div class="astreinte-stat-label">Dossiers</div></div>
+        <div class="astreinte-stat" style="padding:14px"><div class="astreinte-stat-value">${dashboardFmtMinutes(totalMinutes)}</div><div class="astreinte-stat-label">Travail total</div></div>
+        <div class="astreinte-stat" style="padding:14px"><div class="astreinte-stat-value">${totalKm.toFixed(0)} km</div><div class="astreinte-stat-label">Distance</div></div>
+        <div class="astreinte-stat" style="padding:14px"><div class="astreinte-stat-value">${Object.keys(techMap).length}</div><div class="astreinte-stat-label">Techniciens</div></div>
+      </div>
+      
+      <!-- Répartition phone vs déplacement -->
+      <div class="settings-section-title">📞 Répartition des interventions</div>
+      <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="display:flex;height:36px;border-radius:8px;overflow:hidden;margin-bottom:10px">
+          <div style="background:#3b82f6;flex:${pctPhone};display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:13px">${pctPhone > 10 ? `📞 ${pctPhone}%` : ''}</div>
+          <div style="background:#22c55e;flex:${pctDep};display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:13px">${pctDep > 10 ? `🚗 ${pctDep}%` : ''}</div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:12px">
+          <span style="color:#3b82f6">📞 Téléphone : <strong>${totalPhone}</strong></span>
+          <span style="color:#22c55e">🚗 Déplacement : <strong>${totalDep}</strong></span>
+        </div>
+      </div>
+      
+      <!-- Top sites -->
+      <div class="settings-section-title">🏆 Top 10 établissements</div>
+      <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:14px">
+        ${topSites.length === 0 ? '<div style="text-align:center;padding:20px;color:var(--text-tertiary);font-size:12px">Aucune donnée</div>' : topSites.map(([site, count], i) => `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 6px;border-bottom:${i < topSites.length - 1 ? '1px solid var(--border)' : 'none'}">
+            <div style="display:flex;align-items:center;gap:10px;min-width:0">
+              <div style="font-weight:700;color:var(--text-tertiary);width:24px;text-align:right">${i + 1}.</div>
+              <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(site)}</div>
+            </div>
+            <div style="font-size:12px;color:var(--accent);font-weight:700;white-space:nowrap;margin-left:10px">${count} dossier${count > 1 ? 's' : ''}</div>
+          </div>
+        `).join('')}
+      </div>
+      
+      <!-- Comparatif techniciens -->
+      <div class="settings-section-title">👥 Comparatif équipe</div>
+      <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:14px">
+        ${techRanking.length === 0 ? '<div style="text-align:center;padding:20px;color:var(--text-tertiary);font-size:12px">Aucune donnée</div>' : techRanking.map(([username, data], i) => {
+          const maxDossiers = techRanking[0][1].dossiers;
+          const pct = (data.dossiers / maxDossiers) * 100;
+          return `
+            <div style="padding:8px 6px;border-bottom:${i < techRanking.length - 1 ? '1px solid var(--border)' : 'none'}">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                <div style="font-size:13px;font-weight:600">${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : ''}  ${escapeHtml(username)}</div>
+                <div style="font-size:11px;color:var(--text-tertiary)">
+                  ${data.dossiers} doss. • ${dashboardFmtMinutes(data.minutes)} • ${data.km.toFixed(0)}km
+                </div>
+              </div>
+              <div style="height:6px;background:var(--bg);border-radius:3px;overflow:hidden">
+                <div style="width:${pct}%;height:100%;background:linear-gradient(90deg,#2563eb,#1d4ed8);border-radius:3px"></div>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
+// Tab 3 : Validation rapide des semaines
+function renderDashboardValidation() {
+  // Pour chaque tech, calculer le statut de la dernière semaine (-1)
+  const week = getAstreinteWeek(new Date(Date.now() - 7 * 86400000));
+  const weekNum = getWeekNumber(week.start);
+  const weekDossiers = dashboardState.allDossiers.filter(d => {
+    const dt = new Date(d.dateAppel);
+    return dt >= week.start && dt < week.end;
+  });
+  
+  const byTech = {};
+  weekDossiers.forEach(d => {
+    const u = d.user_username || 'Inconnu';
+    if (!byTech[u]) byTech[u] = { dossiers: [], clotures: 0, enCours: 0, validated: false };
+    byTech[u].dossiers.push(d);
+    if (d.statut === 'cloture') byTech[u].clotures++;
+    else byTech[u].enCours++;
+  });
+  
+  // Lire le statut de validation depuis les settings appConfig (à terme : un endpoint dédié)
+  // Pour l'instant, on simule via localStorage
+  Object.keys(byTech).forEach(u => {
+    try {
+      const validated = localStorage.getItem(`_validated_${u}_${weekNum}`);
+      byTech[u].validated = validated === 'true';
+    } catch(e) {}
+  });
+  
+  return `
+    <div style="padding:0 12px 80px">
+      <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px;text-align:center">
+        <div style="font-size:11px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Validation semaine précédente</div>
+        <div style="font-size:16px;font-weight:700">Semaine n°${weekNum}</div>
+        <div style="font-size:12px;color:var(--text-tertiary);margin-top:2px">${fmtDateShort(week.start)} → ${fmtDateShort(week.end)}</div>
+      </div>
+      
+      <div style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.3);border-radius:10px;padding:12px;margin-bottom:14px;font-size:12px;color:var(--text)">
+        💡 <strong>Comment ça marche :</strong> Vérifie que chaque technicien a clôturé tous ses dossiers de la semaine, puis valide pour envoyer au RH (export PDF G1-0-8).
+      </div>
+      
+      ${Object.keys(byTech).length === 0 ? `
+        <div style="text-align:center;padding:40px 20px;color:var(--text-tertiary);font-size:13px">
+          📭 Aucune activité sur cette semaine
+        </div>
+      ` : Object.entries(byTech).map(([username, data]) => `
+        <div style="background:var(--bg-subtle);border:1px solid ${data.validated ? 'rgba(34,197,94,0.4)' : data.enCours > 0 ? 'rgba(234,179,8,0.4)' : 'rgba(34,197,94,0.2)'};border-radius:10px;padding:14px;margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <div>
+              <div style="font-weight:700;font-size:14px">👤 ${escapeHtml(username)}</div>
+              <div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">
+                ${data.dossiers.length} dossier${data.dossiers.length > 1 ? 's' : ''} • 
+                ${data.clotures}/${data.dossiers.length} clôturé${data.clotures > 1 ? 's' : ''}
+              </div>
+            </div>
+            ${data.validated 
+              ? '<span style="background:rgba(34,197,94,0.15);color:#22c55e;padding:4px 12px;border-radius:10px;font-size:11px;font-weight:700">✅ VALIDÉ</span>'
+              : data.enCours > 0 
+                ? '<span style="background:rgba(234,179,8,0.15);color:#eab308;padding:4px 12px;border-radius:10px;font-size:11px;font-weight:700">⏳ À FINIR</span>'
+                : '<span style="background:rgba(59,130,246,0.15);color:#3b82f6;padding:4px 12px;border-radius:10px;font-size:11px;font-weight:700">📋 PRÊT</span>'
+            }
+          </div>
+          ${data.enCours > 0 ? `
+            <div style="background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.3);border-radius:6px;padding:8px;font-size:11px;color:#eab308;margin-bottom:10px">
+              ⚠️ ${data.enCours} dossier${data.enCours > 1 ? 's' : ''} non clôturé${data.enCours > 1 ? 's' : ''} — relancer le tech avant validation
+            </div>
+          ` : ''}
+          <div style="display:flex;gap:6px;justify-content:flex-end">
+            <button class="btn btn-secondary" data-action="dashboard-view-tech-week" data-username="${escapeHtml(username)}" data-weeknum="${weekNum}" style="padding:7px 12px;font-size:12px">📋 Voir détail</button>
+            ${!data.validated && data.enCours === 0 ? `
+              <button class="btn btn-primary" data-action="dashboard-validate-week" data-username="${escapeHtml(username)}" data-weeknum="${weekNum}" style="padding:7px 14px;font-size:12px;background:#22c55e">✅ Valider</button>
+            ` : ''}
+            ${data.validated ? `
+              <button class="btn btn-secondary" data-action="dashboard-unvalidate-week" data-username="${escapeHtml(username)}" data-weeknum="${weekNum}" style="padding:7px 12px;font-size:12px">↺ Annuler validation</button>
+            ` : ''}
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
 
 // ── Helpers d'accès admin ──────────────────────────────────────
 function isAdmin() {
@@ -3425,7 +4552,7 @@ function renderAdminLogs() {
 
 
 // ============================================================================
-// ASTREINTES AMI2S V2.10.16 — MODULE MANAGER (Patch 4)
+// ASTREINTES AMI2S V2.11.0 — MODULE MANAGER (Patch 4)
 // ============================================================================
 // Vue dépannage pour le service ERP : tous les dossiers de tous les techniciens
 // en lecture seule, format "mail Outlook" mais en interface pro.
@@ -3569,7 +4696,7 @@ function getManagerFiltered() {
   }
 
   return dossiers.sort((a, b) => {
-    // V2.10.16 — Tri intelligent : non-récupérés en premier, puis date décroissante
+    // V2.11.0 — Tri intelligent : non-récupérés en premier, puis date décroissante
     const aRecup = a.recupereERP ? 1 : 0;
     const bRecup = b.recupereERP ? 1 : 0;
     if (aRecup !== bRecup) return aRecup - bRecup; // 0 (non-récup) avant 1 (récup)
@@ -3636,7 +4763,7 @@ function renderManagerView() {
           <div class="manager-week-num">Semaine n°${weekNum} ${weekLabel}</div>
           <div class="manager-week-dates">${fmtDateShort(week.start)} 09h → ${fmtDateShort(week.end)} 09h</div>
           ${(() => {
-            // V2.10.16 — Mini-stats équipe
+            // V2.11.0 — Mini-stats équipe
             const techsActifs = new Set(weekDossiers.map(d => d.username || '?')).size;
             const recupered = weekDossiers.filter(d => d.recupereERP).length;
             const total = weekDossiers.length;
@@ -3693,7 +4820,7 @@ function renderManagerView() {
       </div>
 
       <div class="text-center" style="padding:24px 0;font-size:11px;color:var(--text-tertiary);font-family:monospace">
-        Vue Manager V2.10.16 • ${filtered.length} dossier(s) affiché(s)
+        Vue Manager V2.11.0 • ${filtered.length} dossier(s) affiché(s)
       </div>
     </div>
     ${authState.user && authState.user.role === 'manager' ? renderBottomNav() : ''}
@@ -3797,7 +4924,7 @@ function getWeekNumber(date) {
   return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
 }
 
-// ── V2.10.16 — Export Excel/CSV de la semaine ────────────────────
+// ── V2.11.0 — Export Excel/CSV de la semaine ────────────────────
 function managerExportWeekCSV() {
   const weekDossiers = getManagerWeekDossiers();
   if (weekDossiers.length === 0) {
@@ -3869,7 +4996,7 @@ function managerExportWeekCSV() {
 }
 
 // ============================================================================
-// FIN MODULE MANAGER V2.10.16
+// FIN MODULE MANAGER V2.11.0
 // ============================================================================
 
 
@@ -3913,7 +5040,7 @@ function fmtTime(d) {
   if (!d) return '—';
   return new Date(d).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 }
-// V2.10.16 — Helper sécurisé pour parser un km : refuse les dates et valeurs absurdes
+// V2.11.0 — Helper sécurisé pour parser un km : refuse les dates et valeurs absurdes
 function safeKm(v) {
   if (v === null || v === undefined || v === '') return 0;
   const s = String(v);
@@ -4321,7 +5448,7 @@ function renderSyncBadge() {
 // ----------------------------------------------------------------------------
 // BUSINESS LOGIC
 // ----------------------------------------------------------------------------
-// V2.10.16 — Source unique de vérité : dossiers du user connecté uniquement
+// V2.11.0 — Source unique de vérité : dossiers du user connecté uniquement
 // Les vues Dossiers/Stats/Export utilisent toutes cette fonction.
 // Les rôles Manager/Admin auront accès aux dossiers de toute l'équipe via
 // des vues dédiées (Patch 4 Manager / Patch 3b Dashboard).
@@ -4345,7 +5472,7 @@ function getWeekDossiers(offset = 0) {
   });
 }
 
-// V2.10.16 — Bandeau "Astreinte en cours" intelligent
+// V2.11.0 — Bandeau "Astreinte en cours" intelligent
 // S'affiche uniquement si l'utilisateur regarde la semaine actuelle ET qu'on est dans la fenêtre d'astreinte
 function renderAstreinteEnCours() {
   // Uniquement sur la semaine actuelle
@@ -4440,7 +5567,7 @@ function getFilteredDossiers() {
   // Filtre recherche
   if (view.searchQuery && view.searchQuery.trim()) {
     const q = view.searchQuery.toLowerCase().trim();
-    // V2.10.16 — Bug fix : String() systématique pour éviter le crash sur les champs numériques (codeAstreinte, rapportNum)
+    // V2.11.0 — Bug fix : String() systématique pour éviter le crash sur les champs numériques (codeAstreinte, rapportNum)
     dossiers = dossiers.filter(d =>
       String(d.etablissement || '').toLowerCase().includes(q) ||
       String(d.motif || '').toLowerCase().includes(q) ||
@@ -4476,7 +5603,7 @@ function findOpenSequence() {
   // - clôturé avec retourDomicile = 'X' (chaînage en cours, n'a pas encore enregistré retour)
   // ET qui n'a PAS de retour domicile horodaté (sinon la séquence est fermée)
   
-  // V2.10.16 — Ne chercher que dans les dossiers du user connecté
+  // V2.11.0 — Ne chercher que dans les dossiers du user connecté
   const myDossiers = getMyDossiers();
   
   const candidatesEnCours = myDossiers.filter(d => 
@@ -4542,7 +5669,9 @@ function render() {
     // V2.10.2 — Vues admin
     case 'admin-users': app.innerHTML = renderAdminUsers(); break;
     case 'admin-logs': app.innerHTML = renderAdminLogs(); break;
-    // V2.10.16 — Vue manager (dépannage)
+    // V2.11 — Dashboard équipe Admin
+    case 'dashboard-admin': app.innerHTML = renderDashboardAdmin(); break;
+    // V2.11.0 — Vue manager (dépannage)
     case 'manager-view': app.innerHTML = renderManagerView(); break;
   }
   attachListeners();
@@ -4581,7 +5710,7 @@ function render() {
 }
 
 function renderBottomNav() {
-  // V2.10.16 — Bottom nav adapté au rôle
+  // V2.11.0 — Bottom nav adapté au rôle
   let items;
   if (authState.user && authState.user.role === 'manager') {
     // Manager : interface dépannage uniquement
@@ -5267,7 +6396,7 @@ function renderExport() {
   
   // === Rapport nuit/période avec jours fériés FR ===
   const nightPeriod = computeNightPeriod();
-  // V2.10.16 — Rapport de nuit limité aux dossiers du user
+  // V2.11.0 — Rapport de nuit limité aux dossiers du user
   const nightDossiers = getMyDossiers().filter(d => {
     const dt = new Date(d.dateAppel);
     return dt >= nightPeriod.start && dt <= nightPeriod.end;
@@ -5606,7 +6735,7 @@ function renderSettings() {
         </div>
         <div style="padding:12px;display:flex;flex-direction:column;gap:8px">
           ${(() => {
-            // V2.10.16 — Détection intelligente : dossiers locaux sans user_id (orphelins)
+            // V2.11.0 — Détection intelligente : dossiers locaux sans user_id (orphelins)
             const myId = authState.user && authState.user.id;
             const orphans = state.dossiers.filter(d => !d.user_id);
             const orphansCount = orphans.length;
@@ -5632,7 +6761,7 @@ function renderSettings() {
         </div>
       </div>
       
-      <!-- V2.10.16 — Service dépannage (visible pour admin ET manager) -->
+      <!-- V2.11.0 — Service dépannage (visible pour admin ET manager) -->
       ${isManagerOrAdmin() ? `
       <div class="settings-section">
         <div class="settings-section-title">🚨 Service Dépannage</div>
@@ -5678,6 +6807,30 @@ function renderSettings() {
             </div>
             <span class="settings-row-chevron">›</span>
           </div>
+          <div class="settings-row" data-action="goto-dashboard-admin">
+            <div class="settings-row-icon">📊</div>
+            <div class="settings-row-content">
+              <div class="settings-row-title">Dashboard équipe</div>
+              <div class="settings-row-value">Vue d'ensemble, stats et validation</div>
+            </div>
+            <span class="settings-row-chevron">›</span>
+          </div>
+          <div class="settings-row" data-action="toggle-maintenance">
+            <div class="settings-row-icon">🚧</div>
+            <div class="settings-row-content">
+              <div class="settings-row-title">Mode maintenance</div>
+              <div class="settings-row-value">${appConfig.maintenanceMode ? '🔴 Activé — l\'app est bloquée pour les non-admins' : '🟢 Désactivé — accès normal'}</div>
+            </div>
+            <span class="settings-row-chevron">›</span>
+          </div>
+          <div class="settings-row" data-action="manage-version">
+            <div class="settings-row-icon">📦</div>
+            <div class="settings-row-content">
+              <div class="settings-row-title">Version & Mise à jour</div>
+              <div class="settings-row-value">App: ${APP_VERSION} • Cloud: ${appConfig.latestVersion || '...'}</div>
+            </div>
+            <span class="settings-row-chevron">›</span>
+          </div>
         </div>
       </div>
       ` : ''}
@@ -5702,7 +6855,7 @@ function renderSettings() {
         </div>
       </div>
       
-      <!-- V2.10.16 — Sections spécifiques techniciens & admins (cachées au manager) -->
+      <!-- V2.11.0 — Sections spécifiques techniciens & admins (cachées au manager) -->
       ${authState.user && authState.user.role !== 'manager' ? `
       <div class="settings-section">
         <div class="settings-section-title">Identité technicien</div>
@@ -5813,7 +6966,7 @@ function renderSettings() {
       ` : ''}
       
       <div class="text-center" style="padding:24px 0;font-size:11px;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace">
-        Astreintes AMI2S V2.10.16<br>
+        Astreintes AMI2S V2.11.0<br>
         ${getMyDossiers().length} dossier(s) • ${new Date().toISOString().substring(0,10)}
       </div>
     </div>
@@ -6194,7 +7347,7 @@ function renderSequence() {
 function attachListeners() {
   $$('[data-action]').forEach(el => el.addEventListener('click', handleAction));
   
-  // V2.10.16 — Binding pour la recherche dans la vue Manager
+  // V2.11.0 — Binding pour la recherche dans la vue Manager
   const mgrSearch = document.getElementById('manager-search-input');
   if (mgrSearch) {
     mgrSearch.addEventListener('input', (e) => {
@@ -6287,7 +7440,7 @@ async function handleAction(e) {
     case 'nav':
       view.current = t.dataset.view;
       if (view.current === 'list') view.dossierId = null;
-      // V2.10.16 — Si on navigue vers manager-view, charger les dossiers
+      // V2.11.0 — Si on navigue vers manager-view, charger les dossiers
       if (view.current === 'manager-view' && isManagerOrAdmin()) {
         render();
         managerLoadDossiers();
@@ -6304,7 +7457,7 @@ async function handleAction(e) {
       await quickNew();
       break;
     case 'quick-call':
-      // V2.10.16 — Saisie rapide téléphone (3 étapes)
+      // V2.11.0 — Saisie rapide téléphone (3 étapes)
       await quickPhoneCall();
       break;
     case 'cancel-new':
@@ -6469,11 +7622,88 @@ async function handleAction(e) {
       adminState.creatingUser = false;
       render();
       break;
-    // V2.10.16 — Logo personnalisable
+    // V2.11.0 — Logo personnalisable
     case 'change-logo':
       if (!isAdmin()) { toast('Accès refusé', 'error'); break; }
       openLogoModal();
       break;
+    // V2.11 — Mode maintenance
+    case 'toggle-maintenance':
+      if (!isAdmin()) { toast('Accès refusé', 'error'); break; }
+      openMaintenanceModal();
+      break;
+    // V2.11 — Gestion de version
+    case 'manage-version':
+      if (!isAdmin()) { toast('Accès refusé', 'error'); break; }
+      openVersionModal();
+      break;
+    // V2.11 — Dashboard admin
+    case 'goto-dashboard-admin':
+      if (!isAdmin()) { toast('Accès refusé', 'error'); break; }
+      view.current = 'dashboard-admin';
+      render();
+      dashboardLoadData();
+      break;
+    case 'dashboard-tab':
+      dashboardState.tab = t.dataset.tab;
+      render();
+      break;
+    case 'dashboard-reload':
+      await dashboardLoadData();
+      break;
+    case 'dashboard-prev-week':
+      dashboardState.weekOffset--;
+      render();
+      break;
+    case 'dashboard-next-week':
+      if (dashboardState.weekOffset < 0) {
+        dashboardState.weekOffset++;
+        render();
+      }
+      break;
+    case 'dashboard-view-dossier': {
+      const did = t.dataset.id;
+      view.current = 'detail';
+      view.dossierId = did;
+      render();
+      break;
+    }
+    case 'dashboard-validate-week': {
+      const u = t.dataset.username;
+      const w = t.dataset.weeknum;
+      if (confirm(`Valider la semaine n°${w} pour ${u} ?\n\nCela confirmera que tous les dossiers sont prêts à être envoyés au RH.`)) {
+        try {
+          localStorage.setItem(`_validated_${u}_${w}`, 'true');
+          toast(`✅ Semaine ${w} de ${u} validée`, 'success');
+          render();
+        } catch(e) {
+          toast('Erreur: ' + e.message, 'error');
+        }
+      }
+      break;
+    }
+    case 'dashboard-unvalidate-week': {
+      const u = t.dataset.username;
+      const w = t.dataset.weeknum;
+      try {
+        localStorage.removeItem(`_validated_${u}_${w}`);
+        toast(`↺ Validation annulée pour ${u} S${w}`, 'success');
+        render();
+      } catch(e) {
+        toast('Erreur: ' + e.message, 'error');
+      }
+      break;
+    }
+    case 'dashboard-view-tech-week': {
+      const u = t.dataset.username;
+      const w = t.dataset.weeknum;
+      // Filtrer affichage par tech (passage en tab overview avec filtre)
+      dashboardState.filterTech = u;
+      dashboardState.weekOffset = -1; // semaine précédente
+      dashboardState.tab = 'overview';
+      render();
+      break;
+    }
     case 'admin-create-user':
       adminState.creatingUser = true;
       adminState.editingUser = null;
@@ -6509,7 +7739,7 @@ async function handleAction(e) {
     case 'admin-refresh-logs':
       await adminLoadLogs();
       break;
-    // V2.10.16 — Manager (dépannage)
+    // V2.11.0 — Manager (dépannage)
     case 'goto-manager':
       if (!isManagerOrAdmin()) { toast('Accès refusé', 'error'); break; }
       view.current = 'manager-view';
@@ -6773,7 +8003,7 @@ async function editTimestamp(field) {
   if (!newDate) return;
   let finalDate = roundTo5(newDate);
   
-  // V2.10.16 — GARDE-FOU 1 (refonte) : forcer la date sur la BONNE référence
+  // V2.11.0 — GARDE-FOU 1 (refonte) : forcer la date sur la BONNE référence
   // - Pour departDomicile : date de dateAppel (premier événement)
   // - Pour arriveeSite : date de departDomicile (sinon dateAppel)
   // - Pour departSite : date d'arriveeSite (sinon dateAppel)
@@ -6839,7 +8069,7 @@ async function editTimestamp(field) {
     }
   }
   
-  // V2.10.16 — GARDE-FOU 2 : alerte si la date est > 36h de dateAppel
+  // V2.11.0 — GARDE-FOU 2 : alerte si la date est > 36h de dateAppel
   // (sauf chaînage sur weekend long, qui peut effectivement durer ~64h)
   if (d.dateAppel && field !== 'dateAppel') {
     const appel = new Date(d.dateAppel);
@@ -7398,7 +8628,7 @@ async function quickNew() {
 }
 
 // ============================================================================
-// V2.10.16 — SAISIE RAPIDE TÉLÉPHONE (3 étapes, ~30 sec)
+// V2.11.0 — SAISIE RAPIDE TÉLÉPHONE (3 étapes, ~30 sec)
 // ============================================================================
 async function quickPhoneCall() {
   const nowIso = new Date().toISOString();
@@ -8018,10 +9248,10 @@ async function requestGeolocationPermission() {
 // ----------------------------------------------------------------------------
 // V2.9.10 — PDF G1-0-8 reproduit au pixel près du document officiel Eurofeu
 // Coordonnées exactes extraites de l'audit pdfplumber sur le doc original
-// V2.10.16 — async pour permettre le lazy load de jsPDF
+// V2.11.0 — async pour permettre le lazy load de jsPDF
 async function generatePDF() {
   try {
-    // V2.10.16 — Charger jsPDF à la demande (premier appel ~1-2s, ensuite instantané)
+    // V2.11.0 — Charger jsPDF à la demande (premier appel ~1-2s, ensuite instantané)
     if (typeof toast === 'function') toast('📄 Génération du PDF en cours...', 'info');
     await loadJsPDF();
     const { jsPDF } = window.jspdf;
@@ -8387,7 +9617,7 @@ async function generatePDF() {
       return {
         d, isPhone,
         date: fmtDateShort(d.dateAppel),
-        // V2.10.16 — Forcer la conversion en string pour éviter les erreurs jsPDF
+        // V2.11.0 — Forcer la conversion en string pour éviter les erreurs jsPDF
         code: String(d.codeAstreinte || ''),
         demandeur: String(d.etablissement || ''),
         heureAppel: d.bureau ? 'BUREAU' : fmtTime(d.dateAppel),
@@ -8397,7 +9627,7 @@ async function generatePDF() {
         arrSite: d.arriveeSite ? fmtTime(d.arriveeSite) : '',
         depSite: d.departSite ? fmtTime(d.departSite) : (d.finIntervention ? fmtTime(d.finIntervention) : ''),
         tpsSite: String(d.tempsSiteCalcule || ''),
-        // V2.10.16 — Sécurité : ne garder que les valeurs numériques valides
+        // V2.11.0 — Sécurité : ne garder que les valeurs numériques valides
         km: (() => { const n = safeKm(d.km); return n > 0 ? n : ''; })(),
         departDom, retourDom, totalTrajet
       };
@@ -8617,7 +9847,7 @@ async function generatePDF() {
             if (val === null || val === undefined || val === '') return;
             const x = GRID.x[idx];
             const w = GRID.x[idx + 1] - GRID.x[idx];
-            // V2.10.16 — Bug fix : forcer la conversion en string pour éviter l'erreur jsPDF
+            // V2.11.0 — Bug fix : forcer la conversion en string pour éviter l'erreur jsPDF
             let display = String(val);
             if (truncate && display.length > truncate) display = display.substring(0, truncate - 2) + '..';
             doc.text(display, x + w/2, rowY + ROW_H/2 + 2.5, { align: 'center', maxWidth: w - 2 });
@@ -8692,7 +9922,7 @@ async function generatePDF() {
       doc.text(warn3, 19 + warn1W + warn2W, warningY);
       
       // ─────────────────────────────────────────────────────────
-      // 8. 4 CADRES ÉTAPES — V2.10.16 : sur TOUTES les pages (comme l'original Eurofeu)
+      // 8. 4 CADRES ÉTAPES — V2.11.0 : sur TOUTES les pages (comme l'original Eurofeu)
       // ─────────────────────────────────────────────────────────
       {
         // Position : y débute à warningY + 18 pour bien séparer
@@ -9105,7 +10335,7 @@ document.addEventListener('visibilitychange', () => {
 // ----------------------------------------------------------------------------
 // INIT V2.10.0 — Gate authentification avant chargement de l'app
 // ----------------------------------------------------------------------------
-// V2.10.16 — Helpers splash screen
+// V2.11.0 — Helpers splash screen
 function setSplashStatus(text) {
   const el = document.getElementById('splash-status');
   if (el) el.textContent = text;
@@ -9122,6 +10352,10 @@ function hideSplash() {
 async function init() {
   try {
     setSplashStatus('Vérification de la session');
+    
+    // V2.11 — Récupérer la config app en parallèle (maintenance + version)
+    const appConfigPromise = fetchAppConfig();
+    
     // 1. Vérifier si un token est déjà en local
     const hasLocalToken = authLoadFromStorage();
 
@@ -9130,16 +10364,45 @@ async function init() {
       // 2. Valider la session côté serveur (sliding 7j)
       const valid = await authValidate();
       if (valid) {
-        // ✅ Token valide → lancer l'app directement
+        // ✅ Token valide → attendre la config + lancer l'app
         setSplashStatus('Chargement des données');
+        await appConfigPromise;
+        
+        // V2.11 — Si maintenance + non admin → bloquer
+        if (checkMaintenanceBlock()) {
+          hideSplash();
+          return;
+        }
+        
         const result = await startMainApp();
         hideSplash();
+        
+        // V2.11 — Afficher bandeau/modal MAJ après le démarrage
+        if (isUpdateAvailable()) {
+          if (appConfig.forceUpdate) {
+            renderUpdateModal();
+          } else {
+            renderUpdateBanner();
+          }
+        }
+        
+        // V2.11 — Démarrer le polling périodique
+        startAppConfigPolling();
+        
         return result;
       }
       // Token invalide ou expiré côté serveur → on tombe sur le login
     }
 
-    // 3. Pas de token ou token invalide → afficher le login
+    // 3. Pas de token ou token invalide → vérifier maintenance d'abord
+    await appConfigPromise;
+    if (appConfig.maintenanceMode) {
+      // Maintenance active : on bloque même sur l'écran de login
+      renderMaintenanceScreen();
+      hideSplash();
+      return;
+    }
+    
     renderLoginScreen();
     hideSplash();
   } catch (err) {
