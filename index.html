@@ -3823,6 +3823,12 @@ function dashboardGetUsername(dossier) {
   return 'Inconnu';
 }
 
+// V2.11.4 — Helper : un dossier est-il clôturé ?
+// Gère les 2 formats : d.cloture (vrai bool en BDD) et d.statut === 'cloture' (legacy)
+function dashboardIsCloture(d) {
+  return d.cloture === true || d.cloture === 'true' || d.statut === 'cloture';
+}
+
 // V2.11.3 — Helper safeDiff (idem renderStats : gère minuit + dates erronées)
 function dashboardSafeDiff(start, end) {
   if (!start || !end) return 0;
@@ -4008,7 +4014,7 @@ function renderDashboardOverview() {
     }
     byTech[username].dossiers.push(d);
     byTech[username].totalKm += parseFloat(d.distance) || parseFloat(d.km) || 0;
-    if (d.statut === 'cloture') byTech[username].clotures++;
+    if (dashboardIsCloture(d)) byTech[username].clotures++;
     else byTech[username].enCours++;
   });
   // V2.11.3 — Recalcul des minutes en groupes pour chaque tech
@@ -4019,14 +4025,14 @@ function renderDashboardOverview() {
   // Détecter les alertes : dossiers > 24h non clôturés
   const now = new Date();
   const alertes = weekDossiers.filter(d => {
-    if (d.statut === 'cloture') return false;
+    if (dashboardIsCloture(d)) return false;
     const dt = new Date(d.dateAppel);
     return (now - dt) > 24 * 3600 * 1000;
   });
   
   // Compteur global
   const totalDossiers = weekDossiers.length;
-  const totalClotures = weekDossiers.filter(d => d.statut === 'cloture').length;
+  const totalClotures = weekDossiers.filter(d => dashboardIsCloture(d)).length;
   const totalEnCours = totalDossiers - totalClotures;
   const totalMinutes = Object.values(byTech).reduce((s, t) => s + t.totalMinutes, 0);
   const totalKm = Object.values(byTech).reduce((s, t) => s + t.totalKm, 0);
@@ -4242,7 +4248,7 @@ function renderDashboardValidation() {
     const u = dashboardGetUsername(d);
     if (!byTech[u]) byTech[u] = { dossiers: [], clotures: 0, enCours: 0, validated: false };
     byTech[u].dossiers.push(d);
-    if (d.statut === 'cloture') byTech[u].clotures++;
+    if (dashboardIsCloture(d)) byTech[u].clotures++;
     else byTech[u].enCours++;
   });
   
