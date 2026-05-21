@@ -3247,6 +3247,15 @@ function renderLoginScreen() {
     }
     const ok = await authLogin(u, p);
     if (ok) {
+      // V2.11 FIX : vérifier maintenance APRÈS login (pour autoriser admin à se reconnecter)
+      // Re-fetch la config pour avoir l'état le plus récent
+      await fetchAppConfig();
+      if (appConfig.maintenanceMode && authState.user && authState.user.role !== 'admin') {
+        // Non-admin connecté pendant maintenance → bloquer
+        renderMaintenanceScreen();
+        return;
+      }
+      
       if (!authState.mustChangePwd) {
         startMainApp();
       } else {
@@ -3798,6 +3807,22 @@ function dashboardGetWeekDossiers(offset = 0) {
   });
 }
 
+// V2.11 FIX — Helper : retrouver le nom d'affichage d'un user depuis son ID
+function dashboardGetUsername(dossier) {
+  if (!dossier) return 'Inconnu';
+  // Si username déjà présent dans le dossier
+  if (dossier.user_username) return dossier.user_username;
+  // Sinon chercher dans la liste des users
+  if (dossier.user_id && dashboardState.users && dashboardState.users.length > 0) {
+    const u = dashboardState.users.find(x => x.id === dossier.user_id);
+    if (u) {
+      // Préférer full_name puis username, jamais l'UUID
+      return u.full_name || u.username || 'Inconnu';
+    }
+  }
+  return 'Inconnu';
+}
+
 // Calculer les minutes de travail d'un dossier
 function dashboardDossierMinutes(d) {
   let totalMinutes = 0;
@@ -3904,7 +3929,7 @@ function renderDashboardOverview() {
   // Grouper par tech
   const byTech = {};
   weekDossiers.forEach(d => {
-    const username = d.user_username || d.user_id || 'Inconnu';
+    const username = dashboardGetUsername(d);
     if (!byTech[username]) {
       byTech[username] = { dossiers: [], totalMinutes: 0, totalKm: 0, clotures: 0, enCours: 0 };
     }
@@ -3973,7 +3998,7 @@ function renderDashboardOverview() {
           ${alertes.slice(0, 5).map(d => `
             <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:rgba(255,255,255,0.04);border-radius:8px;margin-bottom:6px;font-size:12px">
               <div>
-                <strong>${escapeHtml(d.etablissement || 'Sans nom')}</strong> — ${escapeHtml(d.user_username || 'Inconnu')}
+                <strong>${escapeHtml(d.etablissement || 'Sans nom')}</strong> — ${escapeHtml(dashboardGetUsername(d))}
                 <div style="color:var(--text-tertiary);font-size:11px;margin-top:2px">
                   ${fmtDateShort(new Date(d.dateAppel))} ${new Date(d.dateAppel).toTimeString().slice(0,5)}
                 </div>
@@ -4043,7 +4068,7 @@ function renderDashboardStats() {
   // Comparatif techniciens
   const techMap = {};
   dossiers30.forEach(d => {
-    const u = d.user_username || 'Inconnu';
+    const u = dashboardGetUsername(d);
     if (!techMap[u]) techMap[u] = { dossiers: 0, minutes: 0, km: 0 };
     techMap[u].dossiers++;
     techMap[u].minutes += dashboardDossierMinutes(d);
@@ -4129,7 +4154,7 @@ function renderDashboardValidation() {
   
   const byTech = {};
   weekDossiers.forEach(d => {
-    const u = d.user_username || 'Inconnu';
+    const u = dashboardGetUsername(d);
     if (!byTech[u]) byTech[u] = { dossiers: [], clotures: 0, enCours: 0, validated: false };
     byTech[u].dossiers.push(d);
     if (d.statut === 'cloture') byTech[u].clotures++;
@@ -10394,15 +10419,11 @@ async function init() {
       // Token invalide ou expiré côté serveur → on tombe sur le login
     }
 
-    // 3. Pas de token ou token invalide → vérifier maintenance d'abord
+    // 3. Pas de token ou token invalide → afficher l'écran de login
+    // V2.11 FIX : on ne bloque PLUS le login en mode maintenance, sinon
+    // l'admin déconnecté ne peut plus se reconnecter pour désactiver !
+    // Le blocage se fera après login pour les non-admins (dans authLogin).
     await appConfigPromise;
-    if (appConfig.maintenanceMode) {
-      // Maintenance active : on bloque même sur l'écran de login
-      renderMaintenanceScreen();
-      hideSplash();
-      return;
-    }
-    
     renderLoginScreen();
     hideSplash();
   } catch (err) {
