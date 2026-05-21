@@ -2368,7 +2368,7 @@ function loadJsPDF() {
 // V2.11 — CONFIG APP (Maintenance + Version)
 // ============================================================================
 // Version actuelle de cette app (à incrémenter à chaque déploiement)
-const APP_VERSION = '2.11.0';
+const APP_VERSION = '2.11.1';
 
 // État global de la config app (récupérée depuis le cloud au démarrage)
 const appConfig = {
@@ -3829,6 +3829,148 @@ function dashboardIsCloture(d) {
   return d.cloture === true || d.cloture === 'true' || d.statut === 'cloture';
 }
 
+// ============================================================================
+// V2.11.1 — CRÉATION DE DOSSIER POUR UN TECHNICIEN (admin/manager)
+// Usage : appelé depuis Dashboard (admin) ET vue Dépannage (manager+admin)
+// ============================================================================
+async function createDossierForTech() {
+  if (!isManagerOrAdmin()) { toast('Accès refusé', 'error'); return; }
+  
+  // Récupérer la liste des techs (depuis dashboardState si admin, sinon charge fresh)
+  let users = dashboardState.users || [];
+  if (users.length === 0) {
+    // Cas du manager qui n'a jamais ouvert le Dashboard : charger les users
+    try {
+      toast('Chargement des techniciens...', 'info');
+      const res = await cloudCall('listUsers', {});
+      if (res.success) {
+        users = res.users || [];
+        dashboardState.users = users; // cache pour appels suivants
+      } else {
+        toast('Erreur chargement : ' + (res.error || 'inconnu'), 'error');
+        return;
+      }
+    } catch (e) {
+      toast('Erreur réseau : ' + e.message, 'error');
+      return;
+    }
+  }
+  
+  // Filtrer les techniciens (managers et admins exclus, pour éviter affectations bizarres)
+  const targetUsers = users.filter(u => u.role === 'technicien');
+  
+  if (targetUsers.length === 0) {
+    toast('Aucun technicien à qui affecter', 'error');
+    return;
+  }
+  
+  // Mémoriser d'où vient la demande pour le retour
+  const returnTo = view.current; // 'dashboard-admin' ou 'manager-view'
+  
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay visible';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:500px">
+      <div class="modal-header">
+        <div class="modal-title">➕ Créer un dossier pour...</div>
+        <button class="modal-close" data-action="dctech-close">×</button>
+      </div>
+      <div class="modal-body" style="padding:20px">
+        <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:18px;font-size:12px;color:var(--text)">
+          💡 Tu vas créer un dossier <strong>au nom du technicien sélectionné</strong>. Le dossier apparaîtra sur son compte au prochain sync.
+        </div>
+        
+        <label style="display:block;font-size:11px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;margin-bottom:8px;letter-spacing:0.5px">
+          Choisir le technicien
+        </label>
+        
+        <div id="dctech-list" style="display:flex;flex-direction:column;gap:6px">
+          ${targetUsers.map(u => `
+            <button class="dctech-user-btn" data-tech-id="${escapeHtml(u.id)}" data-tech-name="${escapeHtml(u.full_name || u.username)}" style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;cursor:pointer;text-align:left;color:var(--text);font-size:14px;transition:all 0.15s">
+              <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0">
+                ${escapeHtml((u.full_name || u.username || '?').substring(0,1).toUpperCase())}
+              </div>
+              <div style="flex:1;min-width:0">
+                <div style="font-weight:600">${escapeHtml(u.full_name || u.username)}</div>
+                <div style="font-size:11px;color:var(--text-tertiary);text-transform:capitalize;margin-top:2px">${escapeHtml(u.role)}</div>
+              </div>
+              <span style="color:var(--text-tertiary);font-size:18px">→</span>
+            </button>
+          `).join('')}
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  
+  overlay.addEventListener('click', (e) => {
+    const action = e.target.dataset.action || e.target.closest('[data-action]')?.dataset.action;
+    
+    if (action === 'dctech-close' || e.target === overlay) {
+      overlay.remove();
+      return;
+    }
+    
+    // Click sur un user
+    const userBtn = e.target.closest('.dctech-user-btn');
+    if (userBtn) {
+      const techId = userBtn.dataset.techId;
+      const techName = userBtn.dataset.techName;
+      
+      // Préparer tempDossier avec affectation au tech
+      tempDossier = {
+        id: uid(),
+        dateAppel: new Date().toISOString(),
+        bureau: false,
+        etablissement: '',
+        demandeur: '',
+        codeAstreinte: '',
+        motif: '',
+        type: null,
+        pointDepart: 'domicile',
+        adresseSite: '',
+        km: '',
+        rapportN: '',
+        departDomicile: null,
+        arriveeSite: null,
+        departSite: null,
+        retourDomicile: null,
+        compteRendu: '',
+        statut: 'pending',
+        sequenceId: null,
+        createdAt: new Date().toISOString(),
+        // V2.11.1 — Affectation au technicien sélectionné
+        user_id: techId,
+        username: techName,
+        _createdByAdmin: true,  // flag pour identifier les créations admin/manager
+        _returnTo: returnTo     // mémorise d'où on vient pour le retour
+      };
+      
+      overlay.remove();
+      toast(`Création d'un dossier pour ${techName}`, 'info');
+      view.current = 'new';
+      render();
+    }
+  });
+  
+  // Hover effect
+  overlay.querySelectorAll('.dctech-user-btn').forEach(btn => {
+    btn.addEventListener('mouseenter', () => {
+      btn.style.borderColor = 'var(--accent)';
+      btn.style.background = 'rgba(37,99,235,0.08)';
+    });
+    btn.addEventListener('mouseleave', () => {
+      btn.style.borderColor = 'var(--border)';
+      btn.style.background = 'var(--bg-subtle)';
+    });
+  });
+}
+
+// Alias pour compat ascendante avec le code existant Dashboard
+function dashboardCreateForTech() {
+  return createDossierForTech();
+}
+
 // V2.11.3 — Helper safeDiff (idem renderStats : gère minuit + dates erronées)
 function dashboardSafeDiff(start, end) {
   if (!start || !end) return 0;
@@ -4070,6 +4212,11 @@ function renderDashboardOverview() {
           <div class="astreinte-stat-label">Travail</div>
         </div>
       </div>
+      
+      <!-- V2.11.1 — Bouton créer un dossier pour un tech -->
+      <button class="btn btn-primary" data-action="dashboard-create-for-tech" style="width:100%;padding:12px;border-radius:10px;font-size:14px;font-weight:700;margin-bottom:14px;background:linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);color:white;border:none;box-shadow:0 4px 12px rgba(37,99,235,0.3)">
+        ➕ Créer un dossier pour un technicien
+      </button>
       
       <!-- Alertes -->
       ${alertes.length > 0 ? `
@@ -4907,6 +5054,14 @@ function renderManagerView() {
         </button>
         <button class="manager-tab ${managerState.filter === 'recuperes' ? 'active' : ''}" data-action="manager-filter" data-filter="recuperes">
           ✅ Récupérés <span class="badge">${counts.recuperes}</span>
+        </button>
+      </div>
+
+      <!-- V2.11.1 — Bouton créer un dossier pour un tech (manager+admin) -->
+      <div style="padding: 4px 12px 8px">
+        <button class="btn btn-primary" data-action="manager-create-for-tech" style="width:100%;padding:11px;border-radius:10px;font-size:14px;font-weight:700;background:linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);color:white;border:none;box-shadow:0 4px 10px rgba(37,99,235,0.25);display:flex;align-items:center;justify-content:center;gap:8px">
+          <span>➕</span>
+          <span>Créer un dossier pour un technicien</span>
         </button>
       </div>
 
@@ -7585,8 +7740,15 @@ async function handleAction(e) {
       await quickPhoneCall();
       break;
     case 'cancel-new':
+      // V2.11.1 — Si on créait un dossier pour un tech, retour à la vue d'origine
+      const wasForTech = tempDossier && tempDossier._createdByAdmin === true;
+      const cancelReturnTo = tempDossier && tempDossier._returnTo;
       tempDossier = null;
-      view.current = 'list';
+      if (wasForTech && cancelReturnTo) {
+        view.current = cancelReturnTo;
+      } else {
+        view.current = 'list';
+      }
       render();
       break;
     case 'back-list':
@@ -7828,6 +7990,11 @@ async function handleAction(e) {
       render();
       break;
     }
+    // V2.11.1 — Créer un dossier pour un technicien (admin only)
+    case 'dashboard-create-for-tech':
+      if (!isAdmin()) { toast('Accès refusé', 'error'); break; }
+      dashboardCreateForTech();
+      break;
     case 'admin-create-user':
       adminState.creatingUser = true;
       adminState.editingUser = null;
@@ -7892,6 +8059,11 @@ async function handleAction(e) {
       break;
     case 'manager-export-csv':
       managerExportWeekCSV();
+      break;
+    // V2.11.1 — Créer un dossier pour un tech (depuis vue Dépannage)
+    case 'manager-create-for-tech':
+      if (!isManagerOrAdmin()) { toast('Accès refusé', 'error'); break; }
+      await createDossierForTech();
       break;
     case 'show-sync':
       showSyncModal();
@@ -7972,8 +8144,31 @@ async function saveNewDossier() {
   // V2.9.9 — Nettoyer le flag _isEdit (résidu d'édition)
   delete tempDossier._isEdit;
   
+  // V2.11.1 — Si le dossier est créé par admin/manager pour un tech, retour à la vue d'origine
+  const isForTech = tempDossier._createdByAdmin === true;
+  const targetUsername = tempDossier.username || 'le technicien';
+  const returnTo = tempDossier._returnTo || 'dashboard-admin';
+  delete tempDossier._createdByAdmin;
+  delete tempDossier._returnTo;
+  
   await saveDossier(tempDossier);
   haptic('success');
+  
+  if (isForTech) {
+    toast(`✅ Dossier créé pour ${targetUsername}`, 'success');
+    // Retour à la vue d'origine (Dashboard ou Manager-view)
+    view.current = returnTo;
+    tempDossier = null;
+    render();
+    // Recharger les données du dashboard ou manager
+    if (returnTo === 'dashboard-admin') {
+      await dashboardLoadData();
+    } else if (returnTo === 'manager-view') {
+      await managerLoadDossiers();
+    }
+    return;
+  }
+  
   toast(tempDossier.type === 'telephone' ? 'Appel enregistré' : 'Dossier créé', 'success');
   
   if (tempDossier.type === 'deplacement') {
