@@ -3823,25 +3823,98 @@ function dashboardGetUsername(dossier) {
   return 'Inconnu';
 }
 
-// Calculer les minutes de travail d'un dossier
-function dashboardDossierMinutes(d) {
-  let totalMinutes = 0;
-  if (d.dureeMinutes) {
-    totalMinutes = parseInt(d.dureeMinutes, 10) || 0;
-  } else if (d.type === 'phone' && d.dureeAppel) {
-    const match = String(d.dureeAppel).match(/(\d+)h(\d+)?/);
-    if (match) {
-      totalMinutes = parseInt(match[1], 10) * 60 + (parseInt(match[2], 10) || 0);
-    }
-  } else if (d.departDomicile && d.retourDomicile) {
-    // Calcul depuis horaires
-    try {
-      const t1 = new Date(d.departDomicile);
-      const t2 = new Date(d.retourDomicile);
-      totalMinutes = Math.round((t2 - t1) / 60000);
-      if (totalMinutes < 0 || totalMinutes > 1440) totalMinutes = 0;
-    } catch(e) {}
+// V2.11.3 — Helper safeDiff (idem renderStats : gère minuit + dates erronées)
+function dashboardSafeDiff(start, end) {
+  if (!start || !end) return 0;
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+  let ms = endDate - startDate;
+  if (ms < 0) {
+    const startMin = startDate.getHours() * 60 + startDate.getMinutes();
+    const endMin = endDate.getHours() * 60 + endDate.getMinutes();
+    let diffMin = endMin - startMin;
+    if (diffMin < 0) diffMin += 24 * 60;
+    ms = diffMin * 60 * 1000;
   }
+  if (ms > 24 * 3600 * 1000) {
+    const startMin = startDate.getHours() * 60 + startDate.getMinutes();
+    const endMin = endDate.getHours() * 60 + endDate.getMinutes();
+    let diffMin = endMin - startMin;
+    if (diffMin < 0) diffMin += 24 * 60;
+    ms = diffMin * 60 * 1000;
+  }
+  return Math.round(ms / 60000); // en minutes
+}
+
+// V2.11.3 — Minutes d'un seul dossier (utilisé pour les alertes, pas pour les totaux)
+// NOTE : pour les totaux par tech, utilise dashboardTechMinutes() qui gère les groupes
+function dashboardDossierMinutes(d) {
+  // TÉLÉPHONE
+  if (d.type === 'telephone') {
+    if (d.dureeAppel) {
+      const s = String(d.dureeAppel);
+      let match = s.match(/(\d+)h(\d+)?/i);
+      if (match) return parseInt(match[1], 10) * 60 + (parseInt(match[2], 10) || 0);
+      match = s.match(/(\d+)\s*min/i);
+      if (match) return parseInt(match[1], 10);
+      const num = parseInt(s, 10);
+      if (!isNaN(num) && num > 0 && num < 600) return num;
+    }
+    return 0;
+  }
+  // DÉPLACEMENT — uniquement si départ/retour complets et non-X
+  if (d.type === 'deplacement') {
+    if (d.departDomicile && d.departDomicile !== 'X' && 
+        d.retourDomicile && d.retourDomicile !== 'X') {
+      return dashboardSafeDiff(d.departDomicile, d.retourDomicile);
+    }
+  }
+  return 0;
+}
+
+// V2.11.3 — Total minutes pour un ENSEMBLE de dossiers (gestion des groupes de chaînage X)
+function dashboardTechMinutes(dossiers) {
+  let totalMinutes = 0;
+  
+  // 1. Téléphones : addition simple
+  dossiers.filter(d => d.type === 'telephone').forEach(d => {
+    if (d.dureeAppel) {
+      const s = String(d.dureeAppel);
+      const match = s.match(/(\d+)h(\d+)?/i);
+      if (match) totalMinutes += parseInt(match[1], 10) * 60 + (parseInt(match[2], 10) || 0);
+    }
+  });
+  
+  // 2. Déplacements : groupes de chaînage (X = continuation)
+  const deplacements = dossiers.filter(d => d.type === 'deplacement')
+    .sort((a, b) => new Date(a.dateAppel) - new Date(b.dateAppel));
+  
+  let currentGroup = null;
+  const groups = [];
+  
+  for (const d of deplacements) {
+    if (d.departDomicile && d.departDomicile !== 'X') {
+      // Nouveau groupe
+      if (currentGroup) groups.push(currentGroup);
+      currentGroup = { firstDepart: d.departDomicile, lastRetour: null };
+    } else if (d.departDomicile === 'X' && currentGroup) {
+      // Continuation, on garde le groupe actif
+    }
+    
+    if (d.retourDomicile && d.retourDomicile !== 'X' && currentGroup) {
+      currentGroup.lastRetour = d.retourDomicile;
+      groups.push(currentGroup);
+      currentGroup = null;
+    }
+  }
+  if (currentGroup) groups.push(currentGroup);
+  
+  for (const g of groups) {
+    if (g.firstDepart && g.lastRetour) {
+      totalMinutes += dashboardSafeDiff(g.firstDepart, g.lastRetour);
+    }
+  }
+  
   return totalMinutes;
 }
 
@@ -3926,7 +3999,7 @@ function renderDashboardOverview() {
   const week = getAstreinteWeek(new Date(Date.now() + dashboardState.weekOffset * 7 * 86400000));
   const weekNum = getWeekNumber(week.start);
   
-  // Grouper par tech
+  // Grouper par tech (V2.11.3 — pas de cumul ligne par ligne, calcul par groupes ensuite)
   const byTech = {};
   weekDossiers.forEach(d => {
     const username = dashboardGetUsername(d);
@@ -3934,10 +4007,13 @@ function renderDashboardOverview() {
       byTech[username] = { dossiers: [], totalMinutes: 0, totalKm: 0, clotures: 0, enCours: 0 };
     }
     byTech[username].dossiers.push(d);
-    byTech[username].totalMinutes += dashboardDossierMinutes(d);
     byTech[username].totalKm += parseFloat(d.distance) || parseFloat(d.km) || 0;
     if (d.statut === 'cloture') byTech[username].clotures++;
     else byTech[username].enCours++;
+  });
+  // V2.11.3 — Recalcul des minutes en groupes pour chaque tech
+  Object.keys(byTech).forEach(u => {
+    byTech[u].totalMinutes = dashboardTechMinutes(byTech[u].dossiers);
   });
   
   // Détecter les alertes : dossiers > 24h non clôturés
@@ -4052,29 +4128,38 @@ function renderDashboardStats() {
   });
   const topSites = Object.entries(sitesMap).sort((a, b) => b[1] - a[1]).slice(0, 10);
   
-  // Répartition téléphone / déplacement
-  const totalPhone = dossiers30.filter(d => d.type === 'phone').length;
+  // Répartition téléphone / déplacement (V2.11.3 — fix type 'telephone')
+  const totalPhone = dossiers30.filter(d => d.type === 'telephone').length;
   const totalDep = dossiers30.filter(d => d.type === 'deplacement').length;
   const pctPhone = dossiers30.length > 0 ? Math.round(totalPhone * 100 / dossiers30.length) : 0;
   const pctDep = 100 - pctPhone;
   
-  // Total heures + km
-  let totalMinutes = 0, totalKm = 0;
+  // Total km
+  let totalKm = 0;
   dossiers30.forEach(d => {
-    totalMinutes += dashboardDossierMinutes(d);
     totalKm += parseFloat(d.distance) || parseFloat(d.km) || 0;
   });
   
-  // Comparatif techniciens
-  const techMap = {};
+  // Comparatif techniciens (V2.11.3 — calcul par groupes)
+  const techDossiers = {};
   dossiers30.forEach(d => {
     const u = dashboardGetUsername(d);
-    if (!techMap[u]) techMap[u] = { dossiers: 0, minutes: 0, km: 0 };
-    techMap[u].dossiers++;
-    techMap[u].minutes += dashboardDossierMinutes(d);
-    techMap[u].km += parseFloat(d.distance) || parseFloat(d.km) || 0;
+    if (!techDossiers[u]) techDossiers[u] = [];
+    techDossiers[u].push(d);
+  });
+  
+  const techMap = {};
+  Object.entries(techDossiers).forEach(([u, dList]) => {
+    techMap[u] = {
+      dossiers: dList.length,
+      minutes: dashboardTechMinutes(dList),
+      km: dList.reduce((s, d) => s + (parseFloat(d.distance) || parseFloat(d.km) || 0), 0)
+    };
   });
   const techRanking = Object.entries(techMap).sort((a, b) => b[1].dossiers - a[1].dossiers);
+  
+  // Total minutes global (somme des techs avec leur calcul par groupe)
+  const totalMinutes = Object.values(techMap).reduce((s, t) => s + t.minutes, 0);
   
   return `
     <div style="padding:0 12px 80px">
@@ -5528,17 +5613,25 @@ function renderAstreinteEnCours() {
   const weekDossiers = getWeekDossiers(0);
   const totalDossiers = weekDossiers.length;
   
-  // Calcul total heures travaillées (somme des durées)
+  // Calcul total heures travaillées (V2.11.3 — fix type telephone)
   let totalMinutes = 0;
   weekDossiers.forEach(d => {
-    if (d.dureeMinutes) {
-      totalMinutes += parseInt(d.dureeMinutes, 10) || 0;
-    } else if (d.type === 'phone' && d.dureeAppel) {
+    if (d.type === 'telephone' && d.dureeAppel) {
       // Téléphone : durée en heures (ex: "1h00", "0h30")
       const match = String(d.dureeAppel).match(/(\d+)h(\d+)?/);
       if (match) {
         totalMinutes += parseInt(match[1], 10) * 60 + (parseInt(match[2], 10) || 0);
       }
+    } else if (d.type === 'deplacement' && 
+               d.departDomicile && d.departDomicile !== 'X' && 
+               d.retourDomicile && d.retourDomicile !== 'X') {
+      // Déplacement complet : départ → retour domicile
+      try {
+        const t1 = new Date(d.departDomicile);
+        const t2 = new Date(d.retourDomicile);
+        let mins = Math.round((t2 - t1) / 60000);
+        if (mins > 0 && mins < 1440) totalMinutes += mins;
+      } catch(e) {}
     }
   });
   const totalHeuresStr = totalMinutes > 0 
@@ -6990,9 +7083,9 @@ function renderSettings() {
       </div>
       ` : ''}
       
-      <div class="text-center" style="padding:24px 0;font-size:11px;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace">
-        Astreintes AMI2S V${APP_VERSION}<br>
-        ${getMyDossiers().length} dossier(s) • ${new Date().toISOString().substring(0,10)}
+      <div class="text-center" style="padding:24px 0;font-size:11px;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace;line-height:1.7">
+        <div>Astreintes AMI2S V${APP_VERSION}</div>
+        <div>${getMyDossiers().length} dossier(s) • ${new Date().toISOString().substring(0,10)}</div>
       </div>
     </div>
     
