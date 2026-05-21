@@ -2873,7 +2873,45 @@ function openVersionModal() {
   
   const currentApp = APP_VERSION;
   const currentCloud = appConfig.latestVersion || APP_VERSION;
-  const isOutdated = compareVersions(currentCloud, currentApp) > 0;
+  const versionCompare = compareVersions(currentCloud, currentApp);
+  // versionCompare : -1 = cloud < app (admin en avance) | 0 = égal | 1 = cloud > app (MAJ dispo)
+  
+  // V2.11.1 — Gérer 3 états distincts
+  let cloudBg, cloudBorder, cloudColor, statusBanner;
+  if (versionCompare === 0) {
+    // Égal : tout est à jour, vert
+    cloudBg = 'rgba(34,197,94,0.1)';
+    cloudBorder = 'rgba(34,197,94,0.4)';
+    cloudColor = '#22c55e';
+    statusBanner = `
+      <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.3);border-radius:10px;padding:12px;margin-bottom:18px;font-size:13px;color:var(--text);display:flex;align-items:center;gap:10px">
+        <span style="font-size:20px">✅</span>
+        <div><strong>Tout est à jour</strong> — toi et le cloud êtes à la même version.</div>
+      </div>
+    `;
+  } else if (versionCompare > 0) {
+    // Cloud en avance : il y a une MAJ disponible (pour toi)
+    cloudBg = 'rgba(239,68,68,0.1)';
+    cloudBorder = 'rgba(239,68,68,0.4)';
+    cloudColor = '#ef4444';
+    statusBanner = `
+      <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:12px;margin-bottom:18px;font-size:13px;color:var(--text);display:flex;align-items:center;gap:10px">
+        <span style="font-size:20px">⚠️</span>
+        <div><strong>Une mise à jour est disponible</strong> — recharge l'app (Ctrl+Shift+R) pour récupérer la dernière version.</div>
+      </div>
+    `;
+  } else {
+    // App en avance : tu as une version plus récente que celle annoncée au cloud
+    cloudBg = 'rgba(234,179,8,0.1)';
+    cloudBorder = 'rgba(234,179,8,0.4)';
+    cloudColor = '#eab308';
+    statusBanner = `
+      <div style="background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.3);border-radius:10px;padding:12px;margin-bottom:18px;font-size:13px;color:var(--text);display:flex;align-items:center;gap:10px">
+        <span style="font-size:20px">📢</span>
+        <div><strong>Tu utilises une version plus récente que le cloud.</strong> Pense à <strong>"Publier ${currentApp}"</strong> ci-dessous pour informer tes utilisateurs.</div>
+      </div>
+    `;
+  }
   
   overlay.innerHTML = `
     <div class="modal" style="max-width:560px">
@@ -2882,16 +2920,18 @@ function openVersionModal() {
         <button class="modal-close" data-action="ver-modal-close">×</button>
       </div>
       <div class="modal-body" style="padding:20px">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
           <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
             <div style="font-size:10px;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:4px">Cette app</div>
             <div style="font-size:20px;font-weight:800;color:var(--text)">${currentApp}</div>
           </div>
-          <div style="background:${isOutdated ? 'rgba(239,68,68,0.1)' : 'rgba(34,197,94,0.1)'};border:1px solid ${isOutdated ? 'rgba(239,68,68,0.4)' : 'rgba(34,197,94,0.4)'};border-radius:10px;padding:12px;text-align:center">
+          <div style="background:${cloudBg};border:1px solid ${cloudBorder};border-radius:10px;padding:12px;text-align:center">
             <div style="font-size:10px;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:4px">Cloud</div>
-            <div style="font-size:20px;font-weight:800;color:${isOutdated ? '#ef4444' : '#22c55e'}">${currentCloud}</div>
+            <div style="font-size:20px;font-weight:800;color:${cloudColor}">${currentCloud}</div>
           </div>
         </div>
+        
+        ${statusBanner}
         
         <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:18px;font-size:13px;color:var(--text)">
           <strong>Comment utiliser :</strong><br>
@@ -2903,7 +2943,8 @@ function openVersionModal() {
         
         <div style="margin-bottom:14px">
           <label style="display:block;font-size:11px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;margin-bottom:6px;letter-spacing:0.5px">Numéro de version (ex: 2.11.0)</label>
-          <input type="text" id="ver-num" value="${escapeHtml(currentCloud)}" placeholder="2.11.0" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:15px">
+          <input type="text" id="ver-num" value="${escapeHtml(currentApp)}" placeholder="2.11.0" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:15px">
+          ${versionCompare < 0 ? `<div style="font-size:11px;color:#eab308;margin-top:4px">💡 Le champ est pré-rempli avec la version de cette app (${currentApp}). Clique "Publier" pour synchroniser le cloud.</div>` : ''}
         </div>
         
         <div style="margin-bottom:14px">
