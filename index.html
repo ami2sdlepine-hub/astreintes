@@ -3823,26 +3823,63 @@ function dashboardGetUsername(dossier) {
   return 'Inconnu';
 }
 
-// Calculer les minutes de travail d'un dossier
+// Calculer les minutes de travail d'un dossier (V2.11.1 — gestion étendue)
 function dashboardDossierMinutes(d) {
   let totalMinutes = 0;
+  
+  // Cas 1 : champ dureeMinutes directement (dossiers clôturés)
   if (d.dureeMinutes) {
-    totalMinutes = parseInt(d.dureeMinutes, 10) || 0;
-  } else if (d.type === 'phone' && d.dureeAppel) {
-    const match = String(d.dureeAppel).match(/(\d+)h(\d+)?/);
+    const v = parseInt(d.dureeMinutes, 10);
+    if (!isNaN(v) && v > 0) return v;
+  }
+  
+  // Cas 2 : téléphone - durée d'appel
+  if (d.type === 'phone' && d.dureeAppel) {
+    const s = String(d.dureeAppel);
+    // Format "1h00", "0h30"
+    let match = s.match(/(\d+)h(\d+)?/i);
     if (match) {
       totalMinutes = parseInt(match[1], 10) * 60 + (parseInt(match[2], 10) || 0);
+      if (totalMinutes > 0) return totalMinutes;
     }
-  } else if (d.departDomicile && d.retourDomicile) {
-    // Calcul depuis horaires
+    // Format "60min" ou nombre brut
+    match = s.match(/(\d+)\s*min/i);
+    if (match) return parseInt(match[1], 10);
+    const num = parseInt(s, 10);
+    if (!isNaN(num) && num > 0 && num < 600) return num;
+  }
+  
+  // Cas 3 : déplacement - horaires complets (départ → retour domicile)
+  if (d.departDomicile && d.retourDomicile) {
     try {
       const t1 = new Date(d.departDomicile);
       const t2 = new Date(d.retourDomicile);
-      totalMinutes = Math.round((t2 - t1) / 60000);
-      if (totalMinutes < 0 || totalMinutes > 1440) totalMinutes = 0;
+      const mins = Math.round((t2 - t1) / 60000);
+      if (mins > 0 && mins < 1440) return mins;
     } catch(e) {}
   }
-  return totalMinutes;
+  
+  // Cas 4 (V2.11.1) : déplacement partiel - depuis dateAppel jusqu'au retour
+  if (d.dateAppel && d.retourDomicile) {
+    try {
+      const t1 = new Date(d.dateAppel);
+      const t2 = new Date(d.retourDomicile);
+      const mins = Math.round((t2 - t1) / 60000);
+      if (mins > 0 && mins < 1440) return mins;
+    } catch(e) {}
+  }
+  
+  // Cas 5 (V2.11.1) : déplacement - arrivée → départ site (durée sur place)
+  if (d.arriveeSite && d.departSite) {
+    try {
+      const t1 = new Date(d.arriveeSite);
+      const t2 = new Date(d.departSite);
+      const mins = Math.round((t2 - t1) / 60000);
+      if (mins > 0 && mins < 1440) return mins;
+    } catch(e) {}
+  }
+  
+  return 0;
 }
 
 // Formater minutes en "Xh YYm"
