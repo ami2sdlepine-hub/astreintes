@@ -2406,7 +2406,16 @@ async function fetchAppConfig() {
     if (res.ok && res.config) {
       appConfig.maintenanceMode = res.config.maintenanceMode === true || res.config.maintenanceMode === 'true';
       appConfig.maintenanceMessage = res.config.maintenanceMessage || appConfig.maintenanceMessage;
-      appConfig.latestVersion = res.config.latestVersion || APP_VERSION;
+      // V2.11.2 FIX : valider que latestVersion est bien un numéro de version, pas une date
+      const rawVersion = res.config.latestVersion;
+      const versionStr = (typeof rawVersion === 'string') ? rawVersion : String(rawVersion || '');
+      if (/^\d+\.\d+(\.\d+)?$/.test(versionStr)) {
+        appConfig.latestVersion = versionStr;
+      } else {
+        // Valeur corrompue (probablement une date) → fallback à la version actuelle
+        console.warn('latestVersion corrompue :', rawVersion, '→ fallback', APP_VERSION);
+        appConfig.latestVersion = APP_VERSION;
+      }
       appConfig.updateMessage = res.config.updateMessage || appConfig.updateMessage;
       appConfig.forceUpdate = res.config.forceUpdate === true || res.config.forceUpdate === 'true';
       appConfig.changelog = res.config.changelog || '';
