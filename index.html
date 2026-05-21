@@ -17,8 +17,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.0/jspdf.plugin.autotable.min.js"></script>
+<!-- V2.10.16 — jsPDF chargé en différé (lazy) via loadJsPDF() au moment du besoin -->
+<!-- Ancien chargement bloquant supprimé pour accélérer le démarrage de ~250 Ko -->
 
 <style>
 /* ============================================================================
@@ -1698,7 +1698,7 @@ body { font-size: 15px; line-height: 1.5; }
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   V2.10.15 — Manager view (dépannage)
+   V2.10.16 — Manager view (dépannage)
    ═══════════════════════════════════════════════════════════════ */
 .manager-week-banner {
   background: var(--surface);
@@ -1888,9 +1888,232 @@ body { font-size: 15px; line-height: 1.5; }
   font-style: italic;
 }
 
+/* ============================================================ */
+/* V2.10.16 — SPLASH SCREEN (affiché immédiatement au démarrage)  */
+/* ============================================================ */
+#splash-screen {
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(135deg, #0a0e1a 0%, #1a2238 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+  transition: opacity 0.4s ease-out, visibility 0.4s ease-out;
+}
+#splash-screen.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+#splash-screen .splash-logo {
+  width: 100px;
+  height: 100px;
+  margin-bottom: 24px;
+  animation: splash-pulse 1.5s ease-in-out infinite;
+  filter: drop-shadow(0 4px 12px rgba(37, 99, 235, 0.4));
+}
+#splash-screen .splash-title {
+  color: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  letter-spacing: 0.5px;
+}
+#splash-screen .splash-subtitle {
+  color: #94a3b8;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  margin-bottom: 32px;
+}
+#splash-screen .splash-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: splash-spin 0.8s linear infinite;
+}
+#splash-screen .splash-status {
+  margin-top: 20px;
+  color: #64748b;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.3px;
+}
+@keyframes splash-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.05); opacity: 0.85; }
+}
+@keyframes splash-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ============================================================ */
+/* V2.10.16 — BANDEAU "ASTREINTE EN COURS"                       */
+/* ============================================================ */
+.astreinte-active {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(220, 38, 38, 0.06) 100%);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  position: relative;
+  overflow: hidden;
+}
+.astreinte-active::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: linear-gradient(180deg, #ef4444 0%, #dc2626 100%);
+}
+.astreinte-active-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.astreinte-active-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #ef4444;
+  color: white;
+  padding: 3px 9px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+.astreinte-active-badge::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: white;
+  animation: pulse-red 1.4s ease-in-out infinite;
+}
+@keyframes pulse-red {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.85); }
+}
+.astreinte-active-countdown {
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.astreinte-active-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.astreinte-stat {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  text-align: center;
+}
+.astreinte-stat-value {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.astreinte-stat-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  letter-spacing: 0.5px;
+  margin-top: 2px;
+}
+.astreinte-quick-call-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: white;
+  border: none;
+  padding: 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.astreinte-quick-call-btn:active {
+  transform: scale(0.98);
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.4);
+}
+.astreinte-quick-call-btn .phone-icon {
+  font-size: 18px;
+}
+
+/* ============================================================ */
+/* V2.10.16 — INDICATEUR ONLINE/OFFLINE                          */
+/* ============================================================ */
+.network-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+.network-badge.online {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+.network-badge.offline {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+.network-badge .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.network-badge.online .dot {
+  animation: pulse-online 2s ease-in-out infinite;
+}
+@keyframes pulse-online {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
 </style>
 </head>
 <body>
+<!-- V2.10.16 — Splash screen affiché immédiatement, masqué quand l'app est prête -->
+<div id="splash-screen">
+  <svg class="splash-logo" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="50" cy="50" r="45" fill="none" stroke="#2563eb" stroke-width="3" opacity="0.3"/>
+    <path d="M50 20 L50 50 L70 65" stroke="#2563eb" stroke-width="4" stroke-linecap="round" fill="none"/>
+    <circle cx="50" cy="50" r="3" fill="#2563eb"/>
+  </svg>
+  <div class="splash-title">Astreintes</div>
+  <div class="splash-subtitle">Chargement de l'application...</div>
+  <div class="splash-spinner"></div>
+  <div class="splash-status" id="splash-status">Initialisation</div>
+</div>
+
 <div id="app"></div>
 <div class="toast-container" id="toasts"></div>
 
@@ -1900,7 +2123,7 @@ const AMI2S_LOGO_BASE64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAI
 
 
 // ============================================================================
-// V2.10.15 — LOGO PERSONNALISABLE
+// V2.10.16 — LOGO PERSONNALISABLE
 // ============================================================================
 // Helper pour obtenir le logo actuel (custom si défini, sinon défaut AMI2S)
 function getLogo() {
@@ -1911,6 +2134,70 @@ function getLogo() {
   } catch(e) {}
   return AMI2S_LOGO_BASE64;
 }
+
+// ============================================================================
+// V2.10.16 — DÉTECTION RÉSEAU ONLINE/OFFLINE
+// ============================================================================
+const networkState = {
+  online: navigator.onLine,
+  listeners: []
+};
+
+// ============================================================================
+// V2.10.16 — LAZY LOAD jsPDF (chargement différé pour accélérer le démarrage)
+// ============================================================================
+let _jsPdfLoadPromise = null;
+function loadJsPDF() {
+  if (_jsPdfLoadPromise) return _jsPdfLoadPromise;
+  _jsPdfLoadPromise = new Promise((resolve, reject) => {
+    if (window.jspdf && window.jspdf.jsPDF) {
+      resolve(window.jspdf.jsPDF);
+      return;
+    }
+    const s1 = document.createElement('script');
+    s1.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+    s1.onload = () => {
+      const s2 = document.createElement('script');
+      s2.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.0/jspdf.plugin.autotable.min.js';
+      s2.onload = () => resolve(window.jspdf.jsPDF);
+      s2.onerror = () => reject(new Error('Échec chargement jspdf-autotable'));
+      document.head.appendChild(s2);
+    };
+    s1.onerror = () => reject(new Error('Échec chargement jsPDF'));
+    document.head.appendChild(s1);
+  });
+  return _jsPdfLoadPromise;
+}
+
+function renderNetworkBadge() {
+  const online = networkState.online;
+  return `<span class="network-badge ${online ? 'online' : 'offline'}" title="${online ? 'Connecté au serveur' : 'Hors ligne - les modifications seront synchronisées au retour'}">
+    <span class="dot"></span>${online ? 'En ligne' : 'Hors ligne'}
+  </span>`;
+}
+
+function setupNetworkDetection() {
+  const updateState = () => {
+    const wasOnline = networkState.online;
+    networkState.online = navigator.onLine;
+    if (wasOnline !== networkState.online) {
+      // Changement d'état : toast + re-render
+      if (networkState.online) {
+        if (typeof toast === 'function') toast('🟢 Connexion rétablie - synchronisation en cours', 'success');
+        // Tenter une sync auto
+        if (authState.isAuthenticated && typeof cloudPull === 'function') {
+          setTimeout(() => cloudPull(false), 500);
+        }
+      } else {
+        if (typeof toast === 'function') toast('🔴 Hors ligne - vos modifications seront sauvegardées localement', 'warning');
+      }
+      if (typeof render === 'function') render();
+    }
+  };
+  window.addEventListener('online', updateState);
+  window.addEventListener('offline', updateState);
+}
+setupNetworkDetection();
 
 // Modale upload/reset logo (admin uniquement)
 function openLogoModal() {
@@ -2268,7 +2555,7 @@ function renderLoginScreen() {
           ${authState.loading ? '⏳ Connexion...' : '🔓 Se connecter'}
         </button>
         <div class="login-footer">
-          Astreintes AMI2S V2.10.15 • Session 7 jours
+          Astreintes AMI2S V2.10.16 • Session 7 jours
         </div>
       </div>
     </div>
@@ -2317,6 +2604,15 @@ async function startMainApp() {
 
     await loadState();
 
+    // V2.10.16 — Précharge cloudPull EN PARALLÈLE (non bloquant)
+    // On lance le pull cloud immédiatement, sans attendre, pour gagner du temps perçu
+    let cloudPullPromise = null;
+    if (authState.isAuthenticated && authState.user && authState.user.role !== 'manager') {
+      cloudPullPromise = cloudPull(false).catch(err => {
+        console.warn('cloudPull en parallèle a échoué:', err);
+      });
+    }
+
     // V2.10.3 — Récupérer les settings personnels depuis le cloud
     if (authState.isAuthenticated) {
       try {
@@ -2333,7 +2629,7 @@ async function startMainApp() {
 
     applyTheme();
     
-    // V2.10.15 — Page d'accueil selon le rôle
+    // V2.10.16 — Page d'accueil selon le rôle
     if (authState.user && authState.user.role === 'manager') {
       view.current = 'manager-view';
       render();
@@ -2344,6 +2640,11 @@ async function startMainApp() {
     }
 
     if ('serviceWorker' in navigator) {
+      // V2.10.16 — Service Worker minimal
+      // NOTE : créé via Blob URL, donc scope limité (ne peut PAS intercepter les fetches
+      // de la page principale dans un déploiement single-file GitHub Pages).
+      // Pour un vrai cache PWA, il faudrait un fichier sw.js séparé hébergé.
+      // Ici on garde un SW minimal pour conformité PWA install.
       const swCode = `
         self.addEventListener('install', e => self.skipWaiting());
         self.addEventListener('activate', e => self.clients.claim());
@@ -2359,9 +2660,11 @@ async function startMainApp() {
       requestGeolocationPermission();
     }
 
-    // V2.10.1 — Cloud pull au démarrage (uniquement pour les techs/admin qui ont leurs propres dossiers)
-    if (authState.isAuthenticated && authState.user && authState.user.role !== 'manager') {
-      setTimeout(() => cloudPull(false), 1500);
+    // V2.10.16 — Attendre la fin du pull cloud lancé en parallèle, puis re-render
+    if (cloudPullPromise) {
+      cloudPullPromise.then(() => {
+        if (typeof render === 'function') render();
+      });
     }
   } catch (err) {
     console.error('startMainApp error', err);
@@ -2416,12 +2719,12 @@ async function cloudPull(showFeedback = false) {
     const remoteDossiers = res.dossiers || [];
     const currentUserId = authState.user && authState.user.id;
 
-    // V2.10.15 — Filtrage côté frontend : on ne traite QUE les dossiers
+    // V2.10.16 — Filtrage côté frontend : on ne traite QUE les dossiers
     // appartenant à l'utilisateur connecté (admin verra tous les dossiers
     // de l'équipe via le futur Dashboard, pas ici)
     const myRemoteDossiers = remoteDossiers.filter(d => d.user_id === currentUserId);
 
-    // V2.10.15 — Identifier les dossiers locaux à supprimer
+    // V2.10.16 — Identifier les dossiers locaux à supprimer
     // (présents en local mais plus dans le cloud OU appartenant à un autre user)
     const remoteIdsByUser = new Set(myRemoteDossiers.map(d => d.id));
     const toDelete = state.dossiers.filter(d => {
@@ -2442,7 +2745,7 @@ async function cloudPull(showFeedback = false) {
     state.dossiers.forEach(d => { localById[d.id] = d; });
 
     let added = 0, updated = 0, repaired = 0, restored = 0;
-    const toRepair = []; // V2.10.15 — dossiers à re-pousser vers le cloud
+    const toRepair = []; // V2.10.16 — dossiers à re-pousser vers le cloud
 
     for (const remote of myRemoteDossiers) {
       const adapted = adaptCloudToLocal(remote);
@@ -2453,7 +2756,7 @@ async function cloudPull(showFeedback = false) {
         added++;
       } else {
         // ────────────────────────────────────────────────────────────
-        // V2.10.15 — RÉPARATION PRIORITAIRE : récupérer departSite depuis le cloud
+        // V2.10.16 — RÉPARATION PRIORITAIRE : récupérer departSite depuis le cloud
         // ────────────────────────────────────────────────────────────
         // Si le cloud a finIntervention rempli MAIS le local n'a pas departSite,
         // c'est que le local a été corrompu (bug pré-V2.10.6). On restaure depuis le cloud.
@@ -2471,7 +2774,7 @@ async function cloudPull(showFeedback = false) {
           continue;
         }
 
-        // V2.10.15 — Réparation inverse : local a departSite mais cloud a finIntervention vide
+        // V2.10.16 — Réparation inverse : local a departSite mais cloud a finIntervention vide
         // On re-pousse vers le cloud
         if (localHasDepartSite && !cloudHasFinInter) {
           toRepair.push(local);
@@ -2491,7 +2794,7 @@ async function cloudPull(showFeedback = false) {
       }
     }
 
-    // V2.10.15 — Toast informatif sur la restauration
+    // V2.10.16 — Toast informatif sur la restauration
     if (restored > 0) {
       console.log(`✅ Restauration : ${restored} dossier(s) ont récupéré leur "Départ du site" depuis le cloud`);
       setTimeout(() => {
@@ -2499,7 +2802,7 @@ async function cloudPull(showFeedback = false) {
       }, 500);
     }
 
-    // V2.10.15 — Re-pousser les dossiers à réparer (en arrière-plan, pas bloquant)
+    // V2.10.16 — Re-pousser les dossiers à réparer (en arrière-plan, pas bloquant)
     if (toRepair.length > 0) {
       console.log(`Réparation : ${toRepair.length} dossier(s) avec departSite manquant côté cloud`);
       (async () => {
@@ -2584,7 +2887,7 @@ function adaptLocalToCloud(d) {
     rapportNum: d.rapportNum || d.rapportN || '',
     departDomicile: d.departDomicile || '',
     arriveeSite: d.arriveeSite || '',
-    // V2.10.15 — Bug fix : le champ local s'appelle "departSite" (départ du site),
+    // V2.10.16 — Bug fix : le champ local s'appelle "departSite" (départ du site),
     // on l'envoie dans la colonne cloud "finIntervention" (= heure de fin d'intervention sur site)
     finIntervention: d.departSite || d.finIntervention || '',
     retourDomicile: d.retourDomicile || '',
@@ -2604,7 +2907,7 @@ function adaptLocalToCloud(d) {
 
 function adaptCloudToLocal(d) {
   // On préserve les champs natifs du local pour éviter de casser la V2.9.12
-  // V2.10.15 — Forcer la conversion en string pour les champs texte
+  // V2.10.16 — Forcer la conversion en string pour les champs texte
   // (Google Sheets peut retourner des nombres pour codeAstreinte, rapportNum, etc.)
   const toStr = (v) => (v === null || v === undefined || v === '') ? '' : String(v);
   return {
@@ -2621,13 +2924,13 @@ function adaptCloudToLocal(d) {
     rapportN: toStr(d.rapportNum), // alias rétrocompat
     departDomicile: d.departDomicile,
     arriveeSite: d.arriveeSite,
-    // V2.10.15 — Bug fix : on recupère "finIntervention" du cloud et on le réinjecte dans "departSite" local
+    // V2.10.16 — Bug fix : on recupère "finIntervention" du cloud et on le réinjecte dans "departSite" local
     finIntervention: d.finIntervention,
     departSite: d.finIntervention || null,
     retourDomicile: d.retourDomicile,
     adresse: toStr(d.adresse),
     adresseSite: toStr(d.adresse), // alias rétrocompat
-    // V2.10.15 — Sécurité : km doit être un nombre valide, sinon null
+    // V2.10.16 — Sécurité : km doit être un nombre valide, sinon null
     km: (() => { const n = safeKm(d.km); return n > 0 ? n : null; })(),
     motif: toStr(d.motif),
     rapport: toStr(d.rapport),
@@ -2651,7 +2954,7 @@ async function migrateLocalDossiersToCloud() {
     return;
   }
 
-  // V2.10.15 — Ne migrer que les dossiers qui m'appartiennent ou qui n'ont pas encore de user_id
+  // V2.10.16 — Ne migrer que les dossiers qui m'appartiennent ou qui n'ont pas encore de user_id
   const myId = authState.user && authState.user.id;
   const toMigrate = state.dossiers.filter(d => !d.user_id || d.user_id === myId);
   const localCount = toMigrate.length;
@@ -2678,7 +2981,7 @@ async function migrateLocalDossiersToCloud() {
 
   if (errors === 0) {
     toast(`${success} dossiers migrés avec succès`, 'success');
-    // V2.10.15 — Flag de migration par user (et non global)
+    // V2.10.16 — Flag de migration par user (et non global)
     if (authState.user && authState.user.id) {
       localStorage.setItem('astreintes_migration_done_' + authState.user.id, '1');
     }
@@ -2689,7 +2992,7 @@ async function migrateLocalDossiersToCloud() {
 }
 
 function hasMigrationBeenDone() {
-  // V2.10.15 — Flag par user (chaque user a sa propre migration)
+  // V2.10.16 — Flag par user (chaque user a sa propre migration)
   if (!authState.user || !authState.user.id) return false;
   return localStorage.getItem('astreintes_migration_done_' + authState.user.id) === '1';
 }
@@ -2735,7 +3038,7 @@ function scheduleUserSettingsSave() {
       alertesActives: state.settings.alertesActives,
       favorisEtablissements: state.settings.favorisEtablissements,
       agence: state.settings.agence,
-      // V2.10.15 — Logo personnalisé (admin)
+      // V2.10.16 — Logo personnalisé (admin)
       customLogo: state.settings.customLogo
     };
     try {
@@ -3122,7 +3425,7 @@ function renderAdminLogs() {
 
 
 // ============================================================================
-// ASTREINTES AMI2S V2.10.15 — MODULE MANAGER (Patch 4)
+// ASTREINTES AMI2S V2.10.16 — MODULE MANAGER (Patch 4)
 // ============================================================================
 // Vue dépannage pour le service ERP : tous les dossiers de tous les techniciens
 // en lecture seule, format "mail Outlook" mais en interface pro.
@@ -3266,7 +3569,7 @@ function getManagerFiltered() {
   }
 
   return dossiers.sort((a, b) => {
-    // V2.10.15 — Tri intelligent : non-récupérés en premier, puis date décroissante
+    // V2.10.16 — Tri intelligent : non-récupérés en premier, puis date décroissante
     const aRecup = a.recupereERP ? 1 : 0;
     const bRecup = b.recupereERP ? 1 : 0;
     if (aRecup !== bRecup) return aRecup - bRecup; // 0 (non-récup) avant 1 (récup)
@@ -3333,7 +3636,7 @@ function renderManagerView() {
           <div class="manager-week-num">Semaine n°${weekNum} ${weekLabel}</div>
           <div class="manager-week-dates">${fmtDateShort(week.start)} 09h → ${fmtDateShort(week.end)} 09h</div>
           ${(() => {
-            // V2.10.15 — Mini-stats équipe
+            // V2.10.16 — Mini-stats équipe
             const techsActifs = new Set(weekDossiers.map(d => d.username || '?')).size;
             const recupered = weekDossiers.filter(d => d.recupereERP).length;
             const total = weekDossiers.length;
@@ -3390,7 +3693,7 @@ function renderManagerView() {
       </div>
 
       <div class="text-center" style="padding:24px 0;font-size:11px;color:var(--text-tertiary);font-family:monospace">
-        Vue Manager V2.10.15 • ${filtered.length} dossier(s) affiché(s)
+        Vue Manager V2.10.16 • ${filtered.length} dossier(s) affiché(s)
       </div>
     </div>
     ${authState.user && authState.user.role === 'manager' ? renderBottomNav() : ''}
@@ -3494,7 +3797,7 @@ function getWeekNumber(date) {
   return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
 }
 
-// ── V2.10.15 — Export Excel/CSV de la semaine ────────────────────
+// ── V2.10.16 — Export Excel/CSV de la semaine ────────────────────
 function managerExportWeekCSV() {
   const weekDossiers = getManagerWeekDossiers();
   if (weekDossiers.length === 0) {
@@ -3566,7 +3869,7 @@ function managerExportWeekCSV() {
 }
 
 // ============================================================================
-// FIN MODULE MANAGER V2.10.15
+// FIN MODULE MANAGER V2.10.16
 // ============================================================================
 
 
@@ -3610,7 +3913,7 @@ function fmtTime(d) {
   if (!d) return '—';
   return new Date(d).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 }
-// V2.10.15 — Helper sécurisé pour parser un km : refuse les dates et valeurs absurdes
+// V2.10.16 — Helper sécurisé pour parser un km : refuse les dates et valeurs absurdes
 function safeKm(v) {
   if (v === null || v === undefined || v === '') return 0;
   const s = String(v);
@@ -4018,7 +4321,7 @@ function renderSyncBadge() {
 // ----------------------------------------------------------------------------
 // BUSINESS LOGIC
 // ----------------------------------------------------------------------------
-// V2.10.15 — Source unique de vérité : dossiers du user connecté uniquement
+// V2.10.16 — Source unique de vérité : dossiers du user connecté uniquement
 // Les vues Dossiers/Stats/Export utilisent toutes cette fonction.
 // Les rôles Manager/Admin auront accès aux dossiers de toute l'équipe via
 // des vues dédiées (Patch 4 Manager / Patch 3b Dashboard).
@@ -4042,6 +4345,89 @@ function getWeekDossiers(offset = 0) {
   });
 }
 
+// V2.10.16 — Bandeau "Astreinte en cours" intelligent
+// S'affiche uniquement si l'utilisateur regarde la semaine actuelle ET qu'on est dans la fenêtre d'astreinte
+function renderAstreinteEnCours() {
+  // Uniquement sur la semaine actuelle
+  if (view.weekOffset !== 0) return '';
+  
+  const now = new Date();
+  const { start, end } = getAstreinteWeek(now);
+  
+  // Vérifier qu'on est BIEN dans la fenêtre [start, end] de l'astreinte
+  if (now < start || now >= end) return '';
+  
+  // Calcul du temps restant
+  const msRestant = end - now;
+  const totalHours = Math.floor(msRestant / (1000 * 60 * 60));
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+  let countdownText = '';
+  if (days > 0) {
+    countdownText = `${days}j ${hours}h restantes`;
+  } else if (hours > 0) {
+    countdownText = `${hours}h restantes`;
+  } else {
+    const minutes = Math.floor((msRestant / (1000 * 60)) % 60);
+    countdownText = `${minutes}min restantes`;
+  }
+  
+  // Stats
+  const weekDossiers = getWeekDossiers(0);
+  const totalDossiers = weekDossiers.length;
+  
+  // Calcul total heures travaillées (somme des durées)
+  let totalMinutes = 0;
+  weekDossiers.forEach(d => {
+    if (d.dureeMinutes) {
+      totalMinutes += parseInt(d.dureeMinutes, 10) || 0;
+    } else if (d.type === 'phone' && d.dureeAppel) {
+      // Téléphone : durée en heures (ex: "1h00", "0h30")
+      const match = String(d.dureeAppel).match(/(\d+)h(\d+)?/);
+      if (match) {
+        totalMinutes += parseInt(match[1], 10) * 60 + (parseInt(match[2], 10) || 0);
+      }
+    }
+  });
+  const totalHeuresStr = totalMinutes > 0 
+    ? `${Math.floor(totalMinutes / 60)}h${String(totalMinutes % 60).padStart(2, '0')}`
+    : '0h00';
+  
+  // Total km
+  let totalKm = 0;
+  weekDossiers.forEach(d => {
+    if (d.distance) totalKm += parseFloat(d.distance) || 0;
+  });
+  const totalKmStr = totalKm > 0 ? totalKm.toFixed(0) + ' km' : '0 km';
+  
+  return `
+    <div class="astreinte-active">
+      <div class="astreinte-active-header">
+        <span class="astreinte-active-badge">Astreinte en cours</span>
+        <span class="astreinte-active-countdown">${countdownText}</span>
+      </div>
+      <div class="astreinte-active-stats">
+        <div class="astreinte-stat">
+          <div class="astreinte-stat-value">${totalDossiers}</div>
+          <div class="astreinte-stat-label">Dossier${totalDossiers > 1 ? 's' : ''}</div>
+        </div>
+        <div class="astreinte-stat">
+          <div class="astreinte-stat-value">${totalHeuresStr}</div>
+          <div class="astreinte-stat-label">Travaillées</div>
+        </div>
+        <div class="astreinte-stat">
+          <div class="astreinte-stat-value">${totalKmStr}</div>
+          <div class="astreinte-stat-label">Parcourus</div>
+        </div>
+      </div>
+      <button class="astreinte-quick-call-btn" data-action="quick-call">
+        <span class="phone-icon">📞</span>
+        <span>NOUVEL APPEL</span>
+      </button>
+    </div>
+  `;
+}
+
 function getFilteredDossiers() {
   let dossiers = view.weekOffset !== null ? getWeekDossiers(view.weekOffset) : getMyDossiers();
   dossiers = [...dossiers].sort((a, b) => new Date(b.dateAppel) - new Date(a.dateAppel));
@@ -4054,7 +4440,7 @@ function getFilteredDossiers() {
   // Filtre recherche
   if (view.searchQuery && view.searchQuery.trim()) {
     const q = view.searchQuery.toLowerCase().trim();
-    // V2.10.15 — Bug fix : String() systématique pour éviter le crash sur les champs numériques (codeAstreinte, rapportNum)
+    // V2.10.16 — Bug fix : String() systématique pour éviter le crash sur les champs numériques (codeAstreinte, rapportNum)
     dossiers = dossiers.filter(d =>
       String(d.etablissement || '').toLowerCase().includes(q) ||
       String(d.motif || '').toLowerCase().includes(q) ||
@@ -4090,7 +4476,7 @@ function findOpenSequence() {
   // - clôturé avec retourDomicile = 'X' (chaînage en cours, n'a pas encore enregistré retour)
   // ET qui n'a PAS de retour domicile horodaté (sinon la séquence est fermée)
   
-  // V2.10.15 — Ne chercher que dans les dossiers du user connecté
+  // V2.10.16 — Ne chercher que dans les dossiers du user connecté
   const myDossiers = getMyDossiers();
   
   const candidatesEnCours = myDossiers.filter(d => 
@@ -4156,7 +4542,7 @@ function render() {
     // V2.10.2 — Vues admin
     case 'admin-users': app.innerHTML = renderAdminUsers(); break;
     case 'admin-logs': app.innerHTML = renderAdminLogs(); break;
-    // V2.10.15 — Vue manager (dépannage)
+    // V2.10.16 — Vue manager (dépannage)
     case 'manager-view': app.innerHTML = renderManagerView(); break;
   }
   attachListeners();
@@ -4195,7 +4581,7 @@ function render() {
 }
 
 function renderBottomNav() {
-  // V2.10.15 — Bottom nav adapté au rôle
+  // V2.10.16 — Bottom nav adapté au rôle
   let items;
   if (authState.user && authState.user.role === 'manager') {
     // Manager : interface dépannage uniquement
@@ -4246,6 +4632,7 @@ function renderList() {
           </div>
         </div>
         <div class="header-actions">
+          ${renderNetworkBadge()}
           <button class="icon-btn" data-action="prev-week" title="Semaine précédente">‹</button>
           <button class="icon-btn" data-action="next-week" title="Semaine suivante" ${view.weekOffset >= 0 ? 'disabled style="opacity:0.3"' : ''}>›</button>
         </div>
@@ -4261,6 +4648,8 @@ function renderList() {
         </div>
       </div>
     </header>
+    
+    ${renderAstreinteEnCours()}
     
     ${openSeq ? `
       <div class="sequence-indicator" data-action="show-sequence">
@@ -4878,7 +5267,7 @@ function renderExport() {
   
   // === Rapport nuit/période avec jours fériés FR ===
   const nightPeriod = computeNightPeriod();
-  // V2.10.15 — Rapport de nuit limité aux dossiers du user
+  // V2.10.16 — Rapport de nuit limité aux dossiers du user
   const nightDossiers = getMyDossiers().filter(d => {
     const dt = new Date(d.dateAppel);
     return dt >= nightPeriod.start && dt <= nightPeriod.end;
@@ -5217,7 +5606,7 @@ function renderSettings() {
         </div>
         <div style="padding:12px;display:flex;flex-direction:column;gap:8px">
           ${(() => {
-            // V2.10.15 — Détection intelligente : dossiers locaux sans user_id (orphelins)
+            // V2.10.16 — Détection intelligente : dossiers locaux sans user_id (orphelins)
             const myId = authState.user && authState.user.id;
             const orphans = state.dossiers.filter(d => !d.user_id);
             const orphansCount = orphans.length;
@@ -5243,7 +5632,7 @@ function renderSettings() {
         </div>
       </div>
       
-      <!-- V2.10.15 — Service dépannage (visible pour admin ET manager) -->
+      <!-- V2.10.16 — Service dépannage (visible pour admin ET manager) -->
       ${isManagerOrAdmin() ? `
       <div class="settings-section">
         <div class="settings-section-title">🚨 Service Dépannage</div>
@@ -5313,7 +5702,7 @@ function renderSettings() {
         </div>
       </div>
       
-      <!-- V2.10.15 — Sections spécifiques techniciens & admins (cachées au manager) -->
+      <!-- V2.10.16 — Sections spécifiques techniciens & admins (cachées au manager) -->
       ${authState.user && authState.user.role !== 'manager' ? `
       <div class="settings-section">
         <div class="settings-section-title">Identité technicien</div>
@@ -5424,7 +5813,7 @@ function renderSettings() {
       ` : ''}
       
       <div class="text-center" style="padding:24px 0;font-size:11px;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace">
-        Astreintes AMI2S V2.10.15<br>
+        Astreintes AMI2S V2.10.16<br>
         ${getMyDossiers().length} dossier(s) • ${new Date().toISOString().substring(0,10)}
       </div>
     </div>
@@ -5805,7 +6194,7 @@ function renderSequence() {
 function attachListeners() {
   $$('[data-action]').forEach(el => el.addEventListener('click', handleAction));
   
-  // V2.10.15 — Binding pour la recherche dans la vue Manager
+  // V2.10.16 — Binding pour la recherche dans la vue Manager
   const mgrSearch = document.getElementById('manager-search-input');
   if (mgrSearch) {
     mgrSearch.addEventListener('input', (e) => {
@@ -5898,7 +6287,7 @@ async function handleAction(e) {
     case 'nav':
       view.current = t.dataset.view;
       if (view.current === 'list') view.dossierId = null;
-      // V2.10.15 — Si on navigue vers manager-view, charger les dossiers
+      // V2.10.16 — Si on navigue vers manager-view, charger les dossiers
       if (view.current === 'manager-view' && isManagerOrAdmin()) {
         render();
         managerLoadDossiers();
@@ -5913,6 +6302,10 @@ async function handleAction(e) {
       break;
     case 'quick-new':
       await quickNew();
+      break;
+    case 'quick-call':
+      // V2.10.16 — Saisie rapide téléphone (3 étapes)
+      await quickPhoneCall();
       break;
     case 'cancel-new':
       tempDossier = null;
@@ -6076,7 +6469,7 @@ async function handleAction(e) {
       adminState.creatingUser = false;
       render();
       break;
-    // V2.10.15 — Logo personnalisable
+    // V2.10.16 — Logo personnalisable
     case 'change-logo':
       if (!isAdmin()) { toast('Accès refusé', 'error'); break; }
       openLogoModal();
@@ -6116,7 +6509,7 @@ async function handleAction(e) {
     case 'admin-refresh-logs':
       await adminLoadLogs();
       break;
-    // V2.10.15 — Manager (dépannage)
+    // V2.10.16 — Manager (dépannage)
     case 'goto-manager':
       if (!isManagerOrAdmin()) { toast('Accès refusé', 'error'); break; }
       view.current = 'manager-view';
@@ -6153,7 +6546,7 @@ async function handleAction(e) {
       await doFullSync(true);
       break;
     case 'export-pdf':
-      generatePDF();
+      await generatePDF();
       break;
     case 'export-email-nuit':
       generateEmailNuit();
@@ -6380,7 +6773,7 @@ async function editTimestamp(field) {
   if (!newDate) return;
   let finalDate = roundTo5(newDate);
   
-  // V2.10.15 — GARDE-FOU 1 (refonte) : forcer la date sur la BONNE référence
+  // V2.10.16 — GARDE-FOU 1 (refonte) : forcer la date sur la BONNE référence
   // - Pour departDomicile : date de dateAppel (premier événement)
   // - Pour arriveeSite : date de departDomicile (sinon dateAppel)
   // - Pour departSite : date d'arriveeSite (sinon dateAppel)
@@ -6446,7 +6839,7 @@ async function editTimestamp(field) {
     }
   }
   
-  // V2.10.15 — GARDE-FOU 2 : alerte si la date est > 36h de dateAppel
+  // V2.10.16 — GARDE-FOU 2 : alerte si la date est > 36h de dateAppel
   // (sauf chaînage sur weekend long, qui peut effectivement durer ~64h)
   if (d.dateAppel && field !== 'dateAppel') {
     const appel = new Date(d.dateAppel);
@@ -7004,6 +7397,284 @@ async function quickNew() {
   toast('⚡ Dossier en cours : choisis téléphone ou déplacement', 'success');
 }
 
+// ============================================================================
+// V2.10.16 — SAISIE RAPIDE TÉLÉPHONE (3 étapes, ~30 sec)
+// ============================================================================
+async function quickPhoneCall() {
+  const nowIso = new Date().toISOString();
+  const favoris = (state.settings.favorisEtablissements || []).slice(0, 10);
+  
+  // Récupérer les motifs récurrents depuis les dossiers existants
+  const motifsMap = {};
+  getMyDossiers().forEach(d => {
+    if (d.motif && d.motif.trim().length > 2) {
+      const m = d.motif.trim();
+      motifsMap[m] = (motifsMap[m] || 0) + 1;
+    }
+  });
+  const motifsTop = Object.entries(motifsMap)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([m]) => m);
+  
+  // Récupérer les demandeurs récurrents
+  const demandeursMap = {};
+  getMyDossiers().forEach(d => {
+    if (d.demandeur && d.demandeur.trim().length > 1) {
+      const dm = d.demandeur.trim();
+      demandeursMap[dm] = (demandeursMap[dm] || 0) + 1;
+    }
+  });
+  const demandeursTop = Object.entries(demandeursMap)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6)
+    .map(([d]) => d);
+  
+  // Heure d'appel formatée pour input type="datetime-local"
+  const now = new Date();
+  const localIso = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  
+  // État du wizard
+  const data = {
+    step: 1,
+    dateAppel: localIso,
+    etablissement: '',
+    demandeur: '',
+    codeAstreinte: '',
+    motif: ''
+  };
+  
+  // Créer la modale
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay visible';
+  overlay.id = 'quick-phone-modal';
+  document.body.appendChild(overlay);
+  
+  function renderModal() {
+    const progressPercent = (data.step / 3) * 100;
+    let stepContent = '';
+    
+    if (data.step === 1) {
+      stepContent = `
+        <div style="margin-bottom:16px">
+          <label style="display:block;font-size:11px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;margin-bottom:6px;letter-spacing:0.5px">Heure d'appel</label>
+          <input type="datetime-local" id="qpc-dateappel" value="${data.dateAppel}" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:15px">
+        </div>
+        <div>
+          <label style="display:block;font-size:11px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;margin-bottom:6px;letter-spacing:0.5px">Établissement</label>
+          <input type="text" id="qpc-etablissement" value="${escapeHtml(data.etablissement)}" list="qpc-favs" placeholder="Nom du site..." autofocus style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:15px">
+          <datalist id="qpc-favs">
+            ${favoris.map(f => `<option value="${escapeHtml(f)}">`).join('')}
+          </datalist>
+          ${favoris.length > 0 ? `
+            <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px">
+              ${favoris.slice(0, 5).map(f => `
+                <button class="qpc-quick-pick" data-pick="${escapeHtml(f)}" type="button" style="background:var(--bg-subtle);border:1px solid var(--border);color:var(--text);padding:4px 10px;border-radius:14px;font-size:11px;cursor:pointer">
+                  ${escapeHtml(f.length > 25 ? f.slice(0, 25) + '…' : f)}
+                </button>
+              `).join('')}
+            </div>
+          ` : ''}
+        </div>
+      `;
+    } else if (data.step === 2) {
+      stepContent = `
+        <div style="margin-bottom:16px">
+          <label style="display:block;font-size:11px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;margin-bottom:6px;letter-spacing:0.5px">Code astreinte</label>
+          <input type="text" id="qpc-code" value="${escapeHtml(data.codeAstreinte)}" placeholder="Ex: 12345" autofocus style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:15px">
+        </div>
+        <div>
+          <label style="display:block;font-size:11px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;margin-bottom:6px;letter-spacing:0.5px">Demandeur</label>
+          <input type="text" id="qpc-demandeur" value="${escapeHtml(data.demandeur)}" list="qpc-dem-favs" placeholder="Nom du contact..." style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:15px">
+          <datalist id="qpc-dem-favs">
+            ${demandeursTop.map(d => `<option value="${escapeHtml(d)}">`).join('')}
+          </datalist>
+          ${demandeursTop.length > 0 ? `
+            <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px">
+              ${demandeursTop.slice(0, 4).map(d => `
+                <button class="qpc-quick-pick-demandeur" data-pick="${escapeHtml(d)}" type="button" style="background:var(--bg-subtle);border:1px solid var(--border);color:var(--text);padding:4px 10px;border-radius:14px;font-size:11px;cursor:pointer">
+                  ${escapeHtml(d)}
+                </button>
+              `).join('')}
+            </div>
+          ` : ''}
+        </div>
+      `;
+    } else if (data.step === 3) {
+      stepContent = `
+        <div>
+          <label style="display:block;font-size:11px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;margin-bottom:6px;letter-spacing:0.5px">Motif de l'appel</label>
+          <textarea id="qpc-motif" autofocus placeholder="Ex: Défaut SSI, alarme..." style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:15px;min-height:80px;resize:vertical;font-family:inherit">${escapeHtml(data.motif)}</textarea>
+          ${motifsTop.length > 0 ? `
+            <div style="margin-top:10px">
+              <div style="font-size:10px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Motifs récurrents</div>
+              <div style="display:flex;flex-wrap:wrap;gap:6px">
+                ${motifsTop.map(m => `
+                  <button class="qpc-quick-pick-motif" data-pick="${escapeHtml(m)}" type="button" style="background:var(--bg-subtle);border:1px solid var(--border);color:var(--text);padding:4px 10px;border-radius:14px;font-size:11px;cursor:pointer;text-align:left">
+                    ${escapeHtml(m.length > 35 ? m.slice(0, 35) + '…' : m)}
+                  </button>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
+          <div style="margin-top:14px;padding:10px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.3);border-radius:8px;font-size:12px;color:var(--text)">
+            ✅ Le dossier sera créé en statut <strong>en cours</strong> type téléphone.
+            <br>Tu pourras compléter la durée et le compte-rendu après l'intervention.
+          </div>
+        </div>
+      `;
+    }
+    
+    const isLast = data.step === 3;
+    const canNext = (data.step === 1 && data.etablissement.trim()) ||
+                    (data.step === 2 && data.codeAstreinte.trim()) ||
+                    (data.step === 3 && data.motif.trim());
+    
+    overlay.innerHTML = `
+      <div class="modal" style="max-width:480px">
+        <div class="modal-header">
+          <div class="modal-title">📞 Nouvel appel — Étape ${data.step}/3</div>
+          <button class="modal-close" data-action="qpc-close">×</button>
+        </div>
+        <div style="padding:0 20px;margin-top:-4px">
+          <div style="width:100%;height:3px;background:var(--bg-subtle);border-radius:2px;overflow:hidden">
+            <div style="width:${progressPercent}%;height:100%;background:linear-gradient(90deg,#2563eb,#1d4ed8);transition:width 0.3s"></div>
+          </div>
+        </div>
+        <div class="modal-body" style="padding:20px">
+          ${stepContent}
+        </div>
+        <div class="modal-footer" style="padding:14px 20px;display:flex;gap:8px;justify-content:space-between">
+          <button class="btn btn-secondary" data-action="qpc-prev" ${data.step === 1 ? 'style="visibility:hidden"' : ''}>← Précédent</button>
+          <button class="btn btn-primary" data-action="qpc-next" ${!canNext ? 'disabled style="opacity:0.5"' : ''}>
+            ${isLast ? '✅ Créer le dossier' : 'Suivant →'}
+          </button>
+        </div>
+      </div>
+    `;
+    
+    // Bind les inputs (read live values)
+    const bindInput = (id, field) => {
+      const el = overlay.querySelector('#' + id);
+      if (el) {
+        el.addEventListener('input', e => {
+          data[field] = e.target.value;
+          // Activer/désactiver le bouton Suivant en live
+          const nextBtn = overlay.querySelector('[data-action="qpc-next"]');
+          if (nextBtn) {
+            const valid = (data.step === 1 && data.etablissement.trim()) ||
+                          (data.step === 2 && data.codeAstreinte.trim()) ||
+                          (data.step === 3 && data.motif.trim());
+            nextBtn.disabled = !valid;
+            nextBtn.style.opacity = valid ? '1' : '0.5';
+          }
+        });
+      }
+    };
+    if (data.step === 1) {
+      bindInput('qpc-dateappel', 'dateAppel');
+      bindInput('qpc-etablissement', 'etablissement');
+      overlay.querySelectorAll('.qpc-quick-pick').forEach(btn => {
+        btn.addEventListener('click', () => {
+          data.etablissement = btn.dataset.pick;
+          renderModal();
+        });
+      });
+    } else if (data.step === 2) {
+      bindInput('qpc-code', 'codeAstreinte');
+      bindInput('qpc-demandeur', 'demandeur');
+      overlay.querySelectorAll('.qpc-quick-pick-demandeur').forEach(btn => {
+        btn.addEventListener('click', () => {
+          data.demandeur = btn.dataset.pick;
+          renderModal();
+        });
+      });
+    } else if (data.step === 3) {
+      bindInput('qpc-motif', 'motif');
+      overlay.querySelectorAll('.qpc-quick-pick-motif').forEach(btn => {
+        btn.addEventListener('click', () => {
+          data.motif = btn.dataset.pick;
+          renderModal();
+        });
+      });
+    }
+  }
+  
+  // Handler global pour les actions
+  overlay.addEventListener('click', async (e) => {
+    const action = e.target.dataset.action || e.target.closest('[data-action]')?.dataset.action;
+    
+    if (action === 'qpc-close' || e.target === overlay) {
+      if (data.etablissement || data.codeAstreinte || data.motif) {
+        if (!confirm('Annuler la saisie en cours ?')) return;
+      }
+      overlay.remove();
+      return;
+    }
+    
+    if (action === 'qpc-prev') {
+      if (data.step > 1) {
+        data.step--;
+        renderModal();
+      }
+      return;
+    }
+    
+    if (action === 'qpc-next') {
+      if (data.step < 3) {
+        data.step++;
+        renderModal();
+        return;
+      }
+      
+      // Étape 3 : créer le dossier
+      const dossier = {
+        id: uid(),
+        dateAppel: new Date(data.dateAppel).toISOString(),
+        bureau: true, // Téléphone → bureau (depuis chez soi)
+        etablissement: data.etablissement.trim(),
+        demandeur: data.demandeur.trim(),
+        codeAstreinte: data.codeAstreinte.trim(),
+        motif: data.motif.trim(),
+        type: 'phone',
+        pointDepart: 'domicile',
+        adresseSite: '',
+        km: '',
+        rapportN: '',
+        departDomicile: null,
+        arriveeSite: null,
+        departSite: null,
+        retourDomicile: null,
+        dureeAppel: '',
+        compteRendu: '',
+        statut: 'pending',
+        sequenceId: null,
+        createdAt: new Date().toISOString(),
+        user_id: authState.user && authState.user.id
+      };
+      
+      // Sauvegarder le favori si nouveau
+      if (dossier.etablissement && !(state.settings.favorisEtablissements || []).includes(dossier.etablissement)) {
+        state.settings.favorisEtablissements = state.settings.favorisEtablissements || [];
+        state.settings.favorisEtablissements.unshift(dossier.etablissement);
+        if (state.settings.favorisEtablissements.length > 20) {
+          state.settings.favorisEtablissements = state.settings.favorisEtablissements.slice(0, 20);
+        }
+        await saveSettings();
+      }
+      
+      await saveDossier(dossier);
+      haptic('success');
+      toast('✅ Appel enregistré — pense à compléter la durée plus tard', 'success');
+      overlay.remove();
+      render();
+      return;
+    }
+  });
+  
+  renderModal();
+}
+
 async function editAdresseSite() {
   const d = state.dossiers.find(x => x.id === view.dossierId);
   if (!d) return;
@@ -7347,8 +8018,12 @@ async function requestGeolocationPermission() {
 // ----------------------------------------------------------------------------
 // V2.9.10 — PDF G1-0-8 reproduit au pixel près du document officiel Eurofeu
 // Coordonnées exactes extraites de l'audit pdfplumber sur le doc original
-function generatePDF() {
+// V2.10.16 — async pour permettre le lazy load de jsPDF
+async function generatePDF() {
   try {
+    // V2.10.16 — Charger jsPDF à la demande (premier appel ~1-2s, ensuite instantané)
+    if (typeof toast === 'function') toast('📄 Génération du PDF en cours...', 'info');
+    await loadJsPDF();
     const { jsPDF } = window.jspdf;
     // Format A4 paysage en POINTS (comme l'original Excel)
     const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
@@ -7712,7 +8387,7 @@ function generatePDF() {
       return {
         d, isPhone,
         date: fmtDateShort(d.dateAppel),
-        // V2.10.15 — Forcer la conversion en string pour éviter les erreurs jsPDF
+        // V2.10.16 — Forcer la conversion en string pour éviter les erreurs jsPDF
         code: String(d.codeAstreinte || ''),
         demandeur: String(d.etablissement || ''),
         heureAppel: d.bureau ? 'BUREAU' : fmtTime(d.dateAppel),
@@ -7722,7 +8397,7 @@ function generatePDF() {
         arrSite: d.arriveeSite ? fmtTime(d.arriveeSite) : '',
         depSite: d.departSite ? fmtTime(d.departSite) : (d.finIntervention ? fmtTime(d.finIntervention) : ''),
         tpsSite: String(d.tempsSiteCalcule || ''),
-        // V2.10.15 — Sécurité : ne garder que les valeurs numériques valides
+        // V2.10.16 — Sécurité : ne garder que les valeurs numériques valides
         km: (() => { const n = safeKm(d.km); return n > 0 ? n : ''; })(),
         departDom, retourDom, totalTrajet
       };
@@ -7942,7 +8617,7 @@ function generatePDF() {
             if (val === null || val === undefined || val === '') return;
             const x = GRID.x[idx];
             const w = GRID.x[idx + 1] - GRID.x[idx];
-            // V2.10.15 — Bug fix : forcer la conversion en string pour éviter l'erreur jsPDF
+            // V2.10.16 — Bug fix : forcer la conversion en string pour éviter l'erreur jsPDF
             let display = String(val);
             if (truncate && display.length > truncate) display = display.substring(0, truncate - 2) + '..';
             doc.text(display, x + w/2, rowY + ROW_H/2 + 2.5, { align: 'center', maxWidth: w - 2 });
@@ -8017,7 +8692,7 @@ function generatePDF() {
       doc.text(warn3, 19 + warn1W + warn2W, warningY);
       
       // ─────────────────────────────────────────────────────────
-      // 8. 4 CADRES ÉTAPES — V2.10.15 : sur TOUTES les pages (comme l'original Eurofeu)
+      // 8. 4 CADRES ÉTAPES — V2.10.16 : sur TOUTES les pages (comme l'original Eurofeu)
       // ─────────────────────────────────────────────────────────
       {
         // Position : y débute à warningY + 18 pour bien séparer
@@ -8430,25 +9105,46 @@ document.addEventListener('visibilitychange', () => {
 // ----------------------------------------------------------------------------
 // INIT V2.10.0 — Gate authentification avant chargement de l'app
 // ----------------------------------------------------------------------------
+// V2.10.16 — Helpers splash screen
+function setSplashStatus(text) {
+  const el = document.getElementById('splash-status');
+  if (el) el.textContent = text;
+}
+function hideSplash() {
+  const splash = document.getElementById('splash-screen');
+  if (splash) {
+    splash.classList.add('hidden');
+    // Retirer du DOM après l'animation pour économiser des ressources
+    setTimeout(() => splash.remove(), 500);
+  }
+}
+
 async function init() {
   try {
+    setSplashStatus('Vérification de la session');
     // 1. Vérifier si un token est déjà en local
     const hasLocalToken = authLoadFromStorage();
 
     if (hasLocalToken) {
+      setSplashStatus('Connexion au serveur');
       // 2. Valider la session côté serveur (sliding 7j)
       const valid = await authValidate();
       if (valid) {
         // ✅ Token valide → lancer l'app directement
-        return startMainApp();
+        setSplashStatus('Chargement des données');
+        const result = await startMainApp();
+        hideSplash();
+        return result;
       }
       // Token invalide ou expiré côté serveur → on tombe sur le login
     }
 
     // 3. Pas de token ou token invalide → afficher le login
     renderLoginScreen();
+    hideSplash();
   } catch (err) {
     console.error('Init error', err);
+    hideSplash();
     document.body.innerHTML = '<div style="padding:40px;text-align:center;color:#ef4444">Erreur d\'initialisation : ' + err.message + '</div>';
   }
 }
