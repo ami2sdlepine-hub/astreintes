@@ -2406,16 +2406,7 @@ async function fetchAppConfig() {
     if (res.ok && res.config) {
       appConfig.maintenanceMode = res.config.maintenanceMode === true || res.config.maintenanceMode === 'true';
       appConfig.maintenanceMessage = res.config.maintenanceMessage || appConfig.maintenanceMessage;
-      // V2.11.2 FIX : valider que latestVersion est bien un numéro de version, pas une date
-      const rawVersion = res.config.latestVersion;
-      const versionStr = (typeof rawVersion === 'string') ? rawVersion : String(rawVersion || '');
-      if (/^\d+\.\d+(\.\d+)?$/.test(versionStr)) {
-        appConfig.latestVersion = versionStr;
-      } else {
-        // Valeur corrompue (probablement une date) → fallback à la version actuelle
-        console.warn('latestVersion corrompue :', rawVersion, '→ fallback', APP_VERSION);
-        appConfig.latestVersion = APP_VERSION;
-      }
+      appConfig.latestVersion = res.config.latestVersion || APP_VERSION;
       appConfig.updateMessage = res.config.updateMessage || appConfig.updateMessage;
       appConfig.forceUpdate = res.config.forceUpdate === true || res.config.forceUpdate === 'true';
       appConfig.changelog = res.config.changelog || '';
@@ -3240,7 +3231,7 @@ function renderLoginScreen() {
           ${authState.loading ? '⏳ Connexion...' : '🔓 Se connecter'}
         </button>
         <div class="login-footer">
-          Astreintes AMI2S V2.11.0 • Session 7 jours
+          Astreintes AMI2S V${APP_VERSION} • Session 7 jours
         </div>
       </div>
     </div>
@@ -3832,63 +3823,26 @@ function dashboardGetUsername(dossier) {
   return 'Inconnu';
 }
 
-// Calculer les minutes de travail d'un dossier (V2.11.1 — gestion étendue)
+// Calculer les minutes de travail d'un dossier
 function dashboardDossierMinutes(d) {
   let totalMinutes = 0;
-  
-  // Cas 1 : champ dureeMinutes directement (dossiers clôturés)
   if (d.dureeMinutes) {
-    const v = parseInt(d.dureeMinutes, 10);
-    if (!isNaN(v) && v > 0) return v;
-  }
-  
-  // Cas 2 : téléphone - durée d'appel
-  if (d.type === 'phone' && d.dureeAppel) {
-    const s = String(d.dureeAppel);
-    // Format "1h00", "0h30"
-    let match = s.match(/(\d+)h(\d+)?/i);
+    totalMinutes = parseInt(d.dureeMinutes, 10) || 0;
+  } else if (d.type === 'phone' && d.dureeAppel) {
+    const match = String(d.dureeAppel).match(/(\d+)h(\d+)?/);
     if (match) {
       totalMinutes = parseInt(match[1], 10) * 60 + (parseInt(match[2], 10) || 0);
-      if (totalMinutes > 0) return totalMinutes;
     }
-    // Format "60min" ou nombre brut
-    match = s.match(/(\d+)\s*min/i);
-    if (match) return parseInt(match[1], 10);
-    const num = parseInt(s, 10);
-    if (!isNaN(num) && num > 0 && num < 600) return num;
-  }
-  
-  // Cas 3 : déplacement - horaires complets (départ → retour domicile)
-  if (d.departDomicile && d.retourDomicile) {
+  } else if (d.departDomicile && d.retourDomicile) {
+    // Calcul depuis horaires
     try {
       const t1 = new Date(d.departDomicile);
       const t2 = new Date(d.retourDomicile);
-      const mins = Math.round((t2 - t1) / 60000);
-      if (mins > 0 && mins < 1440) return mins;
+      totalMinutes = Math.round((t2 - t1) / 60000);
+      if (totalMinutes < 0 || totalMinutes > 1440) totalMinutes = 0;
     } catch(e) {}
   }
-  
-  // Cas 4 (V2.11.1) : déplacement partiel - depuis dateAppel jusqu'au retour
-  if (d.dateAppel && d.retourDomicile) {
-    try {
-      const t1 = new Date(d.dateAppel);
-      const t2 = new Date(d.retourDomicile);
-      const mins = Math.round((t2 - t1) / 60000);
-      if (mins > 0 && mins < 1440) return mins;
-    } catch(e) {}
-  }
-  
-  // Cas 5 (V2.11.1) : déplacement - arrivée → départ site (durée sur place)
-  if (d.arriveeSite && d.departSite) {
-    try {
-      const t1 = new Date(d.arriveeSite);
-      const t2 = new Date(d.departSite);
-      const mins = Math.round((t2 - t1) / 60000);
-      if (mins > 0 && mins < 1440) return mins;
-    } catch(e) {}
-  }
-  
-  return 0;
+  return totalMinutes;
 }
 
 // Formater minutes en "Xh YYm"
@@ -7037,7 +6991,7 @@ function renderSettings() {
       ` : ''}
       
       <div class="text-center" style="padding:24px 0;font-size:11px;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace">
-        Astreintes AMI2S V2.11.0<br>
+        Astreintes AMI2S V${APP_VERSION}<br>
         ${getMyDossiers().length} dossier(s) • ${new Date().toISOString().substring(0,10)}
       </div>
     </div>
