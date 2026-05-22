@@ -2768,7 +2768,7 @@ function registerChart(canvasId, instance) {
 // V2.11 — CONFIG APP (Maintenance + Version)
 // ============================================================================
 // Version actuelle de cette app (à incrémenter à chaque déploiement)
-const APP_VERSION = '2.13.9';
+const APP_VERSION = '2.13.10';
 
 // État global de la config app (récupérée depuis le cloud au démarrage)
 const appConfig = {
@@ -10528,8 +10528,15 @@ function renderDetail() {
       ${d.type === 'deplacement' ? (() => {
         // V2.13.8 — Section "D'où pars-tu ?" pour permettre de modifier le point de départ
         // après création (utile pour les changements de destination en route)
+        // V2.13.9 — Fix : on extrait les strings AVANT le template pour éviter
+        // les conflits avec l'imbrication de template literals
         const currentPointDepart = d.pointDepart || 'domicile';
         const previousSite = findPreviousSiteInSequence(d.id, d);
+        const chainageSubtitle = previousSite 
+          ? 'Tu enchaînes après : ' + escapeHtml(previousSite.etablissement)
+          : 'Tu viens d\'un autre site (sera marqué chaînage)';
+        const domicileSubtitle = state.settings.adresseDomicile || 'Adresse à configurer dans Réglages';
+        const autreLieuSubtitle = 'Si tu n\'es pas chez toi (saisie libre ou GPS)';
         return `
           <div class="section">
             <div class="section-title">📍 D'où pars-tu ?</div>
@@ -10539,7 +10546,7 @@ function renderDetail() {
                 <span class="radio-icon">🏠</span>
                 <div class="radio-content">
                   <div class="radio-title">De mon domicile</div>
-                  <div class="radio-subtitle">${state.settings.adresseDomicile || 'Adresse à configurer dans Réglages'}</div>
+                  <div class="radio-subtitle">${escapeHtml(domicileSubtitle)}</div>
                 </div>
               </div>
               <div class="radio-option ${currentPointDepart === 'autre-site' ? 'selected' : ''}" data-action="set-depart" data-depart="autre-site">
@@ -10547,9 +10554,7 @@ function renderDetail() {
                 <span class="radio-icon">🔗</span>
                 <div class="radio-content">
                   <div class="radio-title">Depuis un autre site (chaînage)</div>
-                  <div class="radio-subtitle">${previousSite ? 
-                    'Tu enchaînes après : ' + escapeHtml(previousSite.etablissement) :
-                    "Tu viens d'un autre site (sera marqué chaînage)"}</div>
+                  <div class="radio-subtitle">${chainageSubtitle}</div>
                 </div>
               </div>
               <div class="radio-option ${currentPointDepart === 'autre-lieu' ? 'selected' : ''}" data-action="set-depart" data-depart="autre-lieu">
@@ -10557,7 +10562,7 @@ function renderDetail() {
                 <span class="radio-icon">📌</span>
                 <div class="radio-content">
                   <div class="radio-title">Depuis un autre lieu</div>
-                  <div class="radio-subtitle">Si tu n'es pas chez toi (saisie libre ou GPS)</div>
+                  <div class="radio-subtitle">${escapeHtml(autreLieuSubtitle)}</div>
                 </div>
               </div>
             </div>
