@@ -2669,10 +2669,81 @@ function loadJsPDF() {
 }
 
 // ============================================================================
+// V2.13.3 — LAZY LOAD Chart.js (chargement différé)
+// ============================================================================
+let _chartJsLoadPromise = null;
+function loadChartJs() {
+  if (_chartJsLoadPromise) return _chartJsLoadPromise;
+  _chartJsLoadPromise = new Promise((resolve, reject) => {
+    if (window.Chart) {
+      resolve(window.Chart);
+      return;
+    }
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
+    s.onload = () => {
+      if (window.Chart) {
+        // Désactiver les animations de chargement initial pour fluidité au switch onglet
+        window.Chart.defaults.animation = { duration: 300 };
+        resolve(window.Chart);
+      } else {
+        reject(new Error('Chart.js chargé mais variable absente'));
+      }
+    };
+    s.onerror = () => reject(new Error('Échec chargement Chart.js'));
+    document.head.appendChild(s);
+  });
+  return _chartJsLoadPromise;
+}
+
+// V2.13.3 — Couleurs adaptées au thème courant (clair/sombre)
+function getChartTheme() {
+  // Robustesse : state peut ne pas être défini au tout premier appel
+  const settings = (typeof state !== 'undefined' && state && state.settings) ? state.settings : {};
+  const isDark = document.documentElement.classList.contains('dark') 
+    || settings.theme === 'dark'
+    || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches 
+        && settings.theme === 'auto');
+  return {
+    isDark: isDark,
+    text: isDark ? '#e5e7eb' : '#374151',
+    textTertiary: isDark ? '#9ca3af' : '#6b7280',
+    grid: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+    border: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)',
+    // Palette colorée vibrante (cohérente sur les 2 thèmes)
+    primary: '#3b82f6',
+    primaryFill: 'rgba(59,130,246,0.15)',
+    green: '#22c55e',
+    greenFill: 'rgba(34,197,94,0.15)',
+    yellow: '#eab308',
+    yellowFill: 'rgba(234,179,8,0.15)',
+    red: '#dc2626',
+    redFill: 'rgba(220,38,38,0.15)',
+    purple: '#a855f7',
+    purpleFill: 'rgba(168,85,247,0.15)',
+    orange: '#f97316',
+    orangeFill: 'rgba(249,115,22,0.15)'
+  };
+}
+
+// V2.13.3 — Cache des instances Chart.js pour bien les détruire avant re-render
+const _chartInstances = {};
+function destroyChart(canvasId) {
+  if (_chartInstances[canvasId]) {
+    try { _chartInstances[canvasId].destroy(); } catch(e) {}
+    delete _chartInstances[canvasId];
+  }
+}
+function registerChart(canvasId, instance) {
+  destroyChart(canvasId);
+  _chartInstances[canvasId] = instance;
+}
+
+// ============================================================================
 // V2.11 — CONFIG APP (Maintenance + Version)
 // ============================================================================
 // Version actuelle de cette app (à incrémenter à chaque déploiement)
-const APP_VERSION = '2.13.2';
+const APP_VERSION = '2.13.3';
 
 // État global de la config app (récupérée depuis le cloud au démarrage)
 const appConfig = {
@@ -4508,6 +4579,177 @@ function periodLabel() {
   return 'période personnalisée';
 }
 
+// ============================================================================
+// V2.13.3 — Helpers de calcul des datasets pour les graphiques
+// ============================================================================
+
+// Graphique a) Évolution mensuelle sur 12 derniers mois (ou période filtrée si filtre actif)
+function buildDatasetEvolutionMensuelle(dossiers) {
+  const f = dashboardState.advFilters;
+  const hasPeriodFilter = f.period && f.period !== 'all';
+  
+  // Si filtre période actif, on utilise la plage filtrée, sinon 12 mois glissants
+  let monthsCount = 12;
+  let endDate = new Date();
+  let startDate = new Date(endDate.getFullYear(), endDate.getMonth() - 11, 1);
+  
+  if (hasPeriodFilter) {
+    const range = computeFilterDateRange();
+    if (range) {
+      startDate = new Date(range.start.getFullYear(), range.start.getMonth(), 1);
+      endDate = range.end;
+      // Calcul du nb de mois inclus
+      monthsCount = (endDate.getFullYear() - startDate.getFullYear()) * 12 + (endDate.getMonth() - startDate.getMonth()) + 1;
+      if (monthsCount < 1) monthsCount = 1;
+      if (monthsCount > 24) monthsCount = 24; // cap pour ne pas exploser
+    }
+  }
+  
+  const labels = [];
+  const counts = [];
+  const moisCourts = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
+  
+  for (let i = 0; i < monthsCount; i++) {
+    const d = new Date(startDate.getFullYear(), startDate.getMonth() + i, 1);
+    const monthStart = new Date(d.getFullYear(), d.getMonth(), 1);
+    const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
+    const yyStr = String(d.getFullYear()).slice(2);
+    labels.push(moisCourts[d.getMonth()] + ' ' + yyStr);
+    
+    const n = dossiers.filter(dos => {
+      try {
+        const dt = new Date(dos.dateAppel);
+        return dt >= monthStart && dt <= monthEnd;
+      } catch(e) { return false; }
+    }).length;
+    counts.push(n);
+  }
+  
+  return { labels: labels, counts: counts };
+}
+
+// Graphique b) Activité par jour de la semaine (Lun=1, Dim=7 en interne mais affichage Lun → Dim)
+function buildDatasetParJourSemaine(dossiers) {
+  // Index : 0=Lun, 1=Mar, ..., 6=Dim (notre format affichage)
+  const counts = [0, 0, 0, 0, 0, 0, 0];
+  dossiers.forEach(d => {
+    try {
+      const dt = new Date(d.dateAppel);
+      // getDay() : 0=Dim, 1=Lun, ..., 6=Sam → on remappe pour Lun=0
+      const jsDay = dt.getDay();
+      const idx = (jsDay === 0) ? 6 : (jsDay - 1);
+      counts[idx]++;
+    } catch(e) {}
+  });
+  return { labels: ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'], counts: counts };
+}
+
+// Graphique c) Activité par heure de la journée (0-23)
+function buildDatasetParHeure(dossiers) {
+  const counts = new Array(24).fill(0);
+  dossiers.forEach(d => {
+    try {
+      const dt = new Date(d.dateAppel);
+      const h = dt.getHours();
+      if (h >= 0 && h < 24) counts[h]++;
+    } catch(e) {}
+  });
+  // Labels 00h, 01h, ..., 23h
+  const labels = [];
+  for (let i = 0; i < 24; i++) labels.push(String(i).padStart(2, '0') + 'h');
+  return { labels: labels, counts: counts };
+}
+
+// Graphique e) Charge par technicien (nb de dossiers par tech, trié décroissant)
+function buildDatasetChargeParTech(dossiers) {
+  const byTech = {};
+  dossiers.forEach(d => {
+    const username = dashboardGetUsername(d);
+    if (!username) return;
+    byTech[username] = (byTech[username] || 0) + 1;
+  });
+  // Trier par nb décroissant
+  const sorted = Object.entries(byTech).sort((a, b) => b[1] - a[1]);
+  return {
+    labels: sorted.map(x => x[0]),
+    counts: sorted.map(x => x[1])
+  };
+}
+
+// Graphique g) Évolution des urgences par semaine (sur les 12 dernières semaines ou période filtrée)
+function buildDatasetEvolutionUrgences(urgences) {
+  const f = dashboardState.advFilters;
+  const hasPeriodFilter = f.period && f.period !== 'all';
+  
+  let weeksCount = 12;
+  let endDate = new Date();
+  // Lundi de la semaine courante à 00h
+  const dayOfWeek = endDate.getDay() === 0 ? 6 : endDate.getDay() - 1; // 0=Lun
+  let lastWeekStart = new Date(endDate);
+  lastWeekStart.setDate(lastWeekStart.getDate() - dayOfWeek);
+  lastWeekStart.setHours(0, 0, 0, 0);
+  
+  if (hasPeriodFilter) {
+    const range = computeFilterDateRange();
+    if (range) {
+      // On part du lundi de la semaine de range.start
+      const rangeDayOfWeek = range.start.getDay() === 0 ? 6 : range.start.getDay() - 1;
+      const startWeek = new Date(range.start);
+      startWeek.setDate(startWeek.getDate() - rangeDayOfWeek);
+      startWeek.setHours(0, 0, 0, 0);
+      const diffMs = lastWeekStart.getTime() - startWeek.getTime();
+      weeksCount = Math.ceil(diffMs / (7 * 86400000)) + 1;
+      if (weeksCount < 1) weeksCount = 1;
+      if (weeksCount > 24) weeksCount = 24;
+      lastWeekStart = new Date(lastWeekStart);
+    }
+  }
+  
+  const labels = [];
+  const counts = [];
+  // On démarre de (weeksCount - 1) semaines avant lastWeekStart
+  for (let i = weeksCount - 1; i >= 0; i--) {
+    const weekStart = new Date(lastWeekStart);
+    weekStart.setDate(weekStart.getDate() - i * 7);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+    
+    // Label : "S22" (numéro de semaine ISO)
+    const weekNum = getWeekNumber(weekStart);
+    labels.push('S' + weekNum);
+    
+    const n = urgences.filter(u => {
+      try {
+        const dt = new Date(u.dateDeclenchement);
+        return dt >= weekStart && dt < weekEnd;
+      } catch(e) { return false; }
+    }).length;
+    counts.push(n);
+  }
+  
+  return { labels: labels, counts: counts };
+}
+
+// Graphique h) Délais d'acquittement urgences (histogramme par tranches)
+function buildDatasetDelaisAck(urgences) {
+  // Tranches : < 1min, 1-5min, 5-15min, 15-30min, > 30min
+  const buckets = [0, 0, 0, 0, 0];
+  const labels = ['< 1 min', '1-5 min', '5-15 min', '15-30 min', '> 30 min'];
+  
+  urgences.forEach(u => {
+    const s = u.delaiAckSeconds;
+    if (s === null || s === undefined || s === '' || isNaN(s)) return;
+    const sec = Number(s);
+    if (sec < 60) buckets[0]++;
+    else if (sec < 5 * 60) buckets[1]++;
+    else if (sec < 15 * 60) buckets[2]++;
+    else if (sec < 30 * 60) buckets[3]++;
+    else buckets[4]++;
+  });
+  
+  return { labels: labels, counts: buckets };
+}
+
 // V2.12.0 — Demarrer / arreter l'auto-refresh
 function startDashboardAutoRefresh() {
   stopDashboardAutoRefresh(); // clean before start
@@ -6151,6 +6393,274 @@ function renderInterventionCard(d, step) {
 }
 
 // V2.13.2 — Bouton "🔧 Filtres" + panneau dépliable (partagé entre les onglets Overview/Stats/Urgences)
+// ============================================================================
+// V2.13.3 — Rendus Chart.js (instanciation des graphiques)
+// ============================================================================
+
+// Options communes (axes, tooltip, légende) avec thème dynamique
+function buildCommonChartOptions(theme) {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: {
+      mode: 'index',
+      intersect: false
+    },
+    plugins: {
+      legend: {
+        labels: {
+          color: theme.text,
+          font: { size: 11 },
+          boxWidth: 14,
+          padding: 10
+        }
+      },
+      tooltip: {
+        backgroundColor: theme.isDark ? 'rgba(15,23,42,0.95)' : 'rgba(255,255,255,0.98)',
+        titleColor: theme.text,
+        bodyColor: theme.text,
+        borderColor: theme.border,
+        borderWidth: 1,
+        padding: 10,
+        cornerRadius: 6,
+        titleFont: { size: 12, weight: '600' },
+        bodyFont: { size: 12 }
+      }
+    },
+    scales: {
+      x: {
+        ticks: { color: theme.textTertiary, font: { size: 10 } },
+        grid: { color: theme.grid }
+      },
+      y: {
+        ticks: { color: theme.textTertiary, font: { size: 10 }, precision: 0 },
+        grid: { color: theme.grid },
+        beginAtZero: true
+      }
+    }
+  };
+}
+
+// a) Évolution mensuelle
+async function renderChartEvolutionMensuelle(dossiers) {
+  const canvas = document.getElementById('chart-evolution-mensuelle');
+  if (!canvas) return;
+  try {
+    const Chart = await loadChartJs();
+    const theme = getChartTheme();
+    const data = buildDatasetEvolutionMensuelle(dossiers);
+    const opts = buildCommonChartOptions(theme);
+    const instance = new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels: data.labels,
+        datasets: [{
+          label: 'Interventions / mois',
+          data: data.counts,
+          borderColor: theme.primary,
+          backgroundColor: theme.primaryFill,
+          borderWidth: 2,
+          tension: 0.3,
+          fill: true,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          pointBackgroundColor: theme.primary
+        }]
+      },
+      options: opts
+    });
+    registerChart('chart-evolution-mensuelle', instance);
+  } catch(e) { console.warn('chart-evolution-mensuelle:', e.message); }
+}
+
+// b) Activité par jour de la semaine
+async function renderChartParJourSemaine(dossiers) {
+  const canvas = document.getElementById('chart-jour-semaine');
+  if (!canvas) return;
+  try {
+    const Chart = await loadChartJs();
+    const theme = getChartTheme();
+    const data = buildDatasetParJourSemaine(dossiers);
+    const opts = buildCommonChartOptions(theme);
+    const instance = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels: data.labels,
+        datasets: [{
+          label: 'Interventions',
+          data: data.counts,
+          backgroundColor: theme.purpleFill,
+          borderColor: theme.purple,
+          borderWidth: 1.5,
+          borderRadius: 6
+        }]
+      },
+      options: opts
+    });
+    registerChart('chart-jour-semaine', instance);
+  } catch(e) { console.warn('chart-jour-semaine:', e.message); }
+}
+
+// c) Activité par heure
+async function renderChartParHeure(dossiers) {
+  const canvas = document.getElementById('chart-par-heure');
+  if (!canvas) return;
+  try {
+    const Chart = await loadChartJs();
+    const theme = getChartTheme();
+    const data = buildDatasetParHeure(dossiers);
+    const opts = buildCommonChartOptions(theme);
+    const instance = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels: data.labels,
+        datasets: [{
+          label: 'Interventions',
+          data: data.counts,
+          backgroundColor: theme.orangeFill,
+          borderColor: theme.orange,
+          borderWidth: 1.5,
+          borderRadius: 4
+        }]
+      },
+      options: opts
+    });
+    registerChart('chart-par-heure', instance);
+  } catch(e) { console.warn('chart-par-heure:', e.message); }
+}
+
+// e) Charge par technicien (barres horizontales)
+async function renderChartChargeParTech(dossiers) {
+  const canvas = document.getElementById('chart-charge-tech');
+  if (!canvas) return;
+  try {
+    const Chart = await loadChartJs();
+    const theme = getChartTheme();
+    const data = buildDatasetChargeParTech(dossiers);
+    const opts = buildCommonChartOptions(theme);
+    opts.indexAxis = 'y'; // barres horizontales
+    // Pour les barres horizontales, on inverse les contraintes d'axe pour la précision
+    opts.scales = {
+      x: {
+        ticks: { color: theme.textTertiary, font: { size: 10 }, precision: 0 },
+        grid: { color: theme.grid },
+        beginAtZero: true
+      },
+      y: {
+        ticks: { color: theme.textTertiary, font: { size: 10 } },
+        grid: { color: theme.grid }
+      }
+    };
+    const instance = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels: data.labels,
+        datasets: [{
+          label: 'Dossiers',
+          data: data.counts,
+          backgroundColor: theme.greenFill,
+          borderColor: theme.green,
+          borderWidth: 1.5,
+          borderRadius: 4
+        }]
+      },
+      options: opts
+    });
+    registerChart('chart-charge-tech', instance);
+  } catch(e) { console.warn('chart-charge-tech:', e.message); }
+}
+
+// g) Évolution des urgences par semaine
+async function renderChartEvolutionUrgences(urgences) {
+  const canvas = document.getElementById('chart-evolution-urgences');
+  if (!canvas) return;
+  try {
+    const Chart = await loadChartJs();
+    const theme = getChartTheme();
+    const data = buildDatasetEvolutionUrgences(urgences);
+    const opts = buildCommonChartOptions(theme);
+    const instance = new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels: data.labels,
+        datasets: [{
+          label: 'Urgences / semaine',
+          data: data.counts,
+          borderColor: theme.red,
+          backgroundColor: theme.redFill,
+          borderWidth: 2,
+          tension: 0.3,
+          fill: true,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          pointBackgroundColor: theme.red
+        }]
+      },
+      options: opts
+    });
+    registerChart('chart-evolution-urgences', instance);
+  } catch(e) { console.warn('chart-evolution-urgences:', e.message); }
+}
+
+// h) Délais d'acquittement urgences (histogramme)
+async function renderChartDelaisAck(urgences) {
+  const canvas = document.getElementById('chart-delais-ack');
+  if (!canvas) return;
+  try {
+    const Chart = await loadChartJs();
+    const theme = getChartTheme();
+    const data = buildDatasetDelaisAck(urgences);
+    const opts = buildCommonChartOptions(theme);
+    const instance = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels: data.labels,
+        datasets: [{
+          label: 'Nb d\'urgences',
+          data: data.counts,
+          backgroundColor: [
+            theme.greenFill,    // < 1 min : excellent
+            theme.greenFill,    // 1-5 min : très bien
+            theme.yellowFill,   // 5-15 min : acceptable
+            theme.orangeFill,   // 15-30 min : limite
+            theme.redFill       // > 30 min : critique
+          ],
+          borderColor: [
+            theme.green,
+            theme.green,
+            theme.yellow,
+            theme.orange,
+            theme.red
+          ],
+          borderWidth: 1.5,
+          borderRadius: 6
+        }]
+      },
+      options: opts
+    });
+    registerChart('chart-delais-ack', instance);
+  } catch(e) { console.warn('chart-delais-ack:', e.message); }
+}
+
+// V2.13.3 — Orchestration : appeler tous les graphiques de l'onglet Stats
+function renderAllStatsCharts(dossiers) {
+  // setTimeout(0) pour exécuter APRÈS que le DOM des canvas soit posé par render()
+  setTimeout(() => {
+    renderChartEvolutionMensuelle(dossiers);
+    renderChartParJourSemaine(dossiers);
+    renderChartParHeure(dossiers);
+    renderChartChargeParTech(dossiers);
+  }, 0);
+}
+
+// V2.13.3 — Orchestration : appeler tous les graphiques de l'onglet Urgences
+function renderAllUrgencesCharts(urgences) {
+  setTimeout(() => {
+    renderChartEvolutionUrgences(urgences);
+    renderChartDelaisAck(urgences);
+  }, 0);
+}
+
 function renderDashboardFiltersPanel() {
   const f = dashboardState.advFilters;
   const nbActive = countActiveAdvFilters();
@@ -6563,7 +7073,44 @@ function renderDashboardStats() {
           `;
         }).join('')}
       </div>
+      
+      <!-- V2.13.3 — Section Graphiques -->
+      <div class="settings-section-title">📊 Graphiques</div>
+      <div style="display:flex;flex-direction:column;gap:14px;margin-bottom:14px">
+        <!-- Évolution mensuelle -->
+        <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;padding:12px">
+          <div style="font-size:12px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:10px">📈 Évolution mensuelle</div>
+          <div style="position:relative;height:240px">
+            <canvas id="chart-evolution-mensuelle"></canvas>
+          </div>
+        </div>
+        
+        <!-- Activité par jour de la semaine -->
+        <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;padding:12px">
+          <div style="font-size:12px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:10px">📊 Activité par jour de la semaine</div>
+          <div style="position:relative;height:220px">
+            <canvas id="chart-jour-semaine"></canvas>
+          </div>
+        </div>
+        
+        <!-- Activité par heure -->
+        <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;padding:12px">
+          <div style="font-size:12px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:10px">🕐 Activité par heure de la journée</div>
+          <div style="position:relative;height:220px">
+            <canvas id="chart-par-heure"></canvas>
+          </div>
+        </div>
+        
+        <!-- Charge par technicien -->
+        <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;padding:12px">
+          <div style="font-size:12px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:10px">👥 Charge par technicien</div>
+          <div style="position:relative;height:${Math.max(180, techRanking.length * 32 + 60)}px">
+            <canvas id="chart-charge-tech"></canvas>
+          </div>
+        </div>
+      </div>
     </div>
+    ${(() => { renderAllStatsCharts(dossiers30); return ''; })()}
   `;
 }
 
@@ -6847,6 +7394,25 @@ function renderDashboardUrgences() {
   
   return `
     ${statsHtml}
+    
+    ${list.length > 0 ? `
+      <!-- V2.13.3 — Graphiques urgences -->
+      <div style="padding:0 10px;display:flex;flex-direction:column;gap:14px;margin-bottom:16px">
+        <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;padding:12px">
+          <div style="font-size:12px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:10px">📈 Évolution par semaine</div>
+          <div style="position:relative;height:200px">
+            <canvas id="chart-evolution-urgences"></canvas>
+          </div>
+        </div>
+        <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;padding:12px">
+          <div style="font-size:12px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:10px">⏱ Délais d'acquittement</div>
+          <div style="position:relative;height:200px">
+            <canvas id="chart-delais-ack"></canvas>
+          </div>
+        </div>
+      </div>
+    ` : ''}
+    
     <div style="padding:0 10px 10px 10px;display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
       <div style="font-size:12px;color:var(--text-tertiary);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">📜 Historique (${list.length}${nbActiveFilters > 0 && list.length !== allList.length ? ` / ${allList.length}` : ''})</div>
       <button class="btn btn-secondary" data-action="urgences-log-reload" style="padding:6px 12px;font-size:12px">🔄 Rafraîchir</button>
@@ -6854,6 +7420,7 @@ function renderDashboardUrgences() {
     <div style="padding:0 10px 20px 10px">
       ${itemsHtml}
     </div>
+    ${list.length > 0 ? (() => { renderAllUrgencesCharts(list); return ''; })() : ''}
   `;
 }
 
@@ -10987,6 +11554,9 @@ async function handleAction(e) {
       adminState.creatingUser = false;
       // V2.12.0 — Arreter l'auto-refresh quand on quitte le Dashboard
       stopDashboardAutoRefresh();
+      // V2.13.3 — Détruire les instances Chart.js pour libérer la mémoire
+      ['chart-evolution-mensuelle', 'chart-jour-semaine', 'chart-par-heure', 'chart-charge-tech', 'chart-evolution-urgences', 'chart-delais-ack']
+        .forEach(id => destroyChart(id));
       render();
       break;
     // V2.11.0 — Logo personnalisable
@@ -11020,6 +11590,8 @@ async function handleAction(e) {
       view.current = 'dashboard-admin';
       // V2.13.2 — Charger les filtres persistés en localStorage
       loadDashboardFilters();
+      // V2.13.3 — Précharger Chart.js en arrière-plan pour les graphiques (non-bloquant)
+      loadChartJs().catch(e => console.warn('Chart.js preload KO:', e.message));
       render();
       dashboardLoadData();
       // V2.12.0 — Demarrer auto-refresh (toutes les 60 sec)
