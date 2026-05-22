@@ -6234,7 +6234,7 @@ async function adminCreateUser(userData) {
   if (!userData.password || userData.password.length < 6) {
     return { success: false, error: 'Mot de passe trop court (min 6 caractères)' };
   }
-  if (!['admin', 'technicien', 'manager'].includes(userData.role)) {
+  if (!['admin', 'technicien', 'manager', 'superviseur'].includes(userData.role)) {
     return { success: false, error: 'Rôle invalide' };
   }
 
@@ -6336,8 +6336,8 @@ function renderAdminUsers() {
   const users = adminState.users || [];
 
   const rows = users.map(u => {
-    const roleEmoji = { admin: '🔴', technicien: '🟢', manager: '🟡' }[u.role] || '⚪';
-    const roleLabel = { admin: 'Admin', technicien: 'Technicien', manager: 'Manager' }[u.role] || u.role;
+    const roleEmoji = { admin: '🔴', technicien: '🟢', manager: '🟡', superviseur: '🔵' }[u.role] || '⚪';
+    const roleLabel = { admin: 'Admin', technicien: 'Technicien', manager: 'Manager', superviseur: 'Superviseur' }[u.role] || u.role;
     const isMe = u.id === me.id;
     const isActive = u.active === true || u.active === 'TRUE';
     const lastLogin = u.last_login ? new Date(u.last_login).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'Jamais';
