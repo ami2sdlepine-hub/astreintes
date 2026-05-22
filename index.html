@@ -2768,7 +2768,7 @@ function registerChart(canvasId, instance) {
 // V2.11 — CONFIG APP (Maintenance + Version)
 // ============================================================================
 // Version actuelle de cette app (à incrémenter à chaque déploiement)
-const APP_VERSION = '2.13.6';
+const APP_VERSION = '2.13.8';
 
 // État global de la config app (récupérée depuis le cloud au démarrage)
 const appConfig = {
@@ -7789,6 +7789,172 @@ function openSuperviseurDossierModal(dossierId) {
   // Step actuel si en cours
   const step = !isCloture ? detectInterventionStep(d) : null;
   
+  // V2.13.7 — Code astreinte
+  const codeAstreinte = (d.codeAstreinte != null && String(d.codeAstreinte).trim() !== '') ? String(d.codeAstreinte) : '';
+  
+  // V2.13.7 — Construction de la timeline pour les déplacements
+  // Cloud renvoie : dateAppel, departDomicile, arriveeSite, finIntervention (= departSite), retourDomicile
+  // Local : utilise departSite (alias de finIntervention)
+  const fmtTime = (iso) => {
+    if (!iso || iso === '' || iso === 'X') return null;
+    try {
+      const dt = new Date(iso);
+      if (isNaN(dt.getTime())) return null;
+      return String(dt.getHours()).padStart(2, '0') + ':' + String(dt.getMinutes()).padStart(2, '0');
+    } catch(e) { return null; }
+  };
+  const diffMinutes = (iso1, iso2) => {
+    try {
+      const t1 = new Date(iso1).getTime();
+      const t2 = new Date(iso2).getTime();
+      if (isNaN(t1) || isNaN(t2)) return null;
+      return Math.round((t2 - t1) / 60000);
+    } catch(e) { return null; }
+  };
+  const fmtDuration = (mn) => {
+    if (mn === null || mn === undefined || isNaN(mn)) return '';
+    if (mn < 1) return '< 1 min';
+    if (mn < 60) return mn + ' min';
+    const h = Math.floor(mn / 60);
+    const m = mn % 60;
+    return m > 0 ? (h + 'h' + String(m).padStart(2, '0')) : (h + 'h');
+  };
+  
+  // Récupération des horodatages (gère les 2 noms de champs : cloud vs local)
+  const departDom = d.departDomicile;
+  const arriveeSt = d.arriveeSite;
+  const departSt = d.finIntervention || d.departSite;
+  const retourDom = d.retourDomicile;
+  
+  // Génération du HTML de la timeline (uniquement pour les déplacements)
+  let timelineHtml = '';
+  if (d.type === 'deplacement') {
+    // Définition des 4 étapes
+    const steps = [
+      { 
+        key: 'depart_dom',
+        label: 'Départ domicile',
+        icon: '🏠',
+        value: departDom,
+        time: fmtTime(departDom),
+        isChainage: departDom === 'X'
+      },
+      { 
+        key: 'arrivee_site',
+        label: 'Arrivée sur site',
+        icon: '📍',
+        value: arriveeSt,
+        time: fmtTime(arriveeSt)
+      },
+      { 
+        key: 'depart_site',
+        label: 'Départ du site',
+        icon: '🚗',
+        value: departSt,
+        time: fmtTime(departSt)
+      },
+      { 
+        key: 'retour_dom',
+        label: 'Retour domicile',
+        icon: '🏠',
+        value: retourDom,
+        time: fmtTime(retourDom),
+        isChainage: retourDom === 'X'
+      }
+    ];
+    
+    // Trouver l'index de l'étape "courante" (la première vide après une remplie)
+    let currentIdx = -1;
+    for (let i = 0; i < steps.length; i++) {
+      if (!steps[i].time && !steps[i].isChainage) {
+        currentIdx = i;
+        break;
+      }
+    }
+    // Si l'intervention est clôturée, pas d'étape "en cours"
+    if (isCloture) currentIdx = -1;
+    
+    // Pour chaque étape, calculer la durée écoulée depuis l'étape précédente remplie
+    const stepHtml = steps.map((s, i) => {
+      let statusColor, bgColor, iconColor, textColor, statusLabel;
+      
+      if (s.isChainage) {
+        // Chaînage : affichage en violet
+        statusColor = '#a855f7';
+        bgColor = 'rgba(168,85,247,0.08)';
+        iconColor = '#a855f7';
+        textColor = 'var(--text)';
+        statusLabel = i === 0 ? '⚓ Chaînage (depuis intervention précédente)' : '⚓ Chaînage (vers intervention suivante)';
+      } else if (s.time) {
+        // Étape complétée : vert
+        statusColor = '#22c55e';
+        bgColor = 'rgba(34,197,94,0.08)';
+        iconColor = '#22c55e';
+        textColor = 'var(--text)';
+        statusLabel = '✓ ' + s.time;
+      } else if (i === currentIdx) {
+        // Étape en cours : orange animé
+        statusColor = '#f97316';
+        bgColor = 'rgba(249,115,22,0.10)';
+        iconColor = '#f97316';
+        textColor = '#f97316';
+        statusLabel = '⏳ En attente';
+      } else {
+        // Étape future : grisée
+        statusColor = 'var(--border)';
+        bgColor = 'transparent';
+        iconColor = 'var(--text-tertiary)';
+        textColor = 'var(--text-tertiary)';
+        statusLabel = '—';
+      }
+      
+      // Calcul du delta avec étape précédente
+      let deltaHtml = '';
+      if (i > 0 && s.time && !s.isChainage) {
+        // Chercher la précédente étape avec un vrai horodatage (pas chaînage)
+        for (let j = i - 1; j >= 0; j--) {
+          if (steps[j].time && !steps[j].isChainage) {
+            const mn = diffMinutes(steps[j].value, s.value);
+            if (mn !== null && mn >= 0) {
+              deltaHtml = `<div style="margin-left:34px;font-size:10px;color:var(--text-tertiary);padding:2px 0">⏱ ${fmtDuration(mn)} depuis "${steps[j].label.toLowerCase()}"</div>`;
+            }
+            break;
+          }
+        }
+      }
+      // Cas spécial : si l'étape courante est en cours (orange), afficher le temps écoulé depuis la précédente
+      if (i === currentIdx) {
+        for (let j = i - 1; j >= 0; j--) {
+          if (steps[j].time && !steps[j].isChainage) {
+            const mn = diffMinutes(steps[j].value, new Date().toISOString());
+            if (mn !== null && mn >= 0) {
+              deltaHtml = `<div style="margin-left:34px;font-size:10px;color:#f97316;padding:2px 0;font-weight:600">⏱ Depuis ${fmtDuration(mn)}</div>`;
+            }
+            break;
+          }
+        }
+      }
+      
+      return `
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:${bgColor};border:1px solid ${statusColor === 'var(--border)' ? 'var(--border)' : statusColor + '40'};border-radius:8px;margin-bottom:${i < steps.length - 1 ? '4px' : '0'}">
+          <div style="font-size:20px;line-height:1">${s.icon}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:600;color:${textColor}">${escapeHtml(s.label)}</div>
+            <div style="font-size:11px;color:${statusColor === 'var(--border)' ? 'var(--text-tertiary)' : iconColor};margin-top:2px">${statusLabel}</div>
+          </div>
+        </div>
+        ${deltaHtml}
+      `;
+    }).join('');
+    
+    timelineHtml = `
+      <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:16px">
+        <div style="font-size:10px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;font-weight:600">⏳ Étapes de l'intervention</div>
+        ${stepHtml}
+      </div>
+    `;
+  }
+  
   const overlay = document.createElement('div');
   overlay.id = 'sup-dossier-modal';
   overlay.className = 'modal-overlay visible';
@@ -7802,10 +7968,11 @@ function openSuperviseurDossierModal(dossierId) {
       </div>
       <div class="modal-body" style="padding:22px">
         <!-- Header établissement + statut -->
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:20px;flex-wrap:wrap">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:14px;flex-wrap:wrap">
           <div style="flex:1;min-width:0">
             <div style="font-size:11px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Établissement</div>
             <div style="font-size:20px;font-weight:700;color:var(--text);line-height:1.3">${escapeHtml(d.etablissement || 'Sans nom')}</div>
+            ${codeAstreinte ? `<div style="font-size:12px;color:var(--text-tertiary);margin-top:4px">🔑 Code astreinte : <span style="color:var(--text);font-weight:600;font-family:monospace">${escapeHtml(codeAstreinte)}</span></div>` : ''}
           </div>
           ${statutBadge}
         </div>
@@ -7822,8 +7989,8 @@ function openSuperviseurDossierModal(dossierId) {
           </div>
         </div>
         
-        <!-- Adresse -->
-        ${d.adresseSite || d.adresse ? `
+        <!-- Adresse (uniquement pour déplacement, le téléphone n'en a pas besoin) -->
+        ${d.type === 'deplacement' && (d.adresseSite || d.adresse) ? `
           <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:16px">
             <div style="font-size:10px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">📍 Adresse</div>
             <div style="font-size:13px;color:var(--text);line-height:1.4">${escapeHtml(d.adresseSite || d.adresse || '')}</div>
@@ -7838,22 +8005,24 @@ function openSuperviseurDossierModal(dossierId) {
           </div>
         ` : ''}
         
-        <!-- Horaires -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
-          <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;padding:12px">
-            <div style="font-size:10px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">🕐 Début</div>
-            <div style="font-size:13px;color:var(--text);font-weight:600">${escapeHtml(dateAppelStr)}</div>
+        <!-- V2.13.7 — Horaires : timeline pour déplacement, format simple pour téléphone -->
+        ${d.type === 'deplacement' ? timelineHtml : `
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+            <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;padding:12px">
+              <div style="font-size:10px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">🕐 Début</div>
+              <div style="font-size:13px;color:var(--text);font-weight:600">${escapeHtml(dateAppelStr)}</div>
+            </div>
+            <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;padding:12px">
+              <div style="font-size:10px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">🏁 Fin</div>
+              <div style="font-size:13px;color:var(--text);font-weight:600">${escapeHtml(heureFinStr)}</div>
+            </div>
           </div>
-          <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;padding:12px">
-            <div style="font-size:10px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">🏁 Fin</div>
-            <div style="font-size:13px;color:var(--text);font-weight:600">${escapeHtml(heureFinStr)}</div>
-          </div>
-        </div>
+        `}
         
-        <!-- Durée + Km -->
+        <!-- Durée + Km (toujours affiché) -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
           <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;padding:12px">
-            <div style="font-size:10px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">⏱ Durée</div>
+            <div style="font-size:10px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">⏱ Durée totale</div>
             <div style="font-size:15px;font-weight:700;color:var(--text)">${escapeHtml(dureeStr)}</div>
           </div>
           <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;padding:12px">
@@ -7862,8 +8031,8 @@ function openSuperviseurDossierModal(dossierId) {
           </div>
         </div>
         
-        <!-- Étape en cours si applicable -->
-        ${step ? `
+        <!-- Étape en cours - affichée uniquement pour le téléphone (déplacement a sa timeline) -->
+        ${step && d.type === 'telephone' ? `
           <div style="background:${step.color}15;border:1px solid ${step.color}40;border-radius:10px;padding:12px;margin-bottom:16px">
             <div style="font-size:10px;color:${step.color};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;font-weight:600">Étape actuelle</div>
             <div style="font-size:15px;font-weight:700;color:${step.color}">${step.emoji} ${escapeHtml(step.label)}</div>
@@ -10356,6 +10525,49 @@ function renderDetail() {
           <textarea class="form-textarea" data-bind-edit="compteRendu" placeholder="Détailler l'intervention, pièces, observations...">${escapeHtml(d.compteRendu || '')}</textarea>
         </div>
         
+      ${d.type === 'deplacement' ? (() => {
+        // V2.13.8 — Section "D'où pars-tu ?" pour permettre de modifier le point de départ
+        // après création (utile pour les changements de destination en route)
+        const currentPointDepart = d.pointDepart || 'domicile';
+        const previousSite = findPreviousSiteInSequence(d.id, d);
+        return `
+          <div class="section">
+            <div class="section-title">📍 D'où pars-tu ?</div>
+            <div class="radio-group">
+              <div class="radio-option ${currentPointDepart === 'domicile' ? 'selected' : ''}" data-action="set-depart" data-depart="domicile">
+                <div class="radio-dot"></div>
+                <span class="radio-icon">🏠</span>
+                <div class="radio-content">
+                  <div class="radio-title">De mon domicile</div>
+                  <div class="radio-subtitle">${state.settings.adresseDomicile || 'Adresse à configurer dans Réglages'}</div>
+                </div>
+              </div>
+              <div class="radio-option ${currentPointDepart === 'autre-site' ? 'selected' : ''}" data-action="set-depart" data-depart="autre-site">
+                <div class="radio-dot"></div>
+                <span class="radio-icon">🔗</span>
+                <div class="radio-content">
+                  <div class="radio-title">Depuis un autre site (chaînage)</div>
+                  <div class="radio-subtitle">${previousSite ? 
+                    'Tu enchaînes après : ' + escapeHtml(previousSite.etablissement) :
+                    'Tu viens d\\'un autre site (sera marqué chaînage)'}</div>
+                </div>
+              </div>
+              <div class="radio-option ${currentPointDepart === 'autre-lieu' ? 'selected' : ''}" data-action="set-depart" data-depart="autre-lieu">
+                <div class="radio-dot"></div>
+                <span class="radio-icon">📌</span>
+                <div class="radio-content">
+                  <div class="radio-title">Depuis un autre lieu</div>
+                  <div class="radio-subtitle">Si tu n'es pas chez toi (saisie libre ou GPS)</div>
+                </div>
+              </div>
+            </div>
+            <div class="help-text" style="margin-top:8px;font-size:11px;color:var(--text-tertiary);line-height:1.4">
+              💡 Astuce : si tu as changé de destination en route, choisis le bon point de départ ci-dessus, puis touche <strong>"📍 Calculer km"</strong> pour recalculer la distance.
+            </div>
+          </div>
+        `;
+      })() : ''}
+      
       ${d.type === 'deplacement' ? `
         <div class="section">
           <div class="section-title">📊 Site & distance</div>
@@ -11684,7 +11896,18 @@ async function handleAction(e) {
       if (tempDossier) { tempDossier.bureau = !tempDossier.bureau; render(); }
       break;
     case 'set-depart':
-      if (tempDossier) { tempDossier.pointDepart = t.dataset.depart; render(); }
+      // V2.13.8 — Gère création (tempDossier) ET édition (dossier existant via view.dossierId)
+      if (tempDossier) {
+        tempDossier.pointDepart = t.dataset.depart;
+        render();
+      } else if (view.dossierId) {
+        const dossier = state.dossiers.find(x => x.id === view.dossierId);
+        if (dossier) {
+          dossier.pointDepart = t.dataset.depart;
+          await saveDossier(dossier);
+          render();
+        }
+      }
       break;
     case 'detail':
       view.dossierId = t.dataset.id;
