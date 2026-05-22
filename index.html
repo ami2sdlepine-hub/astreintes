@@ -2626,7 +2626,7 @@ function loadJsPDF() {
 // V2.11 — CONFIG APP (Maintenance + Version)
 // ============================================================================
 // Version actuelle de cette app (à incrémenter à chaque déploiement)
-const APP_VERSION = '2.12.2';
+const APP_VERSION = '2.12.3';
 
 // État global de la config app (récupérée depuis le cloud au démarrage)
 const appConfig = {
@@ -4538,7 +4538,11 @@ const urgenceState = {
   isShowing: false,        // ecran alerte affiché?
   acknowledgedIds: new Set(), // ids des urgences déja acquittées localement
   snoozeUntil: 0,          // V2.12.1 - timestamp jusqu'auquel les alertes sont ignorées
-  vibrateTimer: null
+  vibrateTimer: null,
+  // V2.12.3 — Keepalive audio (son silencieux 24/7 pour garder l'AudioContext vivant)
+  keepaliveCtx: null,       // AudioContext dédié au keepalive
+  keepaliveOsc: null,       // Oscillator silencieux
+  keepaliveActive: false    // Si le keepalive est démarré
 };
 
 // V2.12.2 — Identifiant unique par device (permet à un user connecté sur 2 appareils
@@ -4552,17 +4556,94 @@ function getDeviceId() {
   return id;
 }
 
+// ============================================================================
+// V2.12.3 — KEEPALIVE AUDIO (son silencieux 24/7 pour garder l'AudioContext vivant)
+// Indispensable pour que l'alerte d'urgence sonne IMMÉDIATEMENT sur tablette inactive
+// ============================================================================
+function startAudioKeepalive() {
+  if (urgenceState.keepaliveActive) return true; // déjà actif
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    
+    // Forcer la reprise (nécessite une interaction utilisateur récente)
+    if (ctx.state === 'suspended') {
+      ctx.resume();
+    }
+    
+    // Créer un oscillator silencieux qui tourne 24/7
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 1; // 1 Hz = inaudible
+    gain.gain.value = 0.0001; // volume quasi nul
+    
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    
+    urgenceState.keepaliveCtx = ctx;
+    urgenceState.keepaliveOsc = osc;
+    urgenceState.keepaliveActive = true;
+    
+    // Sauvegarder l'état pour le restaurer après reload
+    try { localStorage.setItem('_audioKeepaliveActive', 'true'); } catch(e) {}
+    
+    console.log('🔊 Keepalive audio démarré (son silencieux en boucle)');
+    return true;
+  } catch (e) {
+    console.warn('Keepalive audio échec:', e);
+    return false;
+  }
+}
+
+function stopAudioKeepalive() {
+  try {
+    if (urgenceState.keepaliveOsc) {
+      urgenceState.keepaliveOsc.stop();
+      urgenceState.keepaliveOsc.disconnect();
+    }
+    if (urgenceState.keepaliveCtx) {
+      urgenceState.keepaliveCtx.close();
+    }
+  } catch (e) {}
+  urgenceState.keepaliveCtx = null;
+  urgenceState.keepaliveOsc = null;
+  urgenceState.keepaliveActive = false;
+  try { localStorage.removeItem('_audioKeepaliveActive'); } catch(e) {}
+}
+
+// Vérifie si le keepalive est en bonne santé (AudioContext pas suspendu)
+function checkAudioKeepalive() {
+  if (!urgenceState.keepaliveActive) return false;
+  if (!urgenceState.keepaliveCtx) return false;
+  if (urgenceState.keepaliveCtx.state === 'suspended') {
+    // Tenter de reprendre
+    urgenceState.keepaliveCtx.resume().catch(e => {});
+    return false;
+  }
+  return true;
+}
+
 // Génère un son strident via Web Audio API (fonctionne sans fichier mp3)
 function urgencePlayAlertSound() {
   if (urgenceState.isPlaying) return;
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    urgenceState.audioContext = ctx;
-    
-    // V2.12.2 — Forcer la reprise de l'AudioContext s'il est suspended
-    // (cas sur tablette qui n'a pas eu d'interaction depuis longtemps)
-    if (ctx.state === 'suspended') {
-      ctx.resume().catch(e => console.warn('AudioContext resume failed:', e));
+    // V2.12.3 — Utiliser le contexte keepalive s'il existe (déjà actif et "chaud")
+    // Sinon créer un nouveau contexte
+    let ctx;
+    if (urgenceState.keepaliveCtx && urgenceState.keepaliveCtx.state !== 'closed') {
+      ctx = urgenceState.keepaliveCtx;
+      // S'assurer qu'il n'est pas suspendu
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(e => {});
+      }
+    } else {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      urgenceState.audioContext = ctx;
+      // Forcer la reprise s'il est suspended
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(e => console.warn('AudioContext resume failed:', e));
+      }
     }
     
     // Pattern : bip-bip-bip (3 bips de 0.3s avec pause 0.2s = 1.5s par boucle)
@@ -4625,7 +4706,8 @@ function urgenceStopAlertSound() {
     clearInterval(urgenceState.loopTimer);
     urgenceState.loopTimer = null;
   }
-  if (urgenceState.audioContext) {
+  // V2.12.3 — Ne fermer le contexte QUE s'il n'est pas le keepalive
+  if (urgenceState.audioContext && urgenceState.audioContext !== urgenceState.keepaliveCtx) {
     try { urgenceState.audioContext.close(); } catch(e) {}
     urgenceState.audioContext = null;
   }
@@ -6063,6 +6145,12 @@ async function startSuperviseurMode() {
   // Auto-refresh très fréquent (15 sec)
   superviseurState.refreshTimer = setInterval(async () => {
     if (!superviseurState.active) return;
+    
+    // V2.12.3 — Vérifier le keepalive audio et le redémarrer si suspendu
+    if (urgenceState.keepaliveActive) {
+      checkAudioKeepalive(); // tente resume si suspended
+    }
+    
     try {
       const resDossiers = await cloudCall('getDossiers', {});
       if (resDossiers.success) {
@@ -6081,6 +6169,8 @@ async function startSuperviseurMode() {
 // Arrêter le mode Superviseur
 function stopSuperviseurMode() {
   superviseurState.active = false;
+  // V2.12.3 — Arrêter aussi le keepalive audio
+  stopAudioKeepalive();
   if (superviseurState.refreshTimer) {
     clearInterval(superviseurState.refreshTimer);
     superviseurState.refreshTimer = null;
@@ -6115,6 +6205,9 @@ function renderSuperviseurDashboard() {
   const hasActive = inProgress.length > 0;
   const snoozeActive = urgenceState.snoozeUntil > Date.now();
   const snoozeRemainingMin = snoozeActive ? Math.ceil((urgenceState.snoozeUntil - Date.now()) / 60000) : 0;
+  
+  // V2.12.3 — État du keepalive audio (pour afficher overlay si pas activé)
+  const audioActive = checkAudioKeepalive();
   
   // État global
   let statusBadge;
@@ -6258,6 +6351,9 @@ function renderSuperviseurDashboard() {
         <div>
           <span style="color:#94a3b8;font-weight:600">${escapeHtml(authState.user.full_name || authState.user.username)}</span>
           • Mode Superviseur • Rafraîchi toutes les 15s
+          ${audioActive 
+            ? ' • <span style="color:#22c55e;font-weight:700">🔊 Alertes sonores actives</span>' 
+            : ' • <span style="color:#ef4444;font-weight:700">⚠️ Touche l\'écran pour activer le son</span>'}
         </div>
         <div style="display:flex;gap:8px">
           ${snoozeActive 
@@ -6268,6 +6364,21 @@ function renderSuperviseurDashboard() {
           <button data-action="sup-logout">🚪 Déconnexion</button>
         </div>
       </div>
+      
+      ${!audioActive ? `
+        <div id="sup-audio-overlay" data-action="sup-activate-audio" style="position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px;cursor:pointer">
+          <div style="font-size:80px;margin-bottom:24px;animation:urg-bounce 1s ease-in-out infinite alternate">🔊</div>
+          <div style="font-size:32px;font-weight:800;color:#ffffff;text-align:center;margin-bottom:16px">Activer les alertes sonores</div>
+          <div style="font-size:18px;color:#cbd5e1;text-align:center;max-width:600px;margin-bottom:32px;line-height:1.5">
+            Pour des raisons de sécurité, le navigateur exige une interaction avant de pouvoir jouer des sons en arrière-plan.
+            <br><br>
+            <strong style="color:#ffffff">Touche n'importe où sur l'écran</strong> pour activer le système d'alerte sonore.
+          </div>
+          <div style="background:#3b82f6;color:white;padding:20px 40px;border-radius:14px;font-size:20px;font-weight:800;letter-spacing:0.5px;box-shadow:0 8px 24px rgba(59,130,246,0.5)">
+            👆 TOUCHE POUR ACTIVER
+          </div>
+        </div>
+      ` : ''}
     </div>
   `;
 }
@@ -9603,6 +9714,21 @@ function renderSequence() {
 function attachListeners() {
   $$('[data-action]').forEach(el => el.addEventListener('click', handleAction));
   
+  // V2.12.3 — Démarrer keepalive audio au premier clic pour les users qui reçoivent les urgences
+  // (admin, manager, superviseur)
+  if (canReceiveUrgence() && !urgenceState.keepaliveActive && !document._audioActivationListenerAdded) {
+    document._audioActivationListenerAdded = true;
+    const activateOnFirstClick = () => {
+      if (canReceiveUrgence()) {
+        startAudioKeepalive();
+      }
+      document.removeEventListener('click', activateOnFirstClick);
+      document.removeEventListener('touchstart', activateOnFirstClick);
+    };
+    document.addEventListener('click', activateOnFirstClick, { once: false });
+    document.addEventListener('touchstart', activateOnFirstClick, { once: false });
+  }
+  
   // V2.11.0 — Binding pour la recherche dans la vue Manager
   const mgrSearch = document.getElementById('manager-search-input');
   if (mgrSearch) {
@@ -10067,6 +10193,16 @@ async function handleAction(e) {
     // V2.12.1 — Handlers Vue Superviseur
     case 'sup-snooze-1h':
       superviseurSnooze1h();
+      break;
+    // V2.12.3 — Activer le keepalive audio (premier clic obligatoire)
+    case 'sup-activate-audio':
+      const ok = startAudioKeepalive();
+      if (ok) {
+        toast('✅ Alertes sonores activées', 'success');
+        render(); // re-render pour cacher l'overlay
+      } else {
+        toast('❌ Échec activation audio', 'error');
+      }
       break;
     case 'sup-unsnooze':
       superviseurUnsnooze();
