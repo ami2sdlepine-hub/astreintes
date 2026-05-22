@@ -2768,7 +2768,7 @@ function registerChart(canvasId, instance) {
 // V2.11 — CONFIG APP (Maintenance + Version)
 // ============================================================================
 // Version actuelle de cette app (à incrémenter à chaque déploiement)
-const APP_VERSION = '2.14.6';
+const APP_VERSION = '2.14.7';
 
 // État global de la config app (récupérée depuis le cloud au démarrage)
 const appConfig = {
@@ -4153,6 +4153,15 @@ async function cloudPull(showFeedback = false) {
       const removed = toDelete.length;
       toast(`Cloud : ${added} ajouté(s), ${updated} mis à jour${removed ? ', ' + removed + ' supprimé(s) du local' : ''}`, 'success');
     }
+    
+    // V2.14.7 — Réparation auto des séquences orphelines après sync
+    // (silent = pas de toast spam, juste des logs console si quelque chose est réparé)
+    try {
+      await repairOrphanSequences(true);
+    } catch (e) {
+      console.warn('[V2.14.7] repairOrphanSequences error:', e);
+    }
+    
     if (typeof render === 'function') render();
     return { success: true, added, updated };
   } catch (err) {
@@ -9930,41 +9939,176 @@ function getBadge(d) {
 }
 
 function findOpenSequence() {
-  // Logique V2.5 plus tolérante : un dossier "ouvert" est :
-  // - en statut "intervention" (en cours), OU
-  // - clôturé avec retourDomicile = 'X' (chaînage en cours, n'a pas encore enregistré retour)
-  // ET qui n'a PAS de retour domicile horodaté (sinon la séquence est fermée)
+  // V2.14.7 — Approche simplifiée : on regroupe les dossiers "en cours" par sequenceId.
+  // Si la réparation auto a fait son boulot, tous les dossiers de la même séquence
+  // partagent le même sequenceId. Sinon, on fait du best-effort en regroupant tout
+  // ce qui est en cours (un tech ne fait qu'une chose à la fois en pratique).
   
-  // V2.11.0 — Ne chercher que dans les dossiers du user connecté
-  const myDossiers = getMyDossiers();
+  const myDossiers = getMyDossiers().filter(d => d.type === 'deplacement');
+  if (myDossiers.length === 0) return null;
   
-  const candidatesEnCours = myDossiers.filter(d => 
-    d.statut === 'intervention' && d.retourDomicile !== 'X' && !d.retourDomicile && d.type === 'deplacement'
+  const refTime = (d) => new Date(d.dateAppel).getTime();
+  
+  // Dossiers en cours = en intervention, pas encore rentré
+  const enCours = myDossiers.filter(d =>
+    d.statut === 'intervention' &&
+    !d.retourDomicile
   );
   
-  const candidatesChaines = myDossiers.filter(d =>
-    d.retourDomicile === 'X' && d.type === 'deplacement'
-  );
+  if (enCours.length === 0) return null;
   
-  const allCandidates = [...candidatesEnCours, ...candidatesChaines];
-  if (allCandidates.length === 0) return null;
-  
-  // Si on a plusieurs candidats avec des sequenceId différents, prendre le plus récent
-  const sortedByDate = allCandidates.sort((a, b) => new Date(b.dateAppel) - new Date(a.dateAppel));
-  const latestDossier = sortedByDate[0];
-  
-  // Récupérer tous les dossiers de la même séquence
-  const seqId = latestDossier.sequenceId;
-  if (!seqId) {
-    return { sequenceId: latestDossier.id, dossiers: [latestDossier] };
+  // Si un seul dossier en cours : c'est lui (séquence éventuellement à 1 dossier si chaînage X)
+  if (enCours.length === 1) {
+    const seul = enCours[0];
+    // Si ce dossier n'a aucun marqueur X (chaînage), c'est un dossier isolé,
+    // mais on retourne quand même la séquence (l'appel à addToSequence peut vouloir s'y rattacher)
+    // → on inclut aussi les dossiers clôturés du même sequenceId (cas Jean Rostand cloturé + Thiais en cours)
+    const sameSeq = seul.sequenceId
+      ? myDossiers.filter(d => d.sequenceId === seul.sequenceId)
+      : [seul];
+    return { 
+      sequenceId: seul.sequenceId || seul.id, 
+      dossiers: sameSeq.sort((a, b) => refTime(a) - refTime(b))
+    };
   }
   
-  // Vérifier qu'aucun dossier de la séquence n'a un retour domicile horodaté
-  const seqDossiers = myDossiers.filter(d => d.sequenceId === seqId);
-  const hasRealRetour = seqDossiers.some(d => d.retourDomicile && d.retourDomicile !== 'X');
-  if (hasRealRetour) return null;
+  // Plusieurs dossiers en cours → ils font partie de la même séquence (un tech = une seule chaîne active)
+  // On prend le sequenceId de la tête (= dossier le plus récent)
+  const tete = enCours.sort((a, b) => refTime(b) - refTime(a))[0];
+  const seqId = tete.sequenceId || tete.id;
   
-  return { sequenceId: seqId, dossiers: seqDossiers };
+  // On inclut tous les dossiers de la même séquence (cloturés ET en cours)
+  const sameSeq = new Set(enCours.map(d => d.id));
+  myDossiers.forEach(d => {
+    if (seqId && d.sequenceId === seqId) sameSeq.add(d.id);
+  });
+  
+  const result = myDossiers
+    .filter(d => sameSeq.has(d.id))
+    .sort((a, b) => refTime(a) - refTime(b));
+  
+  return { sequenceId: seqId, dossiers: result };
+}
+
+// V2.14.7 — Réparation auto des sequenceId orphelins
+// Détecte les dossiers en cours dont le sequenceId est "solo" (1 seul dossier l'utilise)
+// alors qu'il devrait faire partie d'une chaîne, et les rattache au bon sequenceId.
+async function repairOrphanSequences(silent = true) {
+  if (!authState.isAuthenticated) {
+    if (!silent) toast('Tu dois être connecté pour réparer les séquences', 'warning');
+    return { repaired: 0, total: 0 };
+  }
+  
+  const myDossiers = (state.dossiers || []).filter(d =>
+    d.type === 'deplacement' &&
+    d.user_id === authState.user.id
+  );
+  
+  if (myDossiers.length === 0) {
+    return { repaired: 0, total: 0 };
+  }
+  
+  // Compter combien de dossiers partagent chaque sequenceId
+  const seqCounts = {};
+  myDossiers.forEach(d => {
+    if (d.sequenceId) {
+      seqCounts[d.sequenceId] = (seqCounts[d.sequenceId] || 0) + 1;
+    }
+  });
+  
+  const refTime = (d) => new Date(d.dateAppel).getTime();
+  
+  // Trouver les dossiers à réparer :
+  // - en cours (intervention, pas de retour)
+  // - departDomicile = 'X' (chaînage entrant)
+  // - sequenceId orphelin (1 seul dossier l'utilise = lui-même)
+  const orphans = myDossiers.filter(d =>
+    d.statut === 'intervention' &&
+    !d.retourDomicile &&
+    d.departDomicile === 'X' &&
+    d.sequenceId &&
+    seqCounts[d.sequenceId] === 1
+  );
+  
+  if (orphans.length === 0) {
+    if (!silent) toast('✅ Aucune séquence à réparer', 'success');
+    return { repaired: 0, total: 0 };
+  }
+  
+  // Pour chaque orphelin, trouver le bon sequenceId
+  // = celui du dossier précédent (par dateAppel) qui appartient à une vraie séquence
+  let repairedCount = 0;
+  for (const orphan of orphans) {
+    const orphanTime = refTime(orphan);
+    
+    // Cherche le dossier précédent qui appartient à une séquence non solo
+    const predecessor = myDossiers
+      .filter(d =>
+        d.id !== orphan.id &&
+        refTime(d) < orphanTime &&
+        d.sequenceId &&
+        seqCounts[d.sequenceId] > 1  // sequenceId valide (partagé)
+      )
+      .sort((a, b) => refTime(b) - refTime(a))[0];
+    
+    if (predecessor) {
+      const oldSeqId = orphan.sequenceId;
+      orphan.sequenceId = predecessor.sequenceId;
+      orphan.updated_at = new Date().toISOString();
+      seqCounts[predecessor.sequenceId] += 1;
+      seqCounts[oldSeqId] -= 1;
+      
+      console.log('[V2.14.7] Séquence réparée :', orphan.etablissement, 
+                  '→ sequenceId', oldSeqId, '➜', predecessor.sequenceId,
+                  '(rattaché à', predecessor.etablissement + ')');
+      
+      // Sauvegarde locale + cloud
+      try {
+        await saveDossier(orphan);
+        repairedCount++;
+      } catch (e) {
+        console.error('[V2.14.7] Erreur saveDossier orphan:', e);
+      }
+    } else {
+      // Pas de prédécesseur trouvé : on cherche au moins un dossier précédent en cours
+      // (cas où aucun sequenceId n'est encore solide)
+      const fallback = myDossiers
+        .filter(d =>
+          d.id !== orphan.id &&
+          refTime(d) < orphanTime &&
+          d.sequenceId
+        )
+        .sort((a, b) => refTime(b) - refTime(a))[0];
+      
+      if (fallback) {
+        const oldSeqId = orphan.sequenceId;
+        orphan.sequenceId = fallback.sequenceId;
+        orphan.updated_at = new Date().toISOString();
+        seqCounts[fallback.sequenceId] += 1;
+        seqCounts[oldSeqId] -= 1;
+        
+        console.log('[V2.14.7] Séquence réparée (fallback) :', orphan.etablissement,
+                    '→ sequenceId', oldSeqId, '➜', fallback.sequenceId);
+        
+        try {
+          await saveDossier(orphan);
+          repairedCount++;
+        } catch (e) {
+          console.error('[V2.14.7] Erreur saveDossier orphan fallback:', e);
+        }
+      }
+    }
+  }
+  
+  if (!silent) {
+    if (repairedCount > 0) {
+      toast(`✅ ${repairedCount} séquence(s) réparée(s)`, 'success');
+    } else {
+      toast('ℹ️ Aucune séquence n\'a pu être réparée', 'info');
+    }
+  }
+  
+  return { repaired: repairedCount, total: orphans.length };
 }
 
 function recalcDurations(d) {
@@ -11170,6 +11314,12 @@ function renderSettings() {
               </button>
             `;
           })()}
+          <button class="btn btn-secondary" data-action="repair-sequences" style="width:100%">
+            🔧 Réparer les séquences
+          </button>
+          <div style="font-size:11px;color:var(--text-tertiary);text-align:center;margin-top:-4px">
+            Corrige les chaînages cassés si des dossiers n'apparaissent pas dans la bonne séquence.
+          </div>
           <button class="btn btn-secondary" data-action="logout" style="width:100%;color:#dc2626;border-color:#fecaca">
             🚪 Se déconnecter
           </button>
@@ -12117,6 +12267,20 @@ async function handleAction(e) {
     case 'cloud-pull-now':
       await cloudPull(true);
       break;
+    // V2.14.7 — Réparer les sequenceId orphelins manuellement
+    case 'repair-sequences': {
+      const confirmed = await showConfirm(
+        'Réparer les séquences ?',
+        'Cette action va analyser tes dossiers et corriger les chaînages cassés. Sans risque.',
+        'normal'
+      );
+      if (!confirmed) break;
+      toast('🔧 Analyse en cours...', 'info');
+      const result = await repairOrphanSequences(false);
+      console.log('[V2.14.7] Réparation manuelle :', result);
+      render();
+      break;
+    }
     case 'logout':
       await handleLogoutClick();
       break;
