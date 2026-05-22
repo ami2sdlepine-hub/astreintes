@@ -2165,6 +2165,31 @@ body { font-size: 15px; line-height: 1.5; }
   from { transform: scale(1); }
   to { transform: scale(1.15); }
 }
+
+/* V2.13.4 — Animation pour les interventions très longues (> 2h) */
+@keyframes duration-alert-blink {
+  0%, 100% { 
+    background-color: rgba(239,68,68,0.18);
+    border-color: rgba(239,68,68,0.55);
+  }
+  50% { 
+    background-color: rgba(239,68,68,0.35);
+    border-color: rgba(239,68,68,0.85);
+  }
+}
+.intervention-card-alert {
+  animation: duration-alert-blink 1.5s ease-in-out infinite;
+}
+
+/* V2.13.4 — Carte intervention cliquable */
+.intervention-card-clickable {
+  cursor: pointer;
+  transition: transform 0.1s ease, background-color 0.15s ease;
+}
+.intervention-card-clickable:active {
+  transform: scale(0.98);
+  background-color: rgba(255,255,255,0.08) !important;
+}
 #urgence-alert-screen .urg-alert-title {
   color: white;
   font-size: 32px;
@@ -2743,7 +2768,7 @@ function registerChart(canvasId, instance) {
 // V2.11 — CONFIG APP (Maintenance + Version)
 // ============================================================================
 // Version actuelle de cette app (à incrémenter à chaque déploiement)
-const APP_VERSION = '2.13.3';
+const APP_VERSION = '2.13.5';
 
 // État global de la config app (récupérée depuis le cloud au démarrage)
 const appConfig = {
@@ -4776,7 +4801,9 @@ function stopDashboardAutoRefresh() {
 
 // Charger toutes les données du dashboard (dossiers + users)
 async function dashboardLoadData() {
-  if (!isAdmin()) { toast('Accès refusé', 'error'); return; }
+  // V2.13.4 — Autoriser admin OU superviseur (le superviseur a besoin des dossiers + users pour son tableau)
+  const allowed = isAdmin() || (authState.user && authState.user.role === 'superviseur');
+  if (!allowed) { toast('Accès refusé', 'error'); return; }
   dashboardState.loading = true;
   if (typeof render === 'function') render();
   
@@ -5781,6 +5808,52 @@ function fmtRelativeTime(minutes) {
   const days = Math.floor(hours / 24);
   const remHours = hours % 24;
   return remHours > 0 ? `${days}j ${remHours}h` : `${days}j`;
+}
+
+/**
+ * V2.13.4 — Retourne un style d'alerte progressif selon la durée d'une intervention
+ * < 30 min : vert (normal)
+ * 30-60 min : jaune (long)
+ * 60-120 min : orange (très long)
+ * > 120 min : rouge clignotant (alerte)
+ */
+function getDurationAlertStyle(minutes) {
+  if (minutes < 30) {
+    return { color: '#22c55e', bg: 'rgba(34,197,94,0.12)', border: 'rgba(34,197,94,0.35)', label: 'EN COURS', icon: '🟢', blink: false };
+  } else if (minutes < 60) {
+    return { color: '#eab308', bg: 'rgba(234,179,8,0.12)', border: 'rgba(234,179,8,0.35)', label: 'LONG', icon: '🟡', blink: false };
+  } else if (minutes < 120) {
+    return { color: '#f97316', bg: 'rgba(249,115,22,0.15)', border: 'rgba(249,115,22,0.4)', label: 'TRÈS LONG', icon: '🟠', blink: false };
+  } else {
+    return { color: '#ef4444', bg: 'rgba(239,68,68,0.18)', border: 'rgba(239,68,68,0.55)', label: '⚠️ ALERTE', icon: '🔴', blink: true };
+  }
+}
+
+/**
+ * V2.13.4 — Détecte si on est actuellement en période d'astreinte (hors heures bureau)
+ * Bureau : Lun-Jeu 9h-18h, Ven 9h-17h. Reste = astreinte (week-end, soirs, nuits).
+ * Retourne un objet avec { isAstreinte: bool, label: string, color: string, bg: string, nextChange: Date }
+ */
+function getCurrentAstreintePeriod() {
+  const now = new Date();
+  const day = now.getDay(); // 0=dim, 1=lun, ..., 6=sam
+  const h = now.getHours() + now.getMinutes() / 60;
+  
+  let isAstreinte = false;
+  if (day === 0 || day === 6) {
+    // Week-end : toujours astreinte
+    isAstreinte = true;
+  } else if (day >= 1 && day <= 4) {
+    // Lun-Jeu : bureau 9h-18h
+    isAstreinte = !(h >= 9 && h < 18);
+  } else if (day === 5) {
+    // Vendredi : bureau 9h-17h
+    isAstreinte = !(h >= 9 && h < 17);
+  }
+  
+  return isAstreinte
+    ? { isAstreinte: true, label: 'Période d\'astreinte', icon: '🌙', color: '#a855f7', bg: 'rgba(168,85,247,0.12)', border: 'rgba(168,85,247,0.4)' }
+    : { isAstreinte: false, label: 'Heures de bureau', icon: '☀️', color: '#3b82f6', bg: 'rgba(59,130,246,0.10)', border: 'rgba(59,130,246,0.35)' };
 }
 
 /**
@@ -7611,6 +7684,7 @@ async function startSuperviseurMode() {
   await dashboardLoadData();
   
   // Auto-refresh très fréquent (15 sec)
+  let refreshCount = 0;
   superviseurState.refreshTimer = setInterval(async () => {
     if (!superviseurState.active) return;
     
@@ -7623,9 +7697,16 @@ async function startSuperviseurMode() {
       const resDossiers = await cloudCall('getDossiers', {});
       if (resDossiers.success) {
         dashboardState.allDossiers = (resDossiers.dossiers || []).filter(d => !d.deleted);
-        // Re-render uniquement si on est toujours en mode superviseur
-        if (view.current === 'superviseur') render();
       }
+      // V2.13.4 — Rafraîchir aussi les users toutes les 5 minutes (20 cycles × 15s)
+      // pour rester à jour si l'admin crée un nouveau tech
+      refreshCount++;
+      if (refreshCount >= 20) {
+        refreshCount = 0;
+        const resUsers = await cloudCall('listUsers', {});
+        if (resUsers.success) dashboardState.users = resUsers.users || [];
+      }
+      if (view.current === 'superviseur') render();
     } catch (e) { /* silent */ }
   }, 15000);
   
@@ -7665,6 +7746,140 @@ function superviseurUnsnooze() {
   urgenceState.snoozeUntil = 0;
   toast('🔔 Mode silencieux désactivé', 'success');
   render();
+}
+
+// V2.13.4 — Modale détails dossier pour le superviseur (lecture seule)
+function openSuperviseurDossierModal(dossierId) {
+  const d = dashboardState.allDossiers.find(x => x.id === dossierId);
+  if (!d) { toast('Dossier introuvable', 'error'); return; }
+  
+  const techName = dashboardGetUsername(d);
+  const isCloture = dashboardIsCloture(d);
+  const dateAppelStr = d.dateAppel ? new Date(d.dateAppel).toLocaleString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+  const heureFinStr = d.heureFin ? new Date(d.heureFin).toLocaleString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+  
+  // Calcul de la durée
+  let dureeStr = '—';
+  if (d.dateAppel && d.heureFin) {
+    const ms = new Date(d.heureFin) - new Date(d.dateAppel);
+    const minutes = Math.round(ms / 60000);
+    dureeStr = fmtRelativeTime(minutes);
+  } else if (d.dateAppel && !isCloture) {
+    const ms = Date.now() - new Date(d.dateAppel).getTime();
+    const minutes = Math.round(ms / 60000);
+    dureeStr = fmtRelativeTime(minutes) + ' (en cours)';
+  }
+  
+  const km = parseFloat(d.distance) || parseFloat(d.km) || 0;
+  const typeLabel = d.type === 'telephone' ? '☎️ Téléphone' : '🚗 Déplacement';
+  const statutBadge = isCloture
+    ? '<span style="background:rgba(34,197,94,0.15);color:#22c55e;padding:5px 12px;border-radius:8px;font-size:13px;font-weight:700">✓ CLÔTURÉ</span>'
+    : '<span style="background:rgba(239,68,68,0.15);color:#ef4444;padding:5px 12px;border-radius:8px;font-size:13px;font-weight:700">🔴 EN COURS</span>';
+  
+  // Step actuel si en cours
+  const step = !isCloture ? detectInterventionStep(d) : null;
+  
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay visible';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:680px;max-height:90vh;overflow-y:auto">
+      <div class="modal-header" style="background:rgba(59,130,246,0.1);position:sticky;top:0;z-index:2">
+        <div class="modal-title" style="color:#3b82f6">📋 Détails du dossier</div>
+        <button class="modal-close" data-action="sup-close-modal">×</button>
+      </div>
+      <div class="modal-body" style="padding:22px">
+        <!-- Header établissement + statut -->
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:20px;flex-wrap:wrap">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:11px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Établissement</div>
+            <div style="font-size:20px;font-weight:700;color:var(--text);line-height:1.3">${escapeHtml(d.etablissement || 'Sans nom')}</div>
+          </div>
+          ${statutBadge}
+        </div>
+        
+        <!-- Type + Tech -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+          <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;padding:12px">
+            <div style="font-size:10px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Type</div>
+            <div style="font-size:15px;font-weight:600;color:var(--text)">${typeLabel}</div>
+          </div>
+          <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;padding:12px">
+            <div style="font-size:10px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Technicien</div>
+            <div style="font-size:15px;font-weight:600;color:var(--text)">${escapeHtml(techName)}</div>
+          </div>
+        </div>
+        
+        <!-- Adresse -->
+        ${d.adresseSite || d.adresse ? `
+          <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:16px">
+            <div style="font-size:10px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">📍 Adresse</div>
+            <div style="font-size:13px;color:var(--text);line-height:1.4">${escapeHtml(d.adresseSite || d.adresse || '')}</div>
+          </div>
+        ` : ''}
+        
+        <!-- Motif -->
+        ${d.motif ? `
+          <div style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.25);border-radius:10px;padding:12px;margin-bottom:16px">
+            <div style="font-size:10px;color:#3b82f6;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;font-weight:600">📝 Motif de l'intervention</div>
+            <div style="font-size:14px;color:var(--text);line-height:1.5">${escapeHtml(d.motif)}</div>
+          </div>
+        ` : ''}
+        
+        <!-- Horaires -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+          <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;padding:12px">
+            <div style="font-size:10px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">🕐 Début</div>
+            <div style="font-size:13px;color:var(--text);font-weight:600">${escapeHtml(dateAppelStr)}</div>
+          </div>
+          <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;padding:12px">
+            <div style="font-size:10px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">🏁 Fin</div>
+            <div style="font-size:13px;color:var(--text);font-weight:600">${escapeHtml(heureFinStr)}</div>
+          </div>
+        </div>
+        
+        <!-- Durée + Km -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+          <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;padding:12px">
+            <div style="font-size:10px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">⏱ Durée</div>
+            <div style="font-size:15px;font-weight:700;color:var(--text)">${escapeHtml(dureeStr)}</div>
+          </div>
+          <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;padding:12px">
+            <div style="font-size:10px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">🚗 Distance</div>
+            <div style="font-size:15px;font-weight:700;color:var(--text)">${km > 0 ? km.toFixed(1) + ' km' : '—'}</div>
+          </div>
+        </div>
+        
+        <!-- Étape en cours si applicable -->
+        ${step ? `
+          <div style="background:${step.color}15;border:1px solid ${step.color}40;border-radius:10px;padding:12px;margin-bottom:16px">
+            <div style="font-size:10px;color:${step.color};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;font-weight:600">Étape actuelle</div>
+            <div style="font-size:15px;font-weight:700;color:${step.color}">${step.emoji} ${escapeHtml(step.label)}</div>
+            <div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">Depuis ${fmtRelativeTime(step.sinceMin)}</div>
+          </div>
+        ` : ''}
+        
+        <!-- Récupéré ERP -->
+        ${isCloture ? `
+          <div style="text-align:center;padding:10px;background:var(--bg-subtle);border-radius:8px;font-size:12px;color:var(--text-tertiary)">
+            ${d.recupereERP ? '✅ <span style="color:#22c55e;font-weight:600">Récupéré dans l\'ERP</span>' : '⏳ <span style="color:#f97316;font-weight:600">Non récupéré dans l\'ERP</span>'}
+          </div>
+        ` : ''}
+      </div>
+      <div class="modal-footer" style="padding:14px 22px;border-top:1px solid var(--border);text-align:center">
+        <button class="btn btn-primary" data-action="sup-close-modal" style="padding:10px 24px;font-size:14px">Fermer</button>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(overlay);
+  
+  // Fermeture au tap sur l'overlay ou sur les boutons fermer
+  overlay.addEventListener('click', (e) => {
+    const action = e.target.dataset.action || e.target.closest('[data-action]')?.dataset.action;
+    if (action === 'sup-close-modal' || e.target === overlay) {
+      overlay.remove();
+    }
+  });
 }
 
 // Rendu de la grande Vue Superviseur
@@ -7715,6 +7930,20 @@ function renderSuperviseurDashboard() {
       <div class="superviseur-content">
         <!-- COLONNE GAUCHE -->
         <div>
+          <!-- V2.13.4 — Indicateur période astreinte/bureau -->
+          ${(() => {
+            const period = getCurrentAstreintePeriod();
+            return `
+              <div style="background:${period.bg};border:1px solid ${period.border};border-left:4px solid ${period.color};border-radius:10px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px">
+                <div style="font-size:22px">${period.icon}</div>
+                <div style="flex:1">
+                  <div style="font-size:13px;font-weight:700;color:${period.color}">${period.label}</div>
+                  <div style="font-size:10px;color:#94a3b8;margin-top:2px">${period.isAstreinte ? 'Le tech d\'astreinte est mobilisable' : 'Équipe disponible au bureau'}</div>
+                </div>
+              </div>
+            `;
+          })()}
+          
           <!-- Astreinte de la semaine -->
           <div class="superviseur-block" style="margin-bottom:16px">
             <h3>🚨 Astreinte de la semaine</h3>
@@ -7738,8 +7967,19 @@ function renderSuperviseurDashboard() {
                     <div style="font-size:10px;color:#eab308;font-weight:600;text-transform:uppercase">🥈 Suppléant</div>
                   </div>
                 </div>
-              ` : ''}
-            ` : '<div style="text-align:center;padding:20px;color:#64748b;font-size:13px">Aucune désignation cette semaine</div>'}
+              ` : `
+                <div style="margin-top:10px;padding:8px 10px;background:rgba(234,179,8,0.06);border:1px dashed rgba(234,179,8,0.3);border-radius:8px;font-size:11px;color:#eab308;text-align:center">
+                  ℹ️ Pas de suppléant désigné cette semaine
+                </div>
+              `}
+            ` : `
+              <!-- V2.13.4 — Message amélioré quand aucune désignation -->
+              <div style="text-align:center;padding:24px 16px;background:rgba(239,68,68,0.06);border:1px dashed rgba(239,68,68,0.35);border-radius:10px">
+                <div style="font-size:32px;margin-bottom:8px">⚠️</div>
+                <div style="font-size:14px;font-weight:700;color:#ef4444;margin-bottom:4px">Aucun tech désigné cette semaine</div>
+                <div style="font-size:11px;color:#94a3b8;line-height:1.5">L'administrateur doit désigner un titulaire d'astreinte.<br>Contacte <strong style="color:#ffffff">Dimitri</strong> si besoin.</div>
+              </div>
+            `}
           </div>
           
           <!-- Récap semaine -->
@@ -7772,16 +8012,27 @@ function renderSuperviseurDashboard() {
               <div style="display:flex;flex-direction:column;gap:8px">
                 ${inProgress.map(({ dossier: d, step }) => {
                   const techName = dashboardGetUsername(d);
+                  // V2.13.4 — Style d'alerte progressif selon la durée
+                  const durStyle = getDurationAlertStyle(step.sinceMin);
+                  const cardClass = durStyle.blink ? 'intervention-card-alert intervention-card-clickable' : 'intervention-card-clickable';
                   return `
-                    <div style="padding:11px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px">
-                      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px">
+                    <div class="${cardClass}" data-action="sup-show-dossier" data-dossier-id="${escapeHtml(d.id)}" style="padding:11px;background:${durStyle.bg};border:1px solid ${durStyle.border};border-radius:10px;border-left:4px solid ${durStyle.color}">
+                      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px;flex-wrap:wrap">
                         <div style="font-size:13px;font-weight:700;color:#ffffff">${escapeHtml(techName)}</div>
-                        <span style="background:${step.color}30;color:${step.color};padding:3px 8px;border-radius:6px;font-size:10px;font-weight:700">
-                          ${step.emoji} ${escapeHtml(step.label)}
-                        </span>
+                        <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
+                          <span style="background:${step.color}30;color:${step.color};padding:3px 8px;border-radius:6px;font-size:10px;font-weight:700">
+                            ${step.emoji} ${escapeHtml(step.label)}
+                          </span>
+                          <span style="background:${durStyle.color}30;color:${durStyle.color};padding:3px 8px;border-radius:6px;font-size:10px;font-weight:700">
+                            ${durStyle.icon} ${escapeHtml(durStyle.label)}
+                          </span>
+                        </div>
                       </div>
                       <div style="font-size:12px;color:#cbd5e1;margin-bottom:4px">${escapeHtml(d.etablissement || 'Sans nom')}</div>
-                      <div style="font-size:10px;color:#94a3b8">Depuis ${fmtRelativeTime(step.sinceMin)}</div>
+                      <div style="display:flex;justify-content:space-between;align-items:center;font-size:10px">
+                        <span style="color:#94a3b8">Depuis ${fmtRelativeTime(step.sinceMin)}</span>
+                        <span style="color:${durStyle.color};font-weight:600">👆 Voir détails</span>
+                      </div>
                     </div>
                   `;
                 }).join('')}
@@ -7800,7 +8051,7 @@ function renderSuperviseurDashboard() {
                   const techName = dashboardGetUsername(d);
                   const dateStr = new Date(d.dateAppel).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
                   return `
-                    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:rgba(255,255,255,0.03);border-radius:8px">
+                    <div class="intervention-card-clickable" data-action="sup-show-dossier" data-dossier-id="${escapeHtml(d.id)}" style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:rgba(255,255,255,0.03);border-radius:8px">
                       <div style="min-width:0;flex:1">
                         <div style="font-size:12px;font-weight:600;color:#ffffff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(d.etablissement || 'Sans nom')}</div>
                         <div style="font-size:10px;color:#94a3b8;margin-top:2px">${escapeHtml(techName)} • ${escapeHtml(dateStr)}</div>
@@ -8328,18 +8579,23 @@ function getManagerWeekDossiers() {
 }
 
 // V2.12.0 — Distinguer dossiers "vraiment finis" vs "en cours"
-// Un dossier est "fini" si cloturé ET (pour déplacement : retour domicile rempli)
+// V2.13.5 — Fix : reconnaître le cas de chaînage (retourDomicile === 'X')
+// Un dossier est "fini" si cloturé ET (pour déplacement : retour domicile rempli OU chaînage sortant)
 function isDossierReallyFinished(d) {
   if (!d) return false;
   // Doit etre cloture
   const isClotured = d.cloture === true || d.cloture === 'true' || d.statut === 'cloture';
   if (!isClotured) return false;
-  // Pour un déplacement : vérifier que retour est rempli (vraiment fini)
-  if (d.type === 'deplacement') {
-    return d.retourDomicile && d.retourDomicile !== 'X' && d.retourDomicile.trim() !== '';
-  }
-  // Pour téléphone : cloture suffit
-  return true;
+  // Pour téléphone : cloture suffit (jamais de retour domicile)
+  if (d.type !== 'deplacement') return true;
+  // V2.13.5 — Pour un déplacement :
+  // - Si retourDomicile === 'X' → chaînage sortant : l'intervention EST finie (le tech enchaîne sur une autre)
+  // - Si retourDomicile est rempli avec une vraie valeur → retour effectué : l'intervention EST finie
+  // - Si retourDomicile est vide ou null → le tech n'a pas saisi son retour : on considère "non fini"
+  const r = d.retourDomicile;
+  if (r === 'X') return true; // chaînage sortant : fini
+  if (r && typeof r === 'string' && r.trim() !== '') return true; // retour saisi : fini
+  return false; // retour manquant : non fini
 }
 
 // V2.12.0 — Compter les dossiers "en cours" de la semaine
@@ -11856,6 +12112,16 @@ async function handleAction(e) {
       if (!confirm('Te déconnecter du mode Superviseur ?')) break;
       stopSuperviseurMode();
       await authLogout();
+      break;
+    // V2.13.4 — Afficher les détails d'un dossier (modale)
+    case 'sup-show-dossier': {
+      const dossierId = t.dataset.dossierId || t.closest('[data-dossier-id]')?.dataset.dossierId;
+      if (dossierId) openSuperviseurDossierModal(dossierId);
+      break;
+    }
+    case 'sup-close-modal':
+      // Géré dans openSuperviseurDossierModal mais on l'ajoute aussi ici pour cohérence
+      document.querySelectorAll('.modal-overlay.visible').forEach(el => el.remove());
       break;
     case 'show-sync':
       showSyncModal();
