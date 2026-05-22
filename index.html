@@ -2626,7 +2626,7 @@ function loadJsPDF() {
 // V2.11 — CONFIG APP (Maintenance + Version)
 // ============================================================================
 // Version actuelle de cette app (à incrémenter à chaque déploiement)
-const APP_VERSION = '2.12.1';
+const APP_VERSION = '2.12.2';
 
 // État global de la config app (récupérée depuis le cloud au démarrage)
 const appConfig = {
@@ -2944,7 +2944,7 @@ function startAppConfigPolling() {
         checkUrgenceActive();
       }
     } catch(e) { /* silent */ }
-  }, 15 * 1000); // 15 sec
+  }, 8 * 1000); // V2.12.2 - 8 sec (pour respecter max 10 sec demandé)
 }
 
 function renderNetworkBadge() {
@@ -3713,6 +3713,10 @@ async function startMainApp() {
     // Important : ce démarrage doit avoir lieu après login frais (sinon pas de réception urgence)
     if (typeof startAppConfigPolling === 'function') {
       startAppConfigPolling();
+    }
+    // V2.12.2 — Charger les acquittements persistés AVANT de check urgence
+    if (typeof loadAcknowledgedIds === 'function') {
+      loadAcknowledgedIds();
     }
     // V2.12.1 — Vérifier immédiatement s'il y a une urgence active
     if (typeof checkUrgenceActive === 'function') {
@@ -4537,6 +4541,17 @@ const urgenceState = {
   vibrateTimer: null
 };
 
+// V2.12.2 — Identifiant unique par device (permet à un user connecté sur 2 appareils
+// de recevoir l'alerte sur l'autre appareil même s'il l'a déclenchée depuis le premier)
+function getDeviceId() {
+  let id = localStorage.getItem('_deviceId');
+  if (!id) {
+    id = 'dev-' + Math.random().toString(36).substring(2, 12) + '-' + Date.now().toString(36);
+    localStorage.setItem('_deviceId', id);
+  }
+  return id;
+}
+
 // Génère un son strident via Web Audio API (fonctionne sans fichier mp3)
 function urgencePlayAlertSound() {
   if (urgenceState.isPlaying) return;
@@ -4544,8 +4559,13 @@ function urgencePlayAlertSound() {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     urgenceState.audioContext = ctx;
     
+    // V2.12.2 — Forcer la reprise de l'AudioContext s'il est suspended
+    // (cas sur tablette qui n'a pas eu d'interaction depuis longtemps)
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(e => console.warn('AudioContext resume failed:', e));
+    }
+    
     // Pattern : bip-bip-bip (3 bips de 0.3s avec pause 0.2s = 1.5s par boucle)
-    // On répète en boucle pendant 10s puis pause 2s, puis re-boucle
     
     const playOneBip = (startTime, freq) => {
       const osc = ctx.createOscillator();
@@ -4556,8 +4576,8 @@ function urgencePlayAlertSound() {
       
       // Enveloppe : attack rapide + release rapide
       gain.gain.setValueAtTime(0, startTime);
-      gain.gain.linearRampToValueAtTime(0.4, startTime + 0.02);
-      gain.gain.setValueAtTime(0.4, startTime + 0.25);
+      gain.gain.linearRampToValueAtTime(0.5, startTime + 0.02);
+      gain.gain.setValueAtTime(0.5, startTime + 0.25);
       gain.gain.linearRampToValueAtTime(0, startTime + 0.3);
       
       osc.connect(gain);
@@ -4569,10 +4589,9 @@ function urgencePlayAlertSound() {
     const playPattern10s = () => {
       const t0 = ctx.currentTime;
       // 6 series de 3 bips alternés en 10 secondes
-      // chaque serie : 3 bips x 0.5s = 1.5s + pause 0.1s = 1.6s
       for (let serie = 0; serie < 6; serie++) {
         const serieStart = t0 + serie * 1.6;
-        const freq = (serie % 2 === 0) ? 1000 : 1400; // alternance 2 frequences
+        const freq = (serie % 2 === 0) ? 1000 : 1400;
         playOneBip(serieStart, freq);
         playOneBip(serieStart + 0.5, freq);
         playOneBip(serieStart + 1.0, freq);
@@ -4582,13 +4601,17 @@ function urgencePlayAlertSound() {
     urgenceState.isPlaying = true;
     playPattern10s();
     
-    // Boucle : tous les 12 sec, relancer le pattern de 10s
+    // Boucle : tous les 11 sec, relancer le pattern de 10s
     urgenceState.loopTimer = setInterval(() => {
       if (!urgenceState.isPlaying) return;
+      // V2.12.2 — Re-tenter resume au cas où
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(e => {});
+      }
       playPattern10s();
-    }, 12000);
+    }, 11000);
     
-    // Tenter aussi la vibration en boucle (Android)
+    // V2.12.2 — Vibration IMMEDIATE (avant même le son si Android)
     urgenceVibrateLoop();
   } catch (e) {
     console.warn('Audio API non disponible:', e);
@@ -4633,6 +4656,9 @@ function urgenceShowAlertScreen(details) {
   // Parser les détails
   let info = {};
   try { info = typeof details === 'string' ? JSON.parse(details) : details; } catch(e) { info = {}; }
+  
+  // V2.12.2 — Lancer son + vibration IMMÉDIATEMENT (avant le DOM)
+  urgencePlayAlertSound();
   
   const techName = info.username || 'Un technicien';
   const motif = info.motif || 'Pas de motif précisé';
@@ -4703,9 +4729,7 @@ function urgenceShowAlertScreen(details) {
       n.onclick = () => window.focus();
     } catch(e) {}
   }
-  
-  // Lancer le son
-  urgencePlayAlertSound();
+  // V2.12.2 — Son et vibration déjà lancés en début de fonction
 }
 
 // Fermer l'écran alerte
@@ -4717,15 +4741,42 @@ function urgenceCloseAlertScreen() {
 }
 
 // Acquitter l'urgence (appel cloud)
+// V2.12.2 — Helpers pour persister les acquittements (survie au rafraîchissement)
+function loadAcknowledgedIds() {
+  try {
+    const stored = localStorage.getItem('_urgenceAckIds');
+    if (stored) {
+      const arr = JSON.parse(stored);
+      urgenceState.acknowledgedIds = new Set(arr);
+    }
+  } catch (e) {}
+}
+
+function saveAcknowledgedIds() {
+  try {
+    const arr = Array.from(urgenceState.acknowledgedIds);
+    // Garder seulement les 50 derniers acquittements (pour éviter d'accumuler)
+    const last50 = arr.slice(-50);
+    localStorage.setItem('_urgenceAckIds', JSON.stringify(last50));
+  } catch (e) {}
+}
+
 async function urgenceAcknowledge(urgenceId) {
   try {
+    // V2.12.2 — Stocker l'id LOCALEMENT en premier (pour ne plus le retrigger même si cloud tarde)
+    if (urgenceId) {
+      urgenceState.acknowledgedIds.add(urgenceId);
+      saveAcknowledgedIds();
+    }
+    
     // Marquer comme acquittée côté cloud
     const ok = await setAppConfigValue('urgenceAck', true);
     // Marquer aussi inactive après ack
     await setAppConfigValue('urgenceActive', false);
     
-    // Stocker l'id pour ne plus le déclencher localement
-    if (urgenceId) urgenceState.acknowledgedIds.add(urgenceId);
+    // Forcer localement appConfig pour ne pas re-trigger immédiatement
+    appConfig.urgenceAck = true;
+    appConfig.urgenceActive = false;
     
     urgenceCloseAlertScreen();
     
@@ -4810,6 +4861,7 @@ async function urgenceTrigger() {
       const urgenceData = {
         id: uid(),
         userId: authState.user.id,
+        deviceId: getDeviceId(),  // V2.12.2 - identifier l'appareil source
         username: authState.user.full_name || authState.user.username,
         time: new Date().toISOString(),
         motif: motif,
@@ -4856,17 +4908,20 @@ function checkUrgenceActive() {
   let info = {};
   try { info = typeof appConfig.urgenceDetails === 'string' ? JSON.parse(appConfig.urgenceDetails) : appConfig.urgenceDetails; } catch(e) {}
   
-  // Ne PAS afficher l'alerte au tech qui l'a déclenchée (pour éviter qu'il s'auto-alerte)
-  if (info.userId && authState.user && info.userId === authState.user.id) return;
+  // V2.12.2 — Vérifier en PRIORITÉ si déjà acquittée localement (évite le retour de l'alerte)
+  if (info.id && urgenceState.acknowledgedIds.has(info.id)) return;
+  
+  // V2.12.2 — Filtrer par DEVICE_ID au lieu de userId
+  // Permet à un admin connecté sur 2 appareils de recevoir l'alerte sur l'autre
+  if (info.deviceId && info.deviceId === getDeviceId()) return;
+  // Fallback ancien : si pas de deviceId dans les anciennes urgences, exclure par userId
+  if (!info.deviceId && info.userId && authState.user && info.userId === authState.user.id) return;
   
   // V2.12.1 - Admin, manager ET superviseur reçoivent les alertes
   if (!canReceiveUrgence()) return;
   
   // V2.12.1 - Mode snooze : ignorer les alertes pendant la durée du snooze
   if (urgenceState.snoozeUntil && Date.now() < urgenceState.snoozeUntil) return;
-  
-  // Eviter de re-trigger si déjà acquittée localement
-  if (info.id && urgenceState.acknowledgedIds.has(info.id)) return;
   
   // Afficher !
   urgenceShowAlertScreen(info);
