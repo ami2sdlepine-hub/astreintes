@@ -2906,7 +2906,12 @@ function renderUpdateModal() {
 }
 
 // Vérifier périodiquement la config app (toutes les 5 min)
+let _appConfigPollingStarted = false;
 function startAppConfigPolling() {
+  // V2.12.1 FIX — Protection contre double démarrage
+  if (_appConfigPollingStarted) return;
+  _appConfigPollingStarted = true;
+  
   // Polling général : maintenance + version (toutes les 5 min, peu critique)
   setInterval(async () => {
     await fetchAppConfig();
@@ -3424,6 +3429,8 @@ async function authLogout() {
   if (authState.token) {
     await authCall('logout', {});
   }
+  // V2.12.1 — Reset flag polling pour qu'il puisse redémarrer au prochain login
+  _appConfigPollingStarted = false;
   // V2.10.3 — Nettoyage complet pour éviter les fuites de données entre comptes
   await wipeLocalUserData();
   authClearStorage();
@@ -3700,6 +3707,16 @@ async function startMainApp() {
       cloudPullPromise.then(() => {
         if (typeof render === 'function') render();
       });
+    }
+    
+    // V2.12.1 FIX — Démarrer le polling AppConfig (incluant urgence 15s)
+    // Important : ce démarrage doit avoir lieu après login frais (sinon pas de réception urgence)
+    if (typeof startAppConfigPolling === 'function') {
+      startAppConfigPolling();
+    }
+    // V2.12.1 — Vérifier immédiatement s'il y a une urgence active
+    if (typeof checkUrgenceActive === 'function') {
+      checkUrgenceActive();
     }
   } catch (err) {
     console.error('startMainApp error', err);
@@ -7931,7 +7948,7 @@ function renderList() {
           <img src="${getLogo()}" alt="Logo" style="width:40px;height:40px;object-fit:contain;flex-shrink:0">
           <div>
             <div class="header-title">Astreintes</div>
-            <div class="header-subtitle">${state.settings.technicien || 'AMI2S'} • ${state.settings.statutSemaine === 'titulaire' ? 'Titulaire' : 'Suppléant'}</div>
+            <div class="header-subtitle">${state.settings.technicien || 'AMI2S'}${isCurrentUserAstreinteTitulaire() ? ' • 🔴 Titulaire' : isCurrentUserAstreinteSuppleant() ? ' • 🥈 Suppléant' : ''}</div>
           </div>
         </div>
         <div class="header-actions">
