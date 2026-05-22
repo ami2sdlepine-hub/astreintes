@@ -2063,6 +2063,145 @@ body { font-size: 15px; line-height: 1.5; }
 }
 
 /* ============================================================ */
+/* ============================================================ */
+/* V2.12.0 — BOUTON URGENCE + ECRAN ALERTE                       */
+/* ============================================================ */
+.urgence-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+  color: white;
+  border: 2px solid #fca5a5;
+  padding: 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  margin-top: 8px;
+  box-shadow: 0 4px 14px rgba(220, 38, 38, 0.4);
+  text-transform: uppercase;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.urgence-btn:active {
+  transform: scale(0.97);
+}
+.urgence-btn .urg-icon {
+  font-size: 18px;
+}
+
+/* Ecran d'alerte plein écran clignotant pour l'admin */
+#urgence-alert-screen {
+  position: fixed;
+  inset: 0;
+  background: #dc2626;
+  z-index: 999999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: urgence-flash 0.8s ease-in-out infinite;
+}
+@keyframes urgence-flash {
+  0%, 100% { background: #dc2626; }
+  50% { background: #991b1b; }
+}
+#urgence-alert-screen .urg-alert-icon {
+  font-size: 72px;
+  margin-bottom: 16px;
+  animation: urg-bounce 0.5s ease-in-out infinite alternate;
+}
+@keyframes urg-bounce {
+  from { transform: scale(1); }
+  to { transform: scale(1.15); }
+}
+#urgence-alert-screen .urg-alert-title {
+  color: white;
+  font-size: 32px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  margin-bottom: 12px;
+  text-align: center;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+#urgence-alert-screen .urg-alert-tech {
+  color: white;
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 24px;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 10px 24px;
+  border-radius: 30px;
+  text-align: center;
+}
+#urgence-alert-screen .urg-alert-motif {
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 12px;
+  padding: 16px 20px;
+  color: white;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.5;
+  max-width: 500px;
+  width: 100%;
+  margin-bottom: 16px;
+  text-align: center;
+}
+#urgence-alert-screen .urg-alert-context {
+  color: white;
+  font-size: 13px;
+  margin-bottom: 24px;
+  text-align: center;
+  opacity: 0.9;
+}
+#urgence-alert-screen .urg-alert-ack-btn {
+  background: white;
+  color: #dc2626;
+  border: none;
+  padding: 18px 36px;
+  border-radius: 14px;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  min-width: 280px;
+}
+#urgence-alert-screen .urg-alert-ack-btn:active {
+  transform: scale(0.96);
+}
+#urgence-alert-screen .urg-alert-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+#urgence-alert-screen .urg-alert-actions a {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  text-decoration: none;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+#urgence-alert-screen .urg-alert-info {
+  margin-top: 8px;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 11px;
+  text-align: center;
+  font-style: italic;
+}
+
 /* V2.11 — PAGE MAINTENANCE BLOQUANTE                            */
 /* ============================================================ */
 #maintenance-screen {
@@ -2368,7 +2507,7 @@ function loadJsPDF() {
 // V2.11 — CONFIG APP (Maintenance + Version)
 // ============================================================================
 // Version actuelle de cette app (à incrémenter à chaque déploiement)
-const APP_VERSION = '2.11.1';
+const APP_VERSION = '2.12.0';
 
 // État global de la config app (récupérée depuis le cloud au démarrage)
 const appConfig = {
@@ -2378,7 +2517,15 @@ const appConfig = {
   latestVersion: APP_VERSION,
   updateMessage: 'Une nouvelle version est disponible.',
   forceUpdate: false,
-  changelog: ''
+  changelog: '',
+  // V2.12.0 — Désignation tech d'astreinte
+  astreinteTitulaireId: '',
+  astreinteSuppleantId: '',
+  astreinteWeekNumber: 0,   // numéro de semaine ISO pour expiration auto
+  // V2.12.0 — Système d'urgence
+  urgenceActive: false,
+  urgenceDetails: '',  // JSON string : { id, userId, username, time, motif, dossierId, etablissement }
+  urgenceAck: false
 };
 
 // Appel public à getAppConfig (pas besoin de token)
@@ -2406,12 +2553,27 @@ async function fetchAppConfig() {
     if (res.ok && res.config) {
       appConfig.maintenanceMode = res.config.maintenanceMode === true || res.config.maintenanceMode === 'true';
       appConfig.maintenanceMessage = res.config.maintenanceMessage || appConfig.maintenanceMessage;
-      appConfig.latestVersion = res.config.latestVersion || APP_VERSION;
+      // V2.11.2 FIX : valider que latestVersion est bien un numéro de version, pas une date
+      const rawVersion = res.config.latestVersion;
+      const versionStr = (typeof rawVersion === 'string') ? rawVersion : String(rawVersion || '');
+      if (/^\d+\.\d+(\.\d+)?$/.test(versionStr)) {
+        appConfig.latestVersion = versionStr;
+      } else {
+        console.warn('latestVersion corrompue :', rawVersion, '→ fallback', APP_VERSION);
+        appConfig.latestVersion = APP_VERSION;
+      }
       appConfig.updateMessage = res.config.updateMessage || appConfig.updateMessage;
       appConfig.forceUpdate = res.config.forceUpdate === true || res.config.forceUpdate === 'true';
       appConfig.changelog = res.config.changelog || '';
+      // V2.12.0 — Désignation tech d'astreinte
+      appConfig.astreinteTitulaireId = res.config.astreinteTitulaireId || '';
+      appConfig.astreinteSuppleantId = res.config.astreinteSuppleantId || '';
+      appConfig.astreinteWeekNumber = parseInt(res.config.astreinteWeekNumber, 10) || 0;
+      // V2.12.0 — Système d'urgence
+      appConfig.urgenceActive = res.config.urgenceActive === true || res.config.urgenceActive === 'true';
+      appConfig.urgenceDetails = res.config.urgenceDetails || '';
+      appConfig.urgenceAck = res.config.urgenceAck === true || res.config.urgenceAck === 'true';
       appConfig.loaded = true;
-      // Mettre en cache localStorage pour fallback offline
       try { localStorage.setItem('_appConfig', JSON.stringify(appConfig)); } catch(e) {}
       return true;
     }
@@ -2626,6 +2788,7 @@ function renderUpdateModal() {
 
 // Vérifier périodiquement la config app (toutes les 5 min)
 function startAppConfigPolling() {
+  // Polling général : maintenance + version (toutes les 5 min, peu critique)
   setInterval(async () => {
     await fetchAppConfig();
     checkMaintenanceBlock();
@@ -2637,6 +2800,27 @@ function startAppConfigPolling() {
       }
     }
   }, 5 * 60 * 1000); // 5 min
+  
+  // V2.12.0 — Polling rapide pour urgence (toutes les 15 secondes - critique)
+  setInterval(async () => {
+    if (!authState.isAuthenticated) return;
+    try {
+      // Récupération légère uniquement de la config
+      const res = await publicCall('getAppConfig', {});
+      if (res.ok && res.config) {
+        // Mettre à jour uniquement les champs urgence
+        appConfig.urgenceActive = res.config.urgenceActive === true || res.config.urgenceActive === 'true';
+        appConfig.urgenceDetails = res.config.urgenceDetails || '';
+        appConfig.urgenceAck = res.config.urgenceAck === true || res.config.urgenceAck === 'true';
+        // Mettre à jour les champs astreinte aussi (pour l'auto-update du bandeau)
+        appConfig.astreinteTitulaireId = res.config.astreinteTitulaireId || '';
+        appConfig.astreinteSuppleantId = res.config.astreinteSuppleantId || '';
+        appConfig.astreinteWeekNumber = parseInt(res.config.astreinteWeekNumber, 10) || 0;
+        // Vérifier l'urgence
+        checkUrgenceActive();
+      }
+    } catch(e) { /* silent */ }
+  }, 15 * 1000); // 15 sec
 }
 
 function renderNetworkBadge() {
@@ -3807,8 +3991,33 @@ let dashboardState = {
   error: null,
   tab: 'overview', // overview | stats | validation
   weekOffset: 0, // 0 = semaine actuelle, -1 = précédente, etc.
-  filterTech: null // null = tous, sinon username du tech à filtrer
+  filterTech: null, // null = tous, sinon username du tech à filtrer
+  autoRefreshTimer: null // V2.12.0 — Timer pour auto-refresh supervision temps reel
 };
+
+// V2.12.0 — Demarrer / arreter l'auto-refresh
+function startDashboardAutoRefresh() {
+  stopDashboardAutoRefresh(); // clean before start
+  dashboardState.autoRefreshTimer = setInterval(async () => {
+    // Refresh uniquement si on est encore sur le Dashboard et tab Vue d'ensemble
+    if (view.current === 'dashboard-admin' && dashboardState.tab === 'overview' && dashboardState.weekOffset === 0) {
+      try {
+        const resDossiers = await cloudCall('getDossiers', {});
+        if (resDossiers.success) {
+          dashboardState.allDossiers = (resDossiers.dossiers || []).filter(d => !d.deleted);
+          render();
+        }
+      } catch(e) { /* silent */ }
+    }
+  }, 60000); // 60 sec
+}
+
+function stopDashboardAutoRefresh() {
+  if (dashboardState.autoRefreshTimer) {
+    clearInterval(dashboardState.autoRefreshTimer);
+    dashboardState.autoRefreshTimer = null;
+  }
+}
 
 // Charger toutes les données du dashboard (dossiers + users)
 async function dashboardLoadData() {
@@ -3871,7 +4080,830 @@ function dashboardIsCloture(d) {
 }
 
 // ============================================================================
-// V2.11.1 — CRÉATION DE DOSSIER POUR UN TECHNICIEN (admin/manager)
+// V2.12.0 — DÉSIGNATION DU TECH D'ASTREINTE DE LA SEMAINE
+// ============================================================================
+
+// Vérifier si l'utilisateur courant est le tech d'astreinte titulaire
+function isCurrentUserAstreinteTitulaire() {
+  if (!appConfig.loaded || !authState.user) return false;
+  if (!appConfig.astreinteTitulaireId) return false;
+  // Vérifier que la désignation est pour la semaine actuelle
+  if (appConfig.astreinteWeekNumber && appConfig.astreinteWeekNumber !== getWeekNumber(new Date())) {
+    // Désignation périmée
+    return false;
+  }
+  return authState.user.id === appConfig.astreinteTitulaireId;
+}
+
+// Vérifier si l'utilisateur courant est le tech d'astreinte suppléant
+function isCurrentUserAstreinteSuppleant() {
+  if (!appConfig.loaded || !authState.user) return false;
+  if (!appConfig.astreinteSuppleantId) return false;
+  if (appConfig.astreinteWeekNumber && appConfig.astreinteWeekNumber !== getWeekNumber(new Date())) {
+    return false;
+  }
+  return authState.user.id === appConfig.astreinteSuppleantId;
+}
+
+// Vérifier si la désignation d'astreinte est active (pour la semaine actuelle)
+function isAstreinteDesignationActive() {
+  if (!appConfig.astreinteTitulaireId) return false;
+  if (!appConfig.astreinteWeekNumber) return true; // pas de check semaine
+  return appConfig.astreinteWeekNumber === getWeekNumber(new Date());
+}
+
+// Récupérer le nom du tech titulaire/suppléant depuis dashboardState.users
+function getAstreinteTitulaireName() {
+  if (!appConfig.astreinteTitulaireId) return '';
+  const users = dashboardState.users || adminState.users || [];
+  const u = users.find(x => x.id === appConfig.astreinteTitulaireId);
+  return u ? (u.full_name || u.username) : '';
+}
+
+function getAstreinteSuppleantName() {
+  if (!appConfig.astreinteSuppleantId) return '';
+  const users = dashboardState.users || adminState.users || [];
+  const u = users.find(x => x.id === appConfig.astreinteSuppleantId);
+  return u ? (u.full_name || u.username) : '';
+}
+
+// Modal admin pour désigner le tech d'astreinte
+async function openAstreinteDesignationModal() {
+  if (!isAdmin()) { toast('Accès refusé', 'error'); return; }
+  
+  // Charger les techs si pas encore en cache
+  let users = dashboardState.users || [];
+  if (users.length === 0) {
+    try {
+      toast('Chargement des techniciens...', 'info');
+      const res = await cloudCall('listUsers', {});
+      if (res.success) {
+        users = res.users || [];
+        dashboardState.users = users;
+      } else {
+        toast('Erreur chargement : ' + (res.error || 'inconnu'), 'error');
+        return;
+      }
+    } catch (e) {
+      toast('Erreur réseau : ' + e.message, 'error');
+      return;
+    }
+  }
+  
+  // Filtrer uniquement les techniciens
+  const techs = users.filter(u => u.role === 'technicien');
+  if (techs.length === 0) {
+    toast('Aucun technicien dans le système', 'error');
+    return;
+  }
+  
+  const currentWeekNum = getWeekNumber(new Date());
+  const designationActive = isAstreinteDesignationActive();
+  
+  let selectedTitulaire = designationActive ? appConfig.astreinteTitulaireId : '';
+  let selectedSuppleant = designationActive ? appConfig.astreinteSuppleantId : '';
+  
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay visible';
+  
+  const renderModal = () => {
+    const titulaireName = techs.find(t => t.id === selectedTitulaire);
+    const suppleantName = techs.find(t => t.id === selectedSuppleant);
+    
+    overlay.innerHTML = `
+      <div class="modal" style="max-width:560px">
+        <div class="modal-header">
+          <div class="modal-title">🚨 Astreinte de la semaine</div>
+          <button class="modal-close" data-action="ast-close">×</button>
+        </div>
+        <div class="modal-body" style="padding:20px;max-height:70vh;overflow-y:auto">
+          <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:18px;font-size:13px;color:var(--text)">
+            <strong>💡 À quoi sert cette désignation ?</strong><br>
+            <span style="color:var(--text-tertiary)">
+              Seul le <strong>titulaire</strong> verra le bandeau rouge "🔴 ASTREINTE EN COURS" sur sa page Dossiers.<br>
+              Le <strong>suppléant</strong> verra un bandeau orange "🥈 Suppléant - en backup".<br>
+              Les autres techs n'auront aucune alerte. La désignation expire à la fin de la semaine.
+            </span>
+          </div>
+          
+          <div style="text-align:center;padding:12px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.3);border-radius:10px;margin-bottom:18px">
+            <div style="font-size:11px;text-transform:uppercase;color:var(--text-tertiary);letter-spacing:0.5px;margin-bottom:4px">Semaine concernée</div>
+            <div style="font-size:16px;font-weight:700;color:var(--text)">Semaine n°${currentWeekNum} (en cours)</div>
+          </div>
+          
+          <!-- Titulaire -->
+          <div style="margin-bottom:18px">
+            <label style="display:block;font-size:11px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;margin-bottom:8px;letter-spacing:0.5px">
+              👤 Titulaire (obligatoire)
+            </label>
+            ${selectedTitulaire ? `
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:10px;margin-bottom:8px">
+                <div style="display:flex;align-items:center;gap:10px">
+                  <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#ef4444,#dc2626);color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px">
+                    ${escapeHtml((titulaireName?.full_name || titulaireName?.username || '?').substring(0,1).toUpperCase())}
+                  </div>
+                  <div>
+                    <div style="font-weight:700;font-size:14px;color:var(--text)">${escapeHtml(titulaireName?.full_name || titulaireName?.username || '?')}</div>
+                    <div style="font-size:11px;color:#ef4444;font-weight:600">🔴 TITULAIRE</div>
+                  </div>
+                </div>
+                <button data-action="ast-clear-titulaire" style="background:transparent;border:none;color:var(--text-tertiary);font-size:18px;cursor:pointer;padding:4px">×</button>
+              </div>
+            ` : ''}
+            <button data-action="ast-pick-titulaire" style="width:100%;padding:11px;background:var(--bg-subtle);border:1px dashed var(--border);border-radius:10px;color:var(--text);cursor:pointer;font-size:13px">
+              ${selectedTitulaire ? '↻ Changer le titulaire' : '+ Choisir un titulaire'}
+            </button>
+          </div>
+          
+          <!-- Suppléant -->
+          <div style="margin-bottom:18px">
+            <label style="display:block;font-size:11px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;margin-bottom:8px;letter-spacing:0.5px">
+              🥈 Suppléant (optionnel)
+            </label>
+            ${selectedSuppleant ? `
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.3);border-radius:10px;margin-bottom:8px">
+                <div style="display:flex;align-items:center;gap:10px">
+                  <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#eab308,#ca8a04);color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px">
+                    ${escapeHtml((suppleantName?.full_name || suppleantName?.username || '?').substring(0,1).toUpperCase())}
+                  </div>
+                  <div>
+                    <div style="font-weight:700;font-size:14px;color:var(--text)">${escapeHtml(suppleantName?.full_name || suppleantName?.username || '?')}</div>
+                    <div style="font-size:11px;color:#eab308;font-weight:600">🥈 SUPPLÉANT</div>
+                  </div>
+                </div>
+                <button data-action="ast-clear-suppleant" style="background:transparent;border:none;color:var(--text-tertiary);font-size:18px;cursor:pointer;padding:4px">×</button>
+              </div>
+            ` : ''}
+            <button data-action="ast-pick-suppleant" style="width:100%;padding:11px;background:var(--bg-subtle);border:1px dashed var(--border);border-radius:10px;color:var(--text);cursor:pointer;font-size:13px">
+              ${selectedSuppleant ? '↻ Changer le suppléant' : '+ Choisir un suppléant'}
+            </button>
+          </div>
+        </div>
+        <div class="modal-footer" style="padding:14px 20px;display:flex;gap:8px;justify-content:flex-end;border-top:1px solid var(--border)">
+          <button class="btn btn-secondary" data-action="ast-close">Annuler</button>
+          ${designationActive ? `<button class="btn btn-secondary" data-action="ast-clear-all" style="color:#ef4444">🗑 Supprimer la désignation</button>` : ''}
+          <button class="btn btn-primary" data-action="ast-save" ${!selectedTitulaire ? 'disabled style="opacity:0.5"' : ''}>📢 Enregistrer</button>
+        </div>
+      </div>
+    `;
+  };
+  
+  // Mini-modal de choix d'un tech
+  const openTechPicker = (type) => {
+    const picker = document.createElement('div');
+    picker.className = 'modal-overlay visible';
+    picker.style.zIndex = '99999';
+    picker.innerHTML = `
+      <div class="modal" style="max-width:440px">
+        <div class="modal-header">
+          <div class="modal-title">Choisir ${type === 'titulaire' ? 'le titulaire' : 'le suppléant'}</div>
+          <button class="modal-close" data-action="picker-close">×</button>
+        </div>
+        <div class="modal-body" style="padding:14px 20px;max-height:60vh;overflow-y:auto">
+          <div style="display:flex;flex-direction:column;gap:6px">
+            ${techs.map(t => {
+              const isSelectedOther = (type === 'titulaire' ? selectedSuppleant : selectedTitulaire) === t.id;
+              return `
+                <button data-tech-id="${escapeHtml(t.id)}" ${isSelectedOther ? 'disabled' : ''} style="display:flex;align-items:center;gap:10px;padding:11px;background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;cursor:${isSelectedOther ? 'not-allowed' : 'pointer'};text-align:left;color:var(--text);font-size:13px;opacity:${isSelectedOther ? '0.4' : '1'}">
+                  <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px">
+                    ${escapeHtml((t.full_name || t.username || '?').substring(0,1).toUpperCase())}
+                  </div>
+                  <div style="flex:1">${escapeHtml(t.full_name || t.username)}</div>
+                  ${isSelectedOther ? '<span style="font-size:10px;color:var(--text-tertiary)">déjà choisi</span>' : ''}
+                </button>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(picker);
+    
+    picker.addEventListener('click', (e) => {
+      const action = e.target.dataset.action || e.target.closest('[data-action]')?.dataset.action;
+      if (action === 'picker-close' || e.target === picker) {
+        picker.remove();
+        return;
+      }
+      const techBtn = e.target.closest('[data-tech-id]');
+      if (techBtn && !techBtn.disabled) {
+        const id = techBtn.dataset.techId;
+        if (type === 'titulaire') selectedTitulaire = id;
+        else selectedSuppleant = id;
+        picker.remove();
+        renderModal();
+      }
+    });
+  };
+  
+  renderModal();
+  document.body.appendChild(overlay);
+  
+  overlay.addEventListener('click', async (e) => {
+    const action = e.target.dataset.action || e.target.closest('[data-action]')?.dataset.action;
+    
+    if (action === 'ast-close' || e.target === overlay) {
+      overlay.remove();
+      return;
+    }
+    
+    if (action === 'ast-pick-titulaire') {
+      openTechPicker('titulaire');
+      return;
+    }
+    
+    if (action === 'ast-pick-suppleant') {
+      openTechPicker('suppleant');
+      return;
+    }
+    
+    if (action === 'ast-clear-titulaire') {
+      selectedTitulaire = '';
+      renderModal();
+      return;
+    }
+    
+    if (action === 'ast-clear-suppleant') {
+      selectedSuppleant = '';
+      renderModal();
+      return;
+    }
+    
+    if (action === 'ast-clear-all') {
+      if (!confirm('Supprimer complètement la désignation d\'astreinte de cette semaine ?')) return;
+      const btn = e.target;
+      btn.textContent = '⏳ Suppression...';
+      btn.disabled = true;
+      
+      const ok1 = await setAppConfigValue('astreinteTitulaireId', '');
+      const ok2 = await setAppConfigValue('astreinteSuppleantId', '');
+      const ok3 = await setAppConfigValue('astreinteWeekNumber', '0');
+      
+      if (ok1 && ok2 && ok3) {
+        toast('🗑 Désignation supprimée', 'success');
+        overlay.remove();
+        render();
+      } else {
+        toast('Erreur lors de la suppression', 'error');
+        btn.disabled = false;
+      }
+      return;
+    }
+    
+    if (action === 'ast-save') {
+      if (!selectedTitulaire) {
+        toast('Le titulaire est obligatoire', 'error');
+        return;
+      }
+      const btn = e.target;
+      btn.textContent = '⏳ Enregistrement...';
+      btn.disabled = true;
+      
+      const ok1 = await setAppConfigValue('astreinteTitulaireId', selectedTitulaire);
+      const ok2 = await setAppConfigValue('astreinteSuppleantId', selectedSuppleant || '');
+      const ok3 = await setAppConfigValue('astreinteWeekNumber', String(currentWeekNum));
+      
+      if (ok1 && ok2 && ok3) {
+        const tName = techs.find(t => t.id === selectedTitulaire);
+        toast(`✅ Astreinte semaine ${currentWeekNum} : ${tName?.full_name || tName?.username}`, 'success');
+        overlay.remove();
+        render();
+      } else {
+        toast('Erreur lors de l\'enregistrement', 'error');
+        btn.disabled = false;
+      }
+      return;
+    }
+  });
+}
+
+
+// ============================================================================
+// V2.12.0 — SYSTEME D'URGENCE (bouton + alerte + son boucle)
+// ============================================================================
+
+// Etat global du système d'urgence
+const urgenceState = {
+  audioContext: null,
+  oscillator: null,
+  gainNode: null,
+  loopTimer: null,
+  isPlaying: false,
+  isShowing: false,        // ecran alerte affiché?
+  acknowledgedIds: new Set() // ids des urgences déja acquittées localement
+};
+
+// Génère un son strident via Web Audio API (fonctionne sans fichier mp3)
+function urgencePlayAlertSound() {
+  if (urgenceState.isPlaying) return;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    urgenceState.audioContext = ctx;
+    
+    // Pattern : bip-bip-bip (3 bips de 0.3s avec pause 0.2s = 1.5s par boucle)
+    // On répète en boucle pendant 10s puis pause 2s, puis re-boucle
+    
+    const playOneBip = (startTime, freq) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.value = freq;
+      gain.gain.value = 0;
+      
+      // Enveloppe : attack rapide + release rapide
+      gain.gain.setValueAtTime(0, startTime);
+      gain.gain.linearRampToValueAtTime(0.4, startTime + 0.02);
+      gain.gain.setValueAtTime(0.4, startTime + 0.25);
+      gain.gain.linearRampToValueAtTime(0, startTime + 0.3);
+      
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(startTime);
+      osc.stop(startTime + 0.32);
+    };
+    
+    const playPattern10s = () => {
+      const t0 = ctx.currentTime;
+      // 6 series de 3 bips alternés en 10 secondes
+      // chaque serie : 3 bips x 0.5s = 1.5s + pause 0.1s = 1.6s
+      for (let serie = 0; serie < 6; serie++) {
+        const serieStart = t0 + serie * 1.6;
+        const freq = (serie % 2 === 0) ? 1000 : 1400; // alternance 2 frequences
+        playOneBip(serieStart, freq);
+        playOneBip(serieStart + 0.5, freq);
+        playOneBip(serieStart + 1.0, freq);
+      }
+    };
+    
+    urgenceState.isPlaying = true;
+    playPattern10s();
+    
+    // Boucle : tous les 12 sec, relancer le pattern de 10s
+    urgenceState.loopTimer = setInterval(() => {
+      if (!urgenceState.isPlaying) return;
+      playPattern10s();
+    }, 12000);
+    
+    // Tenter aussi la vibration en boucle (Android)
+    urgenceVibrateLoop();
+  } catch (e) {
+    console.warn('Audio API non disponible:', e);
+  }
+}
+
+// Arrêter le son
+function urgenceStopAlertSound() {
+  urgenceState.isPlaying = false;
+  if (urgenceState.loopTimer) {
+    clearInterval(urgenceState.loopTimer);
+    urgenceState.loopTimer = null;
+  }
+  if (urgenceState.audioContext) {
+    try { urgenceState.audioContext.close(); } catch(e) {}
+    urgenceState.audioContext = null;
+  }
+  if (urgenceState.vibrateTimer) {
+    clearInterval(urgenceState.vibrateTimer);
+    urgenceState.vibrateTimer = null;
+  }
+  try { if (navigator.vibrate) navigator.vibrate(0); } catch(e) {}
+}
+
+// Vibration en boucle (Android)
+function urgenceVibrateLoop() {
+  if (!navigator.vibrate) return;
+  // Pattern d'urgence : 3 longues + 2 courtes
+  const pattern = [500, 200, 500, 200, 500, 200, 150, 100, 150];
+  try { navigator.vibrate(pattern); } catch(e) {}
+  urgenceState.vibrateTimer = setInterval(() => {
+    if (!urgenceState.isPlaying) return;
+    try { navigator.vibrate(pattern); } catch(e) {}
+  }, 3000); // re-vibrer toutes les 3 sec
+}
+
+// Afficher l'écran d'alerte plein écran (admin/manager)
+function urgenceShowAlertScreen(details) {
+  if (urgenceState.isShowing) return;
+  urgenceState.isShowing = true;
+  
+  // Parser les détails
+  let info = {};
+  try { info = typeof details === 'string' ? JSON.parse(details) : details; } catch(e) { info = {}; }
+  
+  const techName = info.username || 'Un technicien';
+  const motif = info.motif || 'Pas de motif précisé';
+  const time = info.time ? new Date(info.time).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
+  const etablissement = info.etablissement || '';
+  const adresse = info.adresse || '';
+  
+  // URL Maps si adresse
+  const mapsUrl = adresse 
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(adresse)}` 
+    : null;
+  
+  const screen = document.createElement('div');
+  screen.id = 'urgence-alert-screen';
+  screen.innerHTML = `
+    <div class="urg-alert-icon">🚨</div>
+    <div class="urg-alert-title">URGENCE</div>
+    <div class="urg-alert-tech">📞 ${escapeHtml(techName)}${time ? ' • ' + time : ''}</div>
+    <div class="urg-alert-motif">
+      ${etablissement ? `<div style="font-weight:700;margin-bottom:8px">📍 ${escapeHtml(etablissement)}</div>` : ''}
+      <strong>Motif :</strong> ${escapeHtml(motif)}
+    </div>
+    <div class="urg-alert-actions">
+      ${mapsUrl ? `<a href="${mapsUrl}" target="_blank" rel="noopener">🗺️ Voir sur Maps</a>` : ''}
+      ${info.dossierId ? `<a href="#" data-action="urg-view-dossier" data-id="${escapeHtml(info.dossierId)}">📋 Voir dossier</a>` : ''}
+    </div>
+    <button class="urg-alert-ack-btn" data-action="urg-acknowledge">
+      ✓ J'AI PRIS EN COMPTE
+    </button>
+    <div class="urg-alert-info">
+      Le son et la vibration continueront jusqu'à l'acquittement
+    </div>
+  `;
+  document.body.appendChild(screen);
+  
+  screen.addEventListener('click', async (e) => {
+    const action = e.target.dataset.action || e.target.closest('[data-action]')?.dataset.action;
+    
+    if (action === 'urg-acknowledge') {
+      e.preventDefault();
+      const btn = screen.querySelector('.urg-alert-ack-btn');
+      btn.textContent = '⏳ Validation...';
+      btn.disabled = true;
+      await urgenceAcknowledge(info.id);
+    }
+    
+    if (action === 'urg-view-dossier') {
+      e.preventDefault();
+      const did = e.target.dataset.id || e.target.closest('[data-action]')?.dataset.id;
+      if (did) {
+        urgenceCloseAlertScreen();
+        view.current = 'detail';
+        view.dossierId = did;
+        render();
+      }
+    }
+  });
+  
+  // Tenter d'envoyer une notification push aussi (si autorisé)
+  if ('Notification' in window && Notification.permission === 'granted') {
+    try {
+      const n = new Notification('🚨 URGENCE Astreinte', {
+        body: `${techName} demande de l'aide - ${motif}`,
+        icon: getLogo(),
+        tag: 'urgence-' + (info.id || 'unknown'),
+        requireInteraction: true
+      });
+      n.onclick = () => window.focus();
+    } catch(e) {}
+  }
+  
+  // Lancer le son
+  urgencePlayAlertSound();
+}
+
+// Fermer l'écran alerte
+function urgenceCloseAlertScreen() {
+  const screen = document.getElementById('urgence-alert-screen');
+  if (screen) screen.remove();
+  urgenceState.isShowing = false;
+  urgenceStopAlertSound();
+}
+
+// Acquitter l'urgence (appel cloud)
+async function urgenceAcknowledge(urgenceId) {
+  try {
+    // Marquer comme acquittée côté cloud
+    const ok = await setAppConfigValue('urgenceAck', true);
+    // Marquer aussi inactive après ack
+    await setAppConfigValue('urgenceActive', false);
+    
+    // Stocker l'id pour ne plus le déclencher localement
+    if (urgenceId) urgenceState.acknowledgedIds.add(urgenceId);
+    
+    urgenceCloseAlertScreen();
+    
+    if (ok) {
+      toast('✓ Urgence acquittée', 'success');
+    } else {
+      toast('Acquittement local (cloud KO)', 'warning');
+    }
+  } catch (e) {
+    toast('Erreur acquittement : ' + e.message, 'error');
+  }
+}
+
+// Déclencher une urgence depuis l'app (tech)
+async function urgenceTrigger() {
+  // Modale de confirmation
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay visible';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:440px;border:2px solid #dc2626">
+      <div class="modal-header" style="background:rgba(220,38,38,0.1)">
+        <div class="modal-title" style="color:#dc2626">🚨 Déclencher l'urgence ?</div>
+        <button class="modal-close" data-action="urg-trig-close">×</button>
+      </div>
+      <div class="modal-body" style="padding:20px">
+        <div style="background:rgba(220,38,38,0.08);border:1px solid rgba(220,38,38,0.3);border-radius:10px;padding:12px;margin-bottom:14px;font-size:13px;color:var(--text);line-height:1.5">
+          ⚠️ <strong>Cette action enverra une alerte sonore et visuelle à ton administrateur</strong> (et aux managers).<br>
+          <span style="color:var(--text-tertiary);font-size:11px">Utilise ce bouton seulement en cas de réelle difficulté nécessitant une assistance.</span>
+        </div>
+        
+        <div style="background:rgba(239,68,68,0.05);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:10px;margin-bottom:14px;font-size:11px;color:#ef4444;line-height:1.4">
+          🚨 <strong>EN CAS D'URGENCE VITALE</strong> (incendie, blessure, agression) :<br>
+          <strong>1.</strong> Appelle d'abord le 18 (pompiers), 17 (police) ou 15 (SAMU)<br>
+          <strong>2.</strong> Ensuite seulement utilise ce bouton pour avertir ton admin
+        </div>
+        
+        <label style="display:block;font-size:11px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;margin-bottom:6px;letter-spacing:0.5px">
+          Motif (optionnel, rapide)
+        </label>
+        <textarea id="urg-motif" placeholder="Ex: Besoin d'aide sur intervention, situation imprévue..." style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;min-height:60px;resize:vertical;font-family:inherit"></textarea>
+      </div>
+      <div class="modal-footer" style="padding:14px 20px;display:flex;gap:8px;justify-content:flex-end;border-top:1px solid var(--border)">
+        <button class="btn btn-secondary" data-action="urg-trig-close">Annuler</button>
+        <button class="btn btn-primary" data-action="urg-trig-confirm" style="background:linear-gradient(135deg,#dc2626,#991b1b);color:white;border:none">
+          🚨 DÉCLENCHER L'URGENCE
+        </button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  
+  overlay.addEventListener('click', async (e) => {
+    const action = e.target.dataset.action || e.target.closest('[data-action]')?.dataset.action;
+    
+    if (action === 'urg-trig-close' || e.target === overlay) {
+      overlay.remove();
+      return;
+    }
+    
+    if (action === 'urg-trig-confirm') {
+      const motif = (overlay.querySelector('#urg-motif').value || '').trim() || 'Urgence non spécifiée';
+      
+      // Trouver le dossier actif (le plus récent non clôturé)
+      let dossierId = null;
+      let etablissement = '';
+      let adresse = '';
+      try {
+        const myDossiers = getMyDossiers().filter(d => {
+          if (d.cloture === true || d.statut === 'cloture') return false;
+          return true;
+        });
+        if (myDossiers.length > 0) {
+          // Le plus récent
+          const sorted = myDossiers.sort((a, b) => new Date(b.dateAppel) - new Date(a.dateAppel));
+          const active = sorted[0];
+          dossierId = active.id;
+          etablissement = active.etablissement || '';
+          adresse = active.adresseSite || '';
+        }
+      } catch(e) {}
+      
+      const urgenceData = {
+        id: uid(),
+        userId: authState.user.id,
+        username: authState.user.full_name || authState.user.username,
+        time: new Date().toISOString(),
+        motif: motif,
+        dossierId: dossierId,
+        etablissement: etablissement,
+        adresse: adresse
+      };
+      
+      const btn = overlay.querySelector('[data-action="urg-trig-confirm"]');
+      btn.textContent = '⏳ Envoi...';
+      btn.disabled = true;
+      
+      // Envoyer au cloud (3 clés)
+      const ok1 = await setAppConfigValue('urgenceDetails', JSON.stringify(urgenceData));
+      const ok2 = await setAppConfigValue('urgenceAck', false);
+      const ok3 = await setAppConfigValue('urgenceActive', true);
+      
+      if (ok1 && ok2 && ok3) {
+        overlay.remove();
+        // Feedback visuel + vibration locale
+        try { if (navigator.vibrate) navigator.vibrate([500, 100, 500]); } catch(e) {}
+        toast('🚨 Urgence envoyée à ton administrateur', 'success');
+      } else {
+        btn.textContent = '🚨 DÉCLENCHER L\'URGENCE';
+        btn.disabled = false;
+        toast('Erreur d\'envoi - réessaie', 'error');
+      }
+    }
+  });
+}
+
+// Vérifier s'il y a une urgence en cours (appelé au polling)
+function checkUrgenceActive() {
+  if (!appConfig.loaded) return;
+  
+  const isActive = appConfig.urgenceActive && !appConfig.urgenceAck;
+  if (!isActive) {
+    // Fermer si elle était affichée
+    if (urgenceState.isShowing) urgenceCloseAlertScreen();
+    return;
+  }
+  
+  // Parser les détails
+  let info = {};
+  try { info = typeof appConfig.urgenceDetails === 'string' ? JSON.parse(appConfig.urgenceDetails) : appConfig.urgenceDetails; } catch(e) {}
+  
+  // Ne PAS afficher l'alerte au tech qui l'a déclenchée (pour éviter qu'il s'auto-alerte)
+  if (info.userId && authState.user && info.userId === authState.user.id) return;
+  
+  // Seulement admin/manager voient l'alerte
+  if (!isManagerOrAdmin()) return;
+  
+  // Eviter de re-trigger si déjà acquittée localement
+  if (info.id && urgenceState.acknowledgedIds.has(info.id)) return;
+  
+  // Afficher !
+  urgenceShowAlertScreen(info);
+}
+
+// ============================================================================
+// V2.12.0 — SUPERVISION TEMPS REEL (detection etape d'une intervention)
+// ============================================================================
+
+/**
+ * Detecte l'etape actuelle d'une intervention en cours
+ * Retourne { step, label, sinceMin, color, emoji } ou null si pas en cours
+ */
+function detectInterventionStep(d) {
+  if (!d || dashboardIsCloture(d)) return null;
+  
+  const now = Date.now();
+  
+  // TELEPHONE en attente de saisie de duree
+  if (d.type === 'telephone') {
+    if (!d.dureeAppel) {
+      const sinceMs = now - new Date(d.dateAppel).getTime();
+      return {
+        step: 'phone_pending',
+        label: 'Appel en cours',
+        sinceMin: Math.round(sinceMs / 60000),
+        color: '#3b82f6',
+        emoji: '📞',
+        nextExpected: 'Saisie de la duree d\'appel'
+      };
+    }
+    return null;
+  }
+  
+  if (d.type !== 'deplacement') return null;
+  
+  const hasDepart = d.departDomicile && d.departDomicile !== 'X';
+  const hasArrivee = d.arriveeSite && d.arriveeSite !== 'X';
+  const hasDepartSite = d.departSite && d.departSite !== 'X';
+  const hasRetour = d.retourDomicile && d.retourDomicile !== 'X';
+  
+  if (hasRetour) return null;
+  
+  if (!hasDepart) {
+    const sinceMs = now - new Date(d.dateAppel).getTime();
+    return {
+      step: 'received',
+      label: 'Appel recu',
+      sinceMin: Math.round(sinceMs / 60000),
+      color: '#eab308',
+      emoji: '⏳',
+      nextExpected: 'Depart du domicile',
+      alertIfOver: 30
+    };
+  }
+  
+  if (hasDepart && !hasArrivee && !hasDepartSite) {
+    const sinceMs = now - new Date(d.departDomicile).getTime();
+    return {
+      step: 'en_route',
+      label: 'En route',
+      sinceMin: Math.round(sinceMs / 60000),
+      color: '#f97316',
+      emoji: '🚗',
+      nextExpected: 'Arrivee sur site'
+    };
+  }
+  
+  if (hasArrivee && !hasDepartSite) {
+    const sinceMs = now - new Date(d.arriveeSite).getTime();
+    return {
+      step: 'on_site',
+      label: 'Sur site',
+      sinceMin: Math.round(sinceMs / 60000),
+      color: '#22c55e',
+      emoji: '🛠',
+      nextExpected: 'Depart du site',
+      alertIfOver: 180
+    };
+  }
+  
+  if (hasDepartSite && !hasRetour) {
+    const sinceMs = now - new Date(d.departSite).getTime();
+    return {
+      step: 'returning',
+      label: 'Retour domicile',
+      sinceMin: Math.round(sinceMs / 60000),
+      color: '#06b6d4',
+      emoji: '🏠',
+      nextExpected: 'Arrivee a domicile (cloture)'
+    };
+  }
+  
+  // Cas etape manquante (depart + departSite sans arrivee)
+  if (hasDepart && !hasArrivee && hasDepartSite) {
+    const sinceMs = now - new Date(d.departSite).getTime();
+    return {
+      step: 'missing_step',
+      label: 'Etape manquante',
+      sinceMin: Math.round(sinceMs / 60000),
+      color: '#a855f7',
+      emoji: '⚠️',
+      nextExpected: 'Pense a completer l\'arrivee sur site pour la tracabilite'
+    };
+  }
+  
+  return null;
+}
+
+/**
+ * Recupere toutes les interventions en cours pour la semaine actuelle + dossiers en retard
+ */
+function getInProgressInterventions() {
+  const week = getAstreinteWeek(new Date());
+  return dashboardState.allDossiers
+    .filter(d => {
+      if (!d || d.deleted) return false;
+      if (dashboardIsCloture(d)) return false;
+      const dt = new Date(d.dateAppel);
+      return dt < week.end;
+    })
+    .map(d => ({ dossier: d, step: detectInterventionStep(d) }))
+    .filter(x => x.step !== null)
+    .sort((a, b) => new Date(a.dossier.dateAppel) - new Date(b.dossier.dateAppel));
+}
+
+/**
+ * Formatte un temps relatif en francais lisible
+ */
+function fmtRelativeTime(minutes) {
+  if (minutes < 1) return 'a l\'instant';
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  if (hours < 24) return mins > 0 ? `${hours}h${String(mins).padStart(2, '0')}` : `${hours}h`;
+  const days = Math.floor(hours / 24);
+  const remHours = hours % 24;
+  return remHours > 0 ? `${days}j ${remHours}h` : `${days}j`;
+}
+
+/**
+ * Detecte si un dossier fait partie d'un chainage (X) - position/total
+ */
+function detectChainage(dossier, allDossiers) {
+  if (!dossier || dossier.type !== 'deplacement') return null;
+  if (dossier.departDomicile !== 'X' && dossier.retourDomicile !== 'X') return null;
+  
+  const userId = dossier.user_id;
+  const dossierDate = new Date(dossier.dateAppel).getTime();
+  const dayStart = dossierDate - 24 * 3600 * 1000;
+  
+  const chain = allDossiers
+    .filter(d => 
+      d.user_id === userId && 
+      d.type === 'deplacement' &&
+      new Date(d.dateAppel).getTime() >= dayStart &&
+      new Date(d.dateAppel).getTime() <= dossierDate + 24 * 3600 * 1000
+    )
+    .sort((a, b) => new Date(a.dateAppel) - new Date(b.dateAppel));
+  
+  if (chain.length < 2) return null;
+  
+  let currentChain = [];
+  let foundChain = null;
+  for (const d of chain) {
+    currentChain.push(d);
+    if (d.retourDomicile && d.retourDomicile !== 'X') {
+      if (currentChain.some(x => x.id === dossier.id) && currentChain.length > 1) {
+        foundChain = currentChain;
+        break;
+      }
+      currentChain = [];
+    }
+  }
+  if (!foundChain && currentChain.some(x => x.id === dossier.id) && currentChain.length > 1) {
+    foundChain = currentChain;
+  }
+  
+  if (!foundChain || foundChain.length < 2) return null;
+  const position = foundChain.findIndex(x => x.id === dossier.id) + 1;
+  return { position, total: foundChain.length };
+}
+
+
 // Usage : appelé depuis Dashboard (admin) ET vue Dépannage (manager+admin)
 // ============================================================================
 async function createDossierForTech() {
@@ -4182,6 +5214,105 @@ function renderDashboardAdmin() {
   `;
 }
 
+// V2.12.0 — Bloc supervision temps reel (admin only, dans Dashboard Overview)
+function renderRealTimeMonitoring() {
+  const inProgress = getInProgressInterventions();
+  
+  if (inProgress.length === 0) {
+    return `
+      <div style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.3);border-radius:10px;padding:14px;margin-bottom:14px;text-align:center">
+        <div style="font-size:24px;margin-bottom:6px">✅</div>
+        <div style="font-size:13px;color:var(--text);font-weight:600">Aucune intervention en cours</div>
+        <div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">Toute l'equipe est au repos ou les dossiers sont cloturés</div>
+      </div>
+    `;
+  }
+  
+  return `
+    <div style="background:linear-gradient(135deg,rgba(239,68,68,0.08) 0%,rgba(220,38,38,0.04) 100%);border:1px solid rgba(239,68,68,0.4);border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="display:inline-flex;align-items:center;gap:5px;background:#ef4444;color:white;padding:3px 9px;border-radius:10px;font-size:10px;font-weight:800;letter-spacing:0.6px;text-transform:uppercase">
+            <span style="width:7px;height:7px;border-radius:50%;background:white;animation:pulse-red 1.4s ease-in-out infinite"></span>
+            ${inProgress.length} en cours
+          </span>
+          <span style="font-size:13px;font-weight:700;color:var(--text)">Supervision temps reel</span>
+        </div>
+        <button data-action="dashboard-refresh-realtime" style="background:transparent;border:none;color:var(--text-tertiary);font-size:14px;cursor:pointer;padding:4px 8px" title="Rafraichir">⟳</button>
+      </div>
+      
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${inProgress.map(({ dossier: d, step }) => renderInterventionCard(d, step)).join('')}
+      </div>
+    </div>
+  `;
+}
+
+// V2.12.0 — Carte individuelle d'une intervention en cours
+function renderInterventionCard(d, step) {
+  const techName = dashboardGetUsername(d);
+  const isAlert = step.alertIfOver && step.sinceMin >= step.alertIfOver;
+  const cardBg = isAlert ? 'rgba(239,68,68,0.15)' : 'rgba(255,255,255,0.04)';
+  const cardBorder = isAlert ? 'rgba(239,68,68,0.5)' : 'var(--border)';
+  
+  // Detection chainage
+  const chainInfo = detectChainage(d, dashboardState.allDossiers);
+  
+  // URL Google Maps si adresse
+  const address = d.adresseSite || '';
+  const mapsUrl = address 
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`
+    : null;
+  
+  return `
+    <div style="background:${cardBg};border:1px solid ${cardBorder};border-radius:10px;padding:11px 12px">
+      <!-- En-tete : tech + statut + temps -->
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;gap:8px">
+        <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">
+          <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,${step.color},${step.color});color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0">
+            ${escapeHtml(techName.substring(0,1).toUpperCase())}
+          </div>
+          <div style="min-width:0;flex:1">
+            <div style="font-weight:700;font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(techName)}</div>
+            <div style="font-size:11px;color:${step.color};font-weight:600;display:flex;align-items:center;gap:4px">
+              <span>${step.emoji}</span>
+              <span>${escapeHtml(step.label)}</span>
+              <span style="color:var(--text-tertiary);font-weight:400">- depuis ${fmtRelativeTime(step.sinceMin)}</span>
+            </div>
+          </div>
+        </div>
+        ${isAlert ? '<span style="background:#ef4444;color:white;padding:2px 7px;border-radius:8px;font-size:9px;font-weight:800;letter-spacing:0.5px">⚠️ ALERTE</span>' : ''}
+      </div>
+      
+      <!-- Etablissement + motif -->
+      <div style="margin-bottom:8px">
+        <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">${escapeHtml(d.etablissement || 'Sans nom')}</div>
+        ${d.motif ? `<div style="font-size:11px;color:var(--text-tertiary);line-height:1.4">${escapeHtml(d.motif.substring(0, 120))}${d.motif.length > 120 ? '...' : ''}</div>` : ''}
+        ${chainInfo ? `<div style="font-size:10px;color:#a855f7;font-weight:600;margin-top:4px">🔗 Dossier ${chainInfo.position}/${chainInfo.total} en chainage</div>` : ''}
+      </div>
+      
+      <!-- Prochaine etape attendue -->
+      ${step.nextExpected ? `
+        <div style="font-size:10px;color:var(--text-tertiary);background:var(--bg-subtle);padding:6px 8px;border-radius:6px;margin-bottom:8px">
+          → ${escapeHtml(step.nextExpected)}
+        </div>
+      ` : ''}
+      
+      <!-- Boutons d'action -->
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button data-action="dashboard-view-dossier" data-id="${d.id}" style="flex:1;min-width:0;background:var(--bg-subtle);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:11px;cursor:pointer;font-weight:600">
+          📋 Voir le dossier
+        </button>
+        ${mapsUrl ? `
+          <a href="${mapsUrl}" target="_blank" rel="noopener" style="background:var(--bg-subtle);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:11px;text-decoration:none;font-weight:600;display:inline-flex;align-items:center;gap:4px">
+            🗺️ Maps
+          </a>
+        ` : ''}
+      </div>
+    </div>
+  `;
+}
+
 // Tab 1 : Vue d'ensemble (qui est d'astreinte + alertes)
 function renderDashboardOverview() {
   const weekDossiers = dashboardGetWeekDossiers(dashboardState.weekOffset);
@@ -4258,6 +5389,9 @@ function renderDashboardOverview() {
       <button class="btn btn-primary" data-action="dashboard-create-for-tech" style="width:100%;padding:12px;border-radius:10px;font-size:14px;font-weight:700;margin-bottom:14px;background:linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);color:white;border:none;box-shadow:0 4px 12px rgba(37,99,235,0.3)">
         ➕ Créer un dossier pour un technicien
       </button>
+      
+      <!-- V2.12.0 — Supervision temps réel -->
+      ${dashboardState.weekOffset === 0 ? renderRealTimeMonitoring() : ''}
       
       <!-- Alertes -->
       ${alertes.length > 0 ? `
@@ -4978,8 +6112,98 @@ function getManagerWeekDossiers() {
   });
 }
 
+// V2.12.0 — Distinguer dossiers "vraiment finis" vs "en cours"
+// Un dossier est "fini" si cloturé ET (pour déplacement : retour domicile rempli)
+function isDossierReallyFinished(d) {
+  if (!d) return false;
+  // Doit etre cloture
+  const isClotured = d.cloture === true || d.cloture === 'true' || d.statut === 'cloture';
+  if (!isClotured) return false;
+  // Pour un déplacement : vérifier que retour est rempli (vraiment fini)
+  if (d.type === 'deplacement') {
+    return d.retourDomicile && d.retourDomicile !== 'X' && d.retourDomicile.trim() !== '';
+  }
+  // Pour téléphone : cloture suffit
+  return true;
+}
+
+// V2.12.0 — Compter les dossiers "en cours" de la semaine
+function getManagerInProgressCount() {
+  return getManagerWeekDossiers().filter(d => !isDossierReallyFinished(d)).length;
+}
+
+// V2.12.0 — Ouvre une popup en lecture seule listant les dossiers EN COURS
+// (utilisé depuis Vue Dépannage pour permettre au manager de voir sans pouvoir récupérer)
+function openManagerInProgressModal() {
+  const inProgress = getManagerWeekDossiers().filter(d => !isDossierReallyFinished(d));
+  
+  // Trier par dateAppel descendant (plus récent d'abord)
+  inProgress.sort((a, b) => new Date(b.dateAppel) - new Date(a.dateAppel));
+  
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay visible';
+  
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:560px">
+      <div class="modal-header">
+        <div class="modal-title">🟡 Dossiers en cours d'intervention</div>
+        <button class="modal-close" data-action="mip-close">×</button>
+      </div>
+      <div class="modal-body" style="padding:16px 20px;max-height:70vh;overflow-y:auto">
+        <div style="background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.3);border-radius:10px;padding:12px;margin-bottom:16px;font-size:12px;color:var(--text);line-height:1.5">
+          💡 Ces dossiers ne sont <strong>pas encore terminés</strong> par le technicien. Ils n'apparaissent pas dans les filtres de récupération ERP pour éviter les erreurs.<br>
+          <span style="color:var(--text-tertiary);font-size:11px">Pour le suivi détaillé en direct, consulte le <strong>Dashboard équipe</strong> (admin).</span>
+        </div>
+        
+        ${inProgress.length === 0 ? `
+          <div style="text-align:center;padding:30px 20px;color:var(--text-tertiary);font-size:13px">
+            ✨ Aucune intervention en cours
+          </div>
+        ` : `
+          <div style="display:flex;flex-direction:column;gap:8px">
+            ${inProgress.map(d => {
+              const step = detectInterventionStep(d);
+              const techName = (d.username || '').trim() || 'Inconnu';
+              const dateStr = new Date(d.dateAppel).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+              
+              return `
+                <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;padding:11px 12px">
+                  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">
+                    <div style="flex:1;min-width:0">
+                      <div style="font-weight:700;font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(d.etablissement || 'Sans nom')}</div>
+                      <div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">${escapeHtml(techName)} • ${escapeHtml(dateStr)} • ${d.type === 'telephone' ? '☎️ Téléphone' : '🚗 Déplacement'}</div>
+                    </div>
+                    ${step ? `
+                      <span style="background:${step.color}20;color:${step.color};padding:3px 8px;border-radius:8px;font-size:10px;font-weight:700;white-space:nowrap">
+                        ${step.emoji} ${escapeHtml(step.label)}
+                      </span>
+                    ` : ''}
+                  </div>
+                  ${d.motif ? `<div style="font-size:11px;color:var(--text);background:var(--bg);padding:6px 8px;border-radius:6px;margin-top:6px;line-height:1.4">${escapeHtml(d.motif.substring(0, 150))}${d.motif.length > 150 ? '...' : ''}</div>` : ''}
+                </div>
+              `;
+            }).join('')}
+          </div>
+        `}
+      </div>
+      <div class="modal-footer" style="padding:14px 20px;display:flex;justify-content:flex-end;border-top:1px solid var(--border)">
+        <button class="btn btn-secondary" data-action="mip-close">Fermer</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  
+  overlay.addEventListener('click', (e) => {
+    const action = e.target.dataset.action || e.target.closest('[data-action]')?.dataset.action;
+    if (action === 'mip-close' || e.target === overlay) {
+      overlay.remove();
+    }
+  });
+}
+
 function getManagerFiltered() {
-  let dossiers = getManagerWeekDossiers();
+  // V2.12.0 — On exclut systematiquement les dossiers non-vraiment-finis
+  let dossiers = getManagerWeekDossiers().filter(d => isDossierReallyFinished(d));
 
   // Filtre statut récupération
   if (managerState.filter === 'a-recuperer') {
@@ -5030,10 +6254,13 @@ function renderManagerView() {
   const filtered = getManagerFiltered();
   const groupedByTech = groupDossiersByTech(filtered);
 
+  // V2.12.0 — Compteurs sur dossiers VRAIMENT FINIS uniquement
+  const finishedDossiers = weekDossiers.filter(d => isDossierReallyFinished(d));
+  const inProgressCount = weekDossiers.length - finishedDossiers.length;
   const counts = {
-    tous: weekDossiers.length,
-    'a-recuperer': weekDossiers.filter(d => !d.recupereERP).length,
-    recuperes: weekDossiers.filter(d => d.recupereERP).length
+    tous: finishedDossiers.length,
+    'a-recuperer': finishedDossiers.filter(d => !d.recupereERP).length,
+    recuperes: finishedDossiers.filter(d => d.recupereERP).length
   };
 
   const weekNum = getWeekNumber(week.start);
@@ -5097,6 +6324,17 @@ function renderManagerView() {
           ✅ Récupérés <span class="badge">${counts.recuperes}</span>
         </button>
       </div>
+
+      <!-- V2.12.0 — Note discrète dossiers en cours (cliquable pour voir lesquels) -->
+      ${inProgressCount > 0 ? `
+        <div data-action="manager-show-in-progress" style="margin: 0 12px 8px; padding: 9px 12px; background: rgba(234,179,8,0.08); border: 1px solid rgba(234,179,8,0.3); border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--text);">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="color: #eab308; font-size: 14px;">🟡</span>
+            <span><strong>${inProgressCount} dossier${inProgressCount > 1 ? 's' : ''} en cours</strong> - intervention non terminée</span>
+          </div>
+          <span style="color: var(--text-tertiary); font-size: 11px;">Voir →</span>
+        </div>
+      ` : ''}
 
       <!-- V2.11.1 — Bouton créer un dossier pour un tech (manager+admin) -->
       <div style="padding: 4px 12px 8px">
@@ -5786,6 +7024,34 @@ function getWeekDossiers(offset = 0) {
 
 // V2.11.0 — Bandeau "Astreinte en cours" intelligent
 // S'affiche uniquement si l'utilisateur regarde la semaine actuelle ET qu'on est dans la fenêtre d'astreinte
+// V2.12.0 — Bandeau orange pour le suppléant
+function renderAstreinteSuppleantBanner(end, now) {
+  const msRestant = end - now;
+  const totalHours = Math.floor(msRestant / (1000 * 60 * 60));
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+  let countdownText = days > 0 ? `${days}j ${hours}h restantes` : `${hours}h restantes`;
+  
+  return `
+    <div style="background:linear-gradient(135deg,rgba(234,179,8,0.12) 0%,rgba(202,138,4,0.06) 100%);border:1px solid rgba(234,179,8,0.4);border-radius:var(--radius);padding:14px 16px;margin-bottom:12px;position:relative;overflow:hidden">
+      <div style="position:absolute;top:0;left:0;width:4px;height:100%;background:linear-gradient(180deg,#eab308 0%,#ca8a04 100%)"></div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="display:inline-flex;align-items:center;gap:5px;background:#eab308;color:white;padding:3px 9px;border-radius:10px;font-size:10px;font-weight:800;letter-spacing:0.6px;text-transform:uppercase">
+          🥈 Suppléant
+        </span>
+        <span style="font-size:13px;color:var(--text);font-weight:600">${countdownText}</span>
+      </div>
+      <div style="margin-top:8px;font-size:12px;color:var(--text-tertiary)">
+        Tu es désigné comme <strong style="color:var(--text)">suppléant</strong> pour cette semaine. Reste joignable au cas où le titulaire ne serait pas disponible.
+      </div>
+      <button class="urgence-btn" data-action="urgence-trigger" style="margin-top:10px">
+        <span class="urg-icon">🚨</span>
+        <span>BOUTON URGENCE</span>
+      </button>
+    </div>
+  `;
+}
+
 function renderAstreinteEnCours() {
   // Uniquement sur la semaine actuelle
   if (view.weekOffset !== 0) return '';
@@ -5795,6 +7061,20 @@ function renderAstreinteEnCours() {
   
   // Vérifier qu'on est BIEN dans la fenêtre [start, end] de l'astreinte
   if (now < start || now >= end) return '';
+  
+  // V2.12.0 — Si désignation active, n'afficher que pour le titulaire
+  // Le suppléant a un bandeau orange différent (rendu plus bas)
+  // Si pas de désignation : comportement V2.11 (tout le monde voit)
+  if (isAstreinteDesignationActive()) {
+    if (isCurrentUserAstreinteSuppleant()) {
+      // Bandeau suppléant en backup (orange, sans bouton appel)
+      return renderAstreinteSuppleantBanner(end, now);
+    }
+    if (!isCurrentUserAstreinteTitulaire()) {
+      return ''; // ni titulaire ni suppléant → rien
+    }
+    // Sinon : c'est le titulaire, on continue avec le bandeau rouge classique
+  }
   
   // Calcul du temps restant
   const msRestant = end - now;
@@ -5870,6 +7150,10 @@ function renderAstreinteEnCours() {
       <button class="astreinte-quick-call-btn" data-action="quick-call">
         <span class="phone-icon">📞</span>
         <span>NOUVEL APPEL</span>
+      </button>
+      <button class="urgence-btn" data-action="urgence-trigger">
+        <span class="urg-icon">🚨</span>
+        <span>BOUTON URGENCE</span>
       </button>
     </div>
   `;
@@ -7135,6 +8419,16 @@ function renderSettings() {
             </div>
             <span class="settings-row-chevron">›</span>
           </div>
+          <div class="settings-row" data-action="manage-astreinte">
+            <div class="settings-row-icon">🚨</div>
+            <div class="settings-row-content">
+              <div class="settings-row-title">Astreinte de la semaine</div>
+              <div class="settings-row-value">${isAstreinteDesignationActive() 
+                ? `🔴 ${escapeHtml(getAstreinteTitulaireName() || 'Titulaire défini')}${appConfig.astreinteSuppleantId ? ' + 🥈 ' + escapeHtml(getAstreinteSuppleantName() || 'Suppléant') : ''}` 
+                : '⚪ Aucune désignation cette semaine'}</div>
+            </div>
+            <span class="settings-row-chevron">›</span>
+          </div>
           <div class="settings-row" data-action="toggle-maintenance">
             <div class="settings-row-icon">🚧</div>
             <div class="settings-row-content">
@@ -7780,6 +9074,10 @@ async function handleAction(e) {
       // V2.11.0 — Saisie rapide téléphone (3 étapes)
       await quickPhoneCall();
       break;
+    // V2.12.0 — Déclenchement urgence
+    case 'urgence-trigger':
+      await urgenceTrigger();
+      break;
     case 'cancel-new':
       // V2.11.1 — Si on créait un dossier pour un tech, retour à la vue d'origine
       const wasForTech = tempDossier && tempDossier._createdByAdmin === true;
@@ -7947,6 +9245,8 @@ async function handleAction(e) {
       view.current = 'settings';
       adminState.editingUser = null;
       adminState.creatingUser = false;
+      // V2.12.0 — Arreter l'auto-refresh quand on quitte le Dashboard
+      stopDashboardAutoRefresh();
       render();
       break;
     // V2.11.0 — Logo personnalisable
@@ -7964,12 +9264,19 @@ async function handleAction(e) {
       if (!isAdmin()) { toast('Accès refusé', 'error'); break; }
       openVersionModal();
       break;
+    // V2.12 — Désignation tech d'astreinte
+    case 'manage-astreinte':
+      if (!isAdmin()) { toast('Accès refusé', 'error'); break; }
+      await openAstreinteDesignationModal();
+      break;
     // V2.11 — Dashboard admin
     case 'goto-dashboard-admin':
       if (!isAdmin()) { toast('Accès refusé', 'error'); break; }
       view.current = 'dashboard-admin';
       render();
       dashboardLoadData();
+      // V2.12.0 — Demarrer auto-refresh (toutes les 60 sec)
+      startDashboardAutoRefresh();
       break;
     case 'dashboard-tab':
       dashboardState.tab = t.dataset.tab;
@@ -7977,6 +9284,11 @@ async function handleAction(e) {
       break;
     case 'dashboard-reload':
       await dashboardLoadData();
+      break;
+    // V2.12.0 — Rafraichir uniquement la supervision temps reel
+    case 'dashboard-refresh-realtime':
+      await dashboardLoadData();
+      toast('🔄 Supervision rafraichie', 'success');
       break;
     case 'dashboard-prev-week':
       dashboardState.weekOffset--;
@@ -8105,6 +9417,10 @@ async function handleAction(e) {
     case 'manager-create-for-tech':
       if (!isManagerOrAdmin()) { toast('Accès refusé', 'error'); break; }
       await createDossierForTech();
+      break;
+    // V2.12.0 — Voir les dossiers en cours (popup lecture seule)
+    case 'manager-show-in-progress':
+      openManagerInProgressModal();
       break;
     case 'show-sync':
       showSyncModal();
@@ -10748,6 +12064,9 @@ async function init() {
         
         // V2.11 — Démarrer le polling périodique
         startAppConfigPolling();
+        
+        // V2.12.0 — Vérifier immédiatement s'il y a une urgence active
+        checkUrgenceActive();
         
         return result;
       }
