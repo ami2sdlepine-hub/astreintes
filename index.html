@@ -2672,7 +2672,7 @@ function loadJsPDF() {
 // V2.11 — CONFIG APP (Maintenance + Version)
 // ============================================================================
 // Version actuelle de cette app (à incrémenter à chaque déploiement)
-const APP_VERSION = '2.13.1';
+const APP_VERSION = '2.13.2';
 
 // État global de la config app (récupérée depuis le cloud au démarrage)
 const appConfig = {
@@ -4313,11 +4313,200 @@ let dashboardState = {
   users: [],
   loading: false,
   error: null,
-  tab: 'overview', // overview | stats | validation
+  tab: 'overview', // overview | stats | validation | urgences
   weekOffset: 0, // 0 = semaine actuelle, -1 = précédente, etc.
   filterTech: null, // null = tous, sinon username du tech à filtrer
-  autoRefreshTimer: null // V2.12.0 — Timer pour auto-refresh supervision temps reel
+  autoRefreshTimer: null, // V2.12.0 — Timer pour auto-refresh supervision temps reel
+  // V2.13.2 — Filtres avancés partagés entre les onglets
+  advFilters: {
+    panelOpen: false,         // panneau filtres déplié ou non
+    period: 'all',            // all | today | 7d | 30d | week-astreinte | custom
+    customStart: '',          // ISO date YYYY-MM-DD pour period=custom
+    customEnd: '',            // ISO date YYYY-MM-DD pour period=custom
+    techs: [],                // [] = tous, sinon liste de user_id
+    type: 'all',              // all | telephone | deplacement
+    statut: 'all',            // all | en-cours | clotures | non-recupere-erp
+    astreinteOnly: false      // true = uniquement hors heures bureau
+  }
 };
+
+// V2.13.2 — Persistance localStorage des filtres avancés (par appareil)
+const DASHBOARD_FILTERS_STORAGE_KEY = '_dashboardAdvFilters_v2_13_2';
+
+function loadDashboardFilters() {
+  try {
+    const raw = localStorage.getItem(DASHBOARD_FILTERS_STORAGE_KEY);
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    if (saved && typeof saved === 'object') {
+      // Merge avec les valeurs par défaut pour gérer les nouvelles clés futures
+      Object.keys(dashboardState.advFilters).forEach(k => {
+        if (k === 'panelOpen') return; // panel toujours fermé au démarrage
+        if (saved[k] !== undefined) {
+          dashboardState.advFilters[k] = saved[k];
+        }
+      });
+    }
+  } catch(e) { /* silent */ }
+}
+
+function saveDashboardFilters() {
+  try {
+    // On ne persiste pas panelOpen (état éphémère d'UI)
+    const toSave = Object.assign({}, dashboardState.advFilters);
+    delete toSave.panelOpen;
+    localStorage.setItem(DASHBOARD_FILTERS_STORAGE_KEY, JSON.stringify(toSave));
+  } catch(e) { /* silent */ }
+}
+
+// V2.13.2 — Compte le nombre de filtres actifs (pour le badge "X filtres actifs")
+function countActiveAdvFilters() {
+  const f = dashboardState.advFilters;
+  let n = 0;
+  if (f.period && f.period !== 'all') n++;
+  if (f.techs && f.techs.length > 0) n++;
+  if (f.type && f.type !== 'all') n++;
+  if (f.statut && f.statut !== 'all') n++;
+  if (f.astreinteOnly) n++;
+  return n;
+}
+
+// V2.13.2 — Calcule la plage de dates [start, end] selon le filtre période
+// Retourne null si pas de filtre période (tout)
+function computeFilterDateRange() {
+  const f = dashboardState.advFilters;
+  if (!f.period || f.period === 'all') return null;
+  const now = new Date();
+  if (f.period === 'today') {
+    const start = new Date(now); start.setHours(0,0,0,0);
+    const end = new Date(now); end.setHours(23,59,59,999);
+    return { start, end };
+  }
+  if (f.period === '7d') {
+    const end = new Date(now);
+    const start = new Date(now.getTime() - 7 * 86400000);
+    return { start, end };
+  }
+  if (f.period === '30d') {
+    const end = new Date(now);
+    const start = new Date(now.getTime() - 30 * 86400000);
+    return { start, end };
+  }
+  if (f.period === 'week-astreinte') {
+    // Semaine d'astreinte courante (Lun 9h → Lun 9h)
+    const { start, end } = getAstreinteWeek(now);
+    return { start, end };
+  }
+  if (f.period === 'custom') {
+    if (!f.customStart || !f.customEnd) return null;
+    const start = new Date(f.customStart + 'T00:00:00');
+    const end = new Date(f.customEnd + 'T23:59:59');
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) return null;
+    return { start, end };
+  }
+  return null;
+}
+
+// V2.13.2 — Détecte si un dossier a été créé pendant les heures d'astreinte (hors bureau)
+// Bureau : Lun-Jeu 9h-18h, Ven 9h-17h. Reste = astreinte.
+function isDuringAstreinteHours(dateAppel) {
+  try {
+    const d = new Date(dateAppel);
+    if (isNaN(d.getTime())) return false;
+    const day = d.getDay(); // 0=dim, 1=lun, ..., 6=sam
+    const h = d.getHours() + d.getMinutes() / 60;
+    // Week-end : samedi (6) et dimanche (0) = toujours astreinte
+    if (day === 0 || day === 6) return true;
+    // Lundi à jeudi : bureau 9h-18h
+    if (day >= 1 && day <= 4) return !(h >= 9 && h < 18);
+    // Vendredi : bureau 9h-17h
+    if (day === 5) return !(h >= 9 && h < 17);
+    return false;
+  } catch(e) { return false; }
+}
+
+// V2.13.2 — Applique les filtres avancés sur une liste de dossiers
+// Utilisé par renderDashboardOverview / renderDashboardStats
+function applyDashboardAdvFilters(dossiers) {
+  const f = dashboardState.advFilters;
+  let list = dossiers || [];
+  
+  // Filtre période
+  const range = computeFilterDateRange();
+  if (range) {
+    list = list.filter(d => {
+      const dt = new Date(d.dateAppel);
+      return dt >= range.start && dt <= range.end;
+    });
+  }
+  
+  // Filtre techniciens (par user_id)
+  if (f.techs && f.techs.length > 0) {
+    const techSet = new Set(f.techs);
+    list = list.filter(d => techSet.has(d.user_id));
+  }
+  
+  // Filtre type
+  if (f.type === 'telephone') list = list.filter(d => d.type === 'telephone');
+  else if (f.type === 'deplacement') list = list.filter(d => d.type === 'deplacement');
+  
+  // Filtre statut
+  if (f.statut === 'en-cours') list = list.filter(d => !dashboardIsCloture(d));
+  else if (f.statut === 'clotures') list = list.filter(d => dashboardIsCloture(d));
+  else if (f.statut === 'non-recupere-erp') list = list.filter(d => dashboardIsCloture(d) && !d.recupereERP);
+  
+  // Filtre astreinte uniquement (hors heures bureau)
+  if (f.astreinteOnly) {
+    list = list.filter(d => isDuringAstreinteHours(d.dateAppel));
+  }
+  
+  return list;
+}
+
+// V2.13.2 — Applique les filtres avancés sur la liste d'urgences (logique différente)
+function applyDashboardAdvFiltersUrgences(urgences) {
+  const f = dashboardState.advFilters;
+  let list = urgences || [];
+  
+  // Filtre période (sur dateDeclenchement)
+  const range = computeFilterDateRange();
+  if (range) {
+    list = list.filter(u => {
+      try {
+        const dt = new Date(u.dateDeclenchement);
+        return dt >= range.start && dt <= range.end;
+      } catch(e) { return false; }
+    });
+  }
+  
+  // Filtre techniciens (par userIdDeclencheur)
+  if (f.techs && f.techs.length > 0) {
+    const techSet = new Set(f.techs);
+    list = list.filter(u => techSet.has(u.userIdDeclencheur));
+  }
+  
+  // Filtre statut (interprété pour urgences : en-cours = non acquittée, clotures = acquittée)
+  if (f.statut === 'en-cours') list = list.filter(u => !u.dateAcquittement);
+  else if (f.statut === 'clotures') list = list.filter(u => !!u.dateAcquittement);
+  // 'non-recupere-erp' n'a pas de sens pour les urgences, on ignore
+  // 'type' et 'astreinteOnly' non applicables aux urgences
+  
+  return list;
+}
+
+// V2.13.2 — Label lisible pour la période active (utilisé dans les libellés stats)
+function periodLabel() {
+  const f = dashboardState.advFilters;
+  if (!f.period || f.period === 'all') return 'tout l\'historique';
+  if (f.period === 'today') return 'aujourd\'hui';
+  if (f.period === '7d') return '7 derniers jours';
+  if (f.period === '30d') return '30 derniers jours';
+  if (f.period === 'week-astreinte') return 'cette semaine d\'astreinte';
+  if (f.period === 'custom' && f.customStart && f.customEnd) {
+    return `${f.customStart} → ${f.customEnd}`;
+  }
+  return 'période personnalisée';
+}
 
 // V2.12.0 — Demarrer / arreter l'auto-refresh
 function startDashboardAutoRefresh() {
@@ -5703,6 +5892,8 @@ function renderDashboardAdmin() {
       </button>
     </div>
     
+    ${dashboardState.tab !== 'validation' ? renderDashboardFiltersPanel() : ''}
+    
     ${dashboardState.tab === 'overview' ? renderDashboardOverview() : ''}
     ${dashboardState.tab === 'stats' ? renderDashboardStats() : ''}
     ${dashboardState.tab === 'validation' ? renderDashboardValidation() : ''}
@@ -5959,9 +6150,152 @@ function renderInterventionCard(d, step) {
   `;
 }
 
+// V2.13.2 — Bouton "🔧 Filtres" + panneau dépliable (partagé entre les onglets Overview/Stats/Urgences)
+function renderDashboardFiltersPanel() {
+  const f = dashboardState.advFilters;
+  const nbActive = countActiveAdvFilters();
+  const isOpen = f.panelOpen;
+  
+  // Préparer la liste triée des techs disponibles pour le selecteur
+  const techsAvailable = (dashboardState.users || [])
+    .filter(u => u && u.id && (u.role === 'technicien' || u.role === 'admin' || u.role === 'manager'))
+    .map(u => ({ id: u.id, name: u.full_name || u.username || u.id }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+  
+  // Bouton + badge compteur
+  const headerBtn = `
+    <div style="padding:0 10px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-secondary" data-action="dashboard-toggle-filters" style="display:inline-flex;align-items:center;gap:6px;padding:8px 12px;font-size:13px">
+        🔧 <span>Filtres</span>
+        ${nbActive > 0 ? `<span style="background:#3b82f6;color:white;border-radius:10px;padding:1px 7px;font-size:10px;font-weight:700;margin-left:2px">${nbActive}</span>` : ''}
+        <span style="font-size:10px;color:var(--text-tertiary);margin-left:4px">${isOpen ? '▲' : '▼'}</span>
+      </button>
+      ${nbActive > 0 ? `<button class="btn btn-secondary" data-action="dashboard-reset-filters" style="padding:6px 10px;font-size:12px;color:#dc2626;border-color:rgba(220,38,38,0.3)">✕ Réinitialiser</button>` : ''}
+    </div>
+  `;
+  
+  if (!isOpen) return headerBtn;
+  
+  // Helpers pour générer les boutons "pill" de sélection
+  const pill = (active, action, dataAttr, label) => `
+    <button class="btn ${active ? 'btn-primary' : 'btn-secondary'}" 
+            data-action="${action}" ${dataAttr}
+            style="padding:6px 12px;font-size:12px;border-radius:18px;${active ? '' : 'background:var(--bg);'}">
+      ${label}
+    </button>
+  `;
+  
+  // Bloc Période
+  const periodHtml = `
+    <div style="margin-bottom:14px">
+      <label style="display:block;font-size:10px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">📅 Période</label>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${pill(f.period === 'all', 'dashboard-set-period', 'data-period="all"', 'Tout')}
+        ${pill(f.period === 'today', 'dashboard-set-period', 'data-period="today"', 'Aujourd\'hui')}
+        ${pill(f.period === '7d', 'dashboard-set-period', 'data-period="7d"', '7 derniers jours')}
+        ${pill(f.period === '30d', 'dashboard-set-period', 'data-period="30d"', '30 derniers jours')}
+        ${pill(f.period === 'week-astreinte', 'dashboard-set-period', 'data-period="week-astreinte"', 'Cette semaine d\'astreinte')}
+        ${pill(f.period === 'custom', 'dashboard-set-period', 'data-period="custom"', 'Plage personnalisée')}
+      </div>
+      ${f.period === 'custom' ? `
+        <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <input type="date" id="adv-custom-start" value="${escapeHtml(f.customStart || '')}" 
+                 style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:12px">
+          <span style="font-size:11px;color:var(--text-tertiary)">→</span>
+          <input type="date" id="adv-custom-end" value="${escapeHtml(f.customEnd || '')}" 
+                 style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:12px">
+          <button class="btn btn-primary" data-action="dashboard-apply-custom-dates" style="padding:6px 12px;font-size:12px">Appliquer</button>
+        </div>
+      ` : ''}
+    </div>
+  `;
+  
+  // Bloc Techniciens (sélecteur multi)
+  const techsHtml = techsAvailable.length > 0 ? `
+    <div style="margin-bottom:14px">
+      <label style="display:block;font-size:10px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">
+        👥 Techniciens ${f.techs.length > 0 ? `(${f.techs.length} sélectionné${f.techs.length > 1 ? 's' : ''})` : '(tous)'}
+      </label>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;max-height:140px;overflow-y:auto;padding:4px">
+        ${pill(f.techs.length === 0, 'dashboard-clear-techs', '', '👥 Tous')}
+        ${techsAvailable.map(t => {
+          const active = f.techs.includes(t.id);
+          return pill(active, 'dashboard-toggle-tech', `data-techid="${escapeHtml(t.id)}"`, escapeHtml(t.name));
+        }).join('')}
+      </div>
+    </div>
+  ` : '';
+  
+  // Bloc Type
+  const typeHtml = `
+    <div style="margin-bottom:14px">
+      <label style="display:block;font-size:10px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">🔧 Type d'intervention</label>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${pill(f.type === 'all', 'dashboard-set-type', 'data-type="all"', 'Tous')}
+        ${pill(f.type === 'telephone', 'dashboard-set-type', 'data-type="telephone"', '📞 Téléphone')}
+        ${pill(f.type === 'deplacement', 'dashboard-set-type', 'data-type="deplacement"', '🚗 Déplacement')}
+      </div>
+    </div>
+  `;
+  
+  // Bloc Statut
+  const statutHtml = `
+    <div style="margin-bottom:14px">
+      <label style="display:block;font-size:10px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">📊 Statut</label>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${pill(f.statut === 'all', 'dashboard-set-statut', 'data-statut="all"', 'Tous')}
+        ${pill(f.statut === 'en-cours', 'dashboard-set-statut', 'data-statut="en-cours"', '⏳ En cours')}
+        ${pill(f.statut === 'clotures', 'dashboard-set-statut', 'data-statut="clotures"', '✓ Clôturés')}
+        ${pill(f.statut === 'non-recupere-erp', 'dashboard-set-statut', 'data-statut="non-recupere-erp"', '⚠ Non récupéré ERP')}
+      </div>
+    </div>
+  `;
+  
+  // Checkbox astreinte uniquement
+  const astreinteHtml = `
+    <div style="margin-bottom:4px">
+      <label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text)">
+        <input type="checkbox" id="adv-astreinte-only" data-action="dashboard-toggle-astreinte-only" ${f.astreinteOnly ? 'checked' : ''} 
+               style="width:16px;height:16px;cursor:pointer">
+        <span>🌙 Astreinte uniquement (hors heures bureau)</span>
+      </label>
+      <div style="font-size:10px;color:var(--text-tertiary);margin-top:3px;margin-left:24px;line-height:1.4">
+        Bureau : Lun-Jeu 9h-18h, Ven 9h-17h. Le reste est considéré comme astreinte.
+      </div>
+    </div>
+  `;
+  
+  return `
+    ${headerBtn}
+    <div style="margin:0 10px 14px 10px;padding:14px;background:var(--card);border:1px solid var(--border);border-radius:10px">
+      ${periodHtml}
+      ${techsHtml}
+      ${typeHtml}
+      ${statutHtml}
+      ${astreinteHtml}
+    </div>
+  `;
+}
+
 // Tab 1 : Vue d'ensemble (qui est d'astreinte + alertes)
 function renderDashboardOverview() {
-  const weekDossiers = dashboardGetWeekDossiers(dashboardState.weekOffset);
+  // V2.13.2 — Si un filtre période est actif, on ignore le sélecteur de semaine et on filtre globalement
+  const hasPeriodFilter = dashboardState.advFilters.period && dashboardState.advFilters.period !== 'all';
+  const nbActiveFilters = countActiveAdvFilters();
+  
+  let weekDossiers;
+  if (hasPeriodFilter) {
+    // Filtre période → on part de tous les dossiers et on filtre via applyDashboardAdvFilters
+    weekDossiers = applyDashboardAdvFilters(dashboardState.allDossiers);
+  } else {
+    // Pas de filtre période → comportement classique : semaine d'astreinte selon weekOffset
+    weekDossiers = dashboardGetWeekDossiers(dashboardState.weekOffset);
+    // Mais on applique quand même les autres filtres (techs / type / statut / astreinteOnly)
+    if (nbActiveFilters > 0) {
+      weekDossiers = applyDashboardAdvFilters(weekDossiers);
+    }
+  }
+  
   const week = getAstreinteWeek(new Date(Date.now() + dashboardState.weekOffset * 7 * 86400000));
   const weekNum = getWeekNumber(week.start);
   
@@ -5999,17 +6333,29 @@ function renderDashboardOverview() {
   
   return `
     <div style="padding:0 12px 80px">
-      <!-- Sélecteur semaine -->
-      <div class="week-banner" style="margin-bottom:14px">
-        <div class="week-info">
-          <div class="week-label">Semaine n°${weekNum}${dashboardState.weekOffset === 0 ? ' (actuelle)' : dashboardState.weekOffset === -1 ? ' (précédente)' : ''}</div>
-          <div class="week-dates">${fmtDateShort(week.start)} 09h → ${fmtDateShort(week.end)} 09h</div>
+      <!-- Sélecteur semaine (désactivé quand un filtre période est actif) -->
+      ${hasPeriodFilter ? `
+        <div class="week-banner" style="margin-bottom:14px;opacity:0.85">
+          <div class="week-info">
+            <div class="week-label">🔧 Filtre période actif</div>
+            <div class="week-dates">${escapeHtml(periodLabel())} • ${weekDossiers.length} dossier${weekDossiers.length > 1 ? 's' : ''}</div>
+          </div>
+          <div style="font-size:10px;color:var(--text-tertiary);text-align:right;line-height:1.4">
+            Sélecteur de semaine<br>désactivé
+          </div>
         </div>
-        <div style="display:flex;gap:6px">
-          <button class="icon-btn" data-action="dashboard-prev-week">‹</button>
-          <button class="icon-btn" data-action="dashboard-next-week" ${dashboardState.weekOffset >= 0 ? 'disabled style="opacity:0.3"' : ''}>›</button>
+      ` : `
+        <div class="week-banner" style="margin-bottom:14px">
+          <div class="week-info">
+            <div class="week-label">Semaine n°${weekNum}${dashboardState.weekOffset === 0 ? ' (actuelle)' : dashboardState.weekOffset === -1 ? ' (précédente)' : ''}</div>
+            <div class="week-dates">${fmtDateShort(week.start)} 09h → ${fmtDateShort(week.end)} 09h</div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="icon-btn" data-action="dashboard-prev-week">‹</button>
+            <button class="icon-btn" data-action="dashboard-next-week" ${dashboardState.weekOffset >= 0 ? 'disabled style="opacity:0.3"' : ''}>›</button>
+          </div>
         </div>
-      </div>
+      `}
       
       <!-- KPIs globaux -->
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
@@ -6092,10 +6438,27 @@ function renderDashboardOverview() {
 
 // Tab 2 : Statistiques équipe
 function renderDashboardStats() {
-  // Stats sur les 30 derniers jours
-  const now = new Date();
-  const limit30 = new Date(now.getTime() - 30 * 86400000);
-  const dossiers30 = dashboardState.allDossiers.filter(d => new Date(d.dateAppel) >= limit30);
+  // V2.13.2 — Si un filtre période est actif, on utilise applyDashboardAdvFilters
+  // Sinon on garde le comportement classique (30 derniers jours) + autres filtres si actifs
+  const hasPeriodFilter = dashboardState.advFilters.period && dashboardState.advFilters.period !== 'all';
+  const nbActiveFilters = countActiveAdvFilters();
+  
+  let dossiers30;
+  let periodHeaderLabel = '30 derniers jours';
+  
+  if (hasPeriodFilter) {
+    dossiers30 = applyDashboardAdvFilters(dashboardState.allDossiers);
+    periodHeaderLabel = periodLabel();
+  } else {
+    // Comportement classique : 30 derniers jours
+    const now = new Date();
+    const limit30 = new Date(now.getTime() - 30 * 86400000);
+    dossiers30 = dashboardState.allDossiers.filter(d => new Date(d.dateAppel) >= limit30);
+    // Mais on applique quand même les autres filtres si actifs
+    if (nbActiveFilters > 0) {
+      dossiers30 = applyDashboardAdvFilters(dossiers30);
+    }
+  }
   
   // Top établissements
   const sitesMap = {};
@@ -6141,7 +6504,7 @@ function renderDashboardStats() {
   return `
     <div style="padding:0 12px 80px">
       <div style="text-align:center;padding:10px;background:var(--bg-subtle);border-radius:8px;margin-bottom:14px;font-size:12px;color:var(--text-tertiary)">
-        📅 Statistiques sur les <strong style="color:var(--text)">30 derniers jours</strong>
+        📅 Statistiques sur <strong style="color:var(--text)">${escapeHtml(periodHeaderLabel)}</strong>${nbActiveFilters > 1 ? ` <span style="color:#3b82f6">(${nbActiveFilters - (hasPeriodFilter ? 1 : 0)} autre${nbActiveFilters - (hasPeriodFilter ? 1 : 0) > 1 ? 's' : ''} filtre${nbActiveFilters - (hasPeriodFilter ? 1 : 0) > 1 ? 's' : ''} actif${nbActiveFilters - (hasPeriodFilter ? 1 : 0) > 1 ? 's' : ''})</span>` : ''}
       </div>
       
       <!-- KPIs principaux -->
@@ -6367,16 +6730,30 @@ function renderDashboardUrgences() {
     `;
   }
   
-  const list = urgencesLogState.list || [];
+  const allList = urgencesLogState.list || [];
   
-  // Stats : nb total sur l'année en cours + délai moyen d'acquittement
-  const nowYear = new Date().getFullYear();
-  const thisYearList = list.filter(u => {
-    try { return new Date(u.dateDeclenchement).getFullYear() === nowYear; } catch(e) { return false; }
-  });
-  const totalAnnee = thisYearList.length;
+  // V2.13.2 — Appliquer les filtres avancés sur les urgences
+  const list = applyDashboardAdvFiltersUrgences(allList);
+  const nbActiveFilters = countActiveAdvFilters();
+  const hasPeriodFilter = dashboardState.advFilters.period && dashboardState.advFilters.period !== 'all';
   
-  const delaisValides = list
+  // V2.13.2 — Stats : recalculées sur la liste filtrée si filtre période actif
+  // Sinon comportement par défaut : total année courante
+  let totalLabel, totalCount;
+  if (hasPeriodFilter) {
+    totalLabel = periodLabel();
+    totalCount = list.length;
+  } else {
+    const nowYear = new Date().getFullYear();
+    totalLabel = String(nowYear);
+    totalCount = allList.filter(u => {
+      try { return new Date(u.dateDeclenchement).getFullYear() === nowYear; } catch(e) { return false; }
+    }).length;
+  }
+  
+  // Délai moyen : calculé sur la liste filtrée (si filtres actifs) ou sur tout (sinon)
+  const delaiSource = nbActiveFilters > 0 ? list : allList;
+  const delaisValides = delaiSource
     .map(u => u.delaiAckSeconds)
     .filter(s => s !== null && s !== undefined && s !== '' && !isNaN(s));
   const delaiMoyen = delaisValides.length > 0
@@ -6390,9 +6767,9 @@ function renderDashboardUrgences() {
     <div style="padding:0 10px;margin-bottom:16px">
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px">
         <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px">
-          <div style="font-size:10px;text-transform:uppercase;color:var(--text-tertiary);letter-spacing:0.5px;margin-bottom:4px">Total ${nowYear}</div>
-          <div style="font-size:24px;font-weight:700;color:var(--text)">${totalAnnee}</div>
-          <div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">urgence${totalAnnee > 1 ? 's' : ''} déclenchée${totalAnnee > 1 ? 's' : ''}</div>
+          <div style="font-size:10px;text-transform:uppercase;color:var(--text-tertiary);letter-spacing:0.5px;margin-bottom:4px">Total ${escapeHtml(totalLabel)}</div>
+          <div style="font-size:24px;font-weight:700;color:var(--text)">${totalCount}</div>
+          <div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">urgence${totalCount > 1 ? 's' : ''} déclenchée${totalCount > 1 ? 's' : ''}</div>
         </div>
         <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px">
           <div style="font-size:10px;text-transform:uppercase;color:var(--text-tertiary);letter-spacing:0.5px;margin-bottom:4px">Délai moyen d'ack</div>
@@ -6411,11 +6788,16 @@ function renderDashboardUrgences() {
   
   // Liste des urgences
   if (list.length === 0) {
+    const emptyMsg = nbActiveFilters > 0 
+      ? 'Aucune urgence ne correspond aux filtres actifs.'
+      : 'Aucune urgence enregistrée pour l\'instant.';
     return statsHtml + `
       <div style="padding:30px 20px;text-align:center;color:var(--text-tertiary)">
         <div style="font-size:32px;margin-bottom:8px">📭</div>
-        <div style="font-size:13px">Aucune urgence enregistrée pour l'instant.</div>
-        <button class="btn btn-secondary" data-action="urgences-log-reload" style="margin-top:14px">🔄 Rafraîchir</button>
+        <div style="font-size:13px">${escapeHtml(emptyMsg)}</div>
+        ${nbActiveFilters > 0 
+          ? `<button class="btn btn-secondary" data-action="dashboard-reset-filters" style="margin-top:14px">✕ Réinitialiser les filtres</button>`
+          : `<button class="btn btn-secondary" data-action="urgences-log-reload" style="margin-top:14px">🔄 Rafraîchir</button>`}
       </div>
     `;
   }
@@ -6466,7 +6848,7 @@ function renderDashboardUrgences() {
   return `
     ${statsHtml}
     <div style="padding:0 10px 10px 10px;display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-      <div style="font-size:12px;color:var(--text-tertiary);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">📜 Historique (${list.length})</div>
+      <div style="font-size:12px;color:var(--text-tertiary);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">📜 Historique (${list.length}${nbActiveFilters > 0 && list.length !== allList.length ? ` / ${allList.length}` : ''})</div>
       <button class="btn btn-secondary" data-action="urgences-log-reload" style="padding:6px 12px;font-size:12px">🔄 Rafraîchir</button>
     </div>
     <div style="padding:0 10px 20px 10px">
@@ -10636,6 +11018,8 @@ async function handleAction(e) {
     case 'goto-dashboard-admin':
       if (!isAdmin()) { toast('Accès refusé', 'error'); break; }
       view.current = 'dashboard-admin';
+      // V2.13.2 — Charger les filtres persistés en localStorage
+      loadDashboardFilters();
       render();
       dashboardLoadData();
       // V2.12.0 — Demarrer auto-refresh (toutes les 60 sec)
@@ -10658,6 +11042,86 @@ async function handleAction(e) {
       urgencesLogState.loaded = false;
       await loadUrgencesLog();
       break;
+    // V2.13.2 — Filtres avancés Dashboard
+    case 'dashboard-toggle-filters':
+      dashboardState.advFilters.panelOpen = !dashboardState.advFilters.panelOpen;
+      render();
+      break;
+    case 'dashboard-reset-filters':
+      dashboardState.advFilters.period = 'all';
+      dashboardState.advFilters.customStart = '';
+      dashboardState.advFilters.customEnd = '';
+      dashboardState.advFilters.techs = [];
+      dashboardState.advFilters.type = 'all';
+      dashboardState.advFilters.statut = 'all';
+      dashboardState.advFilters.astreinteOnly = false;
+      saveDashboardFilters();
+      toast('✕ Filtres réinitialisés', 'success');
+      render();
+      break;
+    case 'dashboard-set-period': {
+      const newPeriod = t.dataset.period || 'all';
+      dashboardState.advFilters.period = newPeriod;
+      // Si on quitte custom, on garde quand même les dates au cas où on y revient
+      saveDashboardFilters();
+      render();
+      break;
+    }
+    case 'dashboard-apply-custom-dates': {
+      const startEl = document.getElementById('adv-custom-start');
+      const endEl = document.getElementById('adv-custom-end');
+      const startVal = startEl ? startEl.value : '';
+      const endVal = endEl ? endEl.value : '';
+      if (!startVal || !endVal) {
+        toast('Sélectionne les deux dates', 'warning');
+        break;
+      }
+      if (startVal > endVal) {
+        toast('La date de début doit être avant celle de fin', 'warning');
+        break;
+      }
+      dashboardState.advFilters.customStart = startVal;
+      dashboardState.advFilters.customEnd = endVal;
+      saveDashboardFilters();
+      toast('✓ Plage appliquée', 'success');
+      render();
+      break;
+    }
+    case 'dashboard-toggle-tech': {
+      const techId = t.dataset.techid;
+      if (!techId) break;
+      const idx = dashboardState.advFilters.techs.indexOf(techId);
+      if (idx >= 0) {
+        dashboardState.advFilters.techs.splice(idx, 1);
+      } else {
+        dashboardState.advFilters.techs.push(techId);
+      }
+      saveDashboardFilters();
+      render();
+      break;
+    }
+    case 'dashboard-clear-techs':
+      dashboardState.advFilters.techs = [];
+      saveDashboardFilters();
+      render();
+      break;
+    case 'dashboard-set-type':
+      dashboardState.advFilters.type = t.dataset.type || 'all';
+      saveDashboardFilters();
+      render();
+      break;
+    case 'dashboard-set-statut':
+      dashboardState.advFilters.statut = t.dataset.statut || 'all';
+      saveDashboardFilters();
+      render();
+      break;
+    case 'dashboard-toggle-astreinte-only': {
+      const el = document.getElementById('adv-astreinte-only');
+      dashboardState.advFilters.astreinteOnly = el ? el.checked : !dashboardState.advFilters.astreinteOnly;
+      saveDashboardFilters();
+      render();
+      break;
+    }
     // V2.12.0 — Rafraichir uniquement la supervision temps reel
     case 'dashboard-refresh-realtime':
       await dashboardLoadData();
