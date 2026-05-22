@@ -2768,7 +2768,7 @@ function registerChart(canvasId, instance) {
 // V2.11 — CONFIG APP (Maintenance + Version)
 // ============================================================================
 // Version actuelle de cette app (à incrémenter à chaque déploiement)
-const APP_VERSION = '2.13.10';
+const APP_VERSION = '2.14.0';
 
 // État global de la config app (récupérée depuis le cloud au démarrage)
 const appConfig = {
@@ -4229,6 +4229,8 @@ function adaptLocalToCloud(d) {
     sequenceId: d.sequenceId || '',
     cloture: d.cloture || d.statut === 'cloture' || false,
     recupereERP: d.recupereERP || false,
+    // V2.14.0 — Persistance du point de départ (domicile / autre-site / autre-lieu)
+    pointDepart: d.pointDepart || 'domicile',
     created_at: d.createdAt || d.created_at || new Date().toISOString(),
     updated_at: new Date().toISOString(),
     deleted: d.deleted || false
@@ -4269,6 +4271,8 @@ function adaptCloudToLocal(d) {
     cloture: d.cloture,
     statut: d.cloture ? 'cloture' : 'intervention',
     recupereERP: d.recupereERP,
+    // V2.14.0 — Persistance du point de départ (domicile / autre-site / autre-lieu)
+    pointDepart: d.pointDepart || 'domicile',
     createdAt: d.created_at,
     created_at: d.created_at,
     updatedAt: d.updated_at,
@@ -10605,6 +10609,9 @@ function renderDetail() {
           </div>
           <button class="btn btn-ghost btn-block" data-action="reopen">🔄 Annuler la clôture</button>
         ` : ''}
+        ${d.type === 'deplacement' ? `
+          <button class="btn btn-ghost btn-block" data-action="convert-to-tel" style="color:#3b82f6;border-color:rgba(59,130,246,0.3)">📞 Convertir en appel téléphonique</button>
+        ` : ''}
         <button class="btn btn-ghost-danger btn-block" data-action="delete">🗑 Supprimer</button>
       </div>
     </div>
@@ -11997,6 +12004,10 @@ async function handleAction(e) {
     case 'delete':
       await deleteDossierAction();
       break;
+    // V2.14.0 — Convertir un dossier de déplacement en téléphone
+    case 'convert-to-tel':
+      await convertDossierToTelephone();
+      break;
     case 'edit-dossier':
       editDossier();
       break;
@@ -13051,6 +13062,44 @@ async function deleteDossierAction() {
   toast('Dossier supprimé', 'success');
   view.dossierId = null;
   view.current = 'list';
+  render();
+}
+
+// V2.14.0 — Convertir un dossier déplacement → téléphone (cas annulation en route, résolution par téléphone)
+async function convertDossierToTelephone() {
+  const d = state.dossiers.find(x => x.id === view.dossierId);
+  if (!d) return;
+  
+  if (d.type !== 'deplacement') {
+    toast('Seuls les dossiers de déplacement peuvent être convertis', 'warning');
+    return;
+  }
+  
+  const confirmed = await showConfirm(
+    'Convertir en téléphone ?',
+    `${d.etablissement || 'Ce dossier'} sera transformé en appel téléphonique. L'adresse, les kilomètres et tous les horodatages de déplacement (départ, arrivée, retour) seront effacés. L'établissement, le code astreinte, le motif et le compte-rendu sont conservés.`,
+    'normal'
+  );
+  if (!confirmed) return;
+  
+  // Conversion : on garde les champs communs, on efface les champs spécifiques déplacement
+  d.type = 'telephone';
+  d.adresse = '';
+  d.adresseSite = '';
+  d.km = null;
+  d.departDomicile = '';
+  d.arriveeSite = '';
+  d.departSite = '';
+  d.finIntervention = '';
+  d.retourDomicile = '';
+  d.pointDepart = '';
+  d.updated_at = new Date().toISOString();
+  
+  // Sauvegarder en local + cloud
+  await saveDossier(d);
+  
+  toast('✅ Dossier converti en téléphone', 'success');
+  haptic('success');
   render();
 }
 
