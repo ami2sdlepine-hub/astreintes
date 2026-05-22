@@ -2768,7 +2768,7 @@ function registerChart(canvasId, instance) {
 // V2.11 — CONFIG APP (Maintenance + Version)
 // ============================================================================
 // Version actuelle de cette app (à incrémenter à chaque déploiement)
-const APP_VERSION = '2.13.5';
+const APP_VERSION = '2.13.6';
 
 // État global de la config app (récupérée depuis le cloud au démarrage)
 const appConfig = {
@@ -4932,8 +4932,13 @@ async function openAstreinteDesignationModal() {
     }
   }
   
-  // Filtrer uniquement les techniciens
-  const techs = users.filter(u => u.role === 'technicien');
+  // Filtrer les personnes pouvant être désignées comme tech d'astreinte
+  // V2.13.6 — Inclure aussi admin et manager (humains qui peuvent intervenir),
+  // exclure uniquement superviseur (qui est une tablette) et les comptes supprimés
+  const techs = users.filter(u => {
+    if (u.deleted === true || u.deleted === 'true') return false;
+    return u.role === 'technicien' || u.role === 'admin' || u.role === 'manager';
+  });
   if (techs.length === 0) {
     toast('Aucun technicien dans le système', 'error');
     return;
@@ -7749,7 +7754,12 @@ function superviseurUnsnooze() {
 }
 
 // V2.13.4 — Modale détails dossier pour le superviseur (lecture seule)
+// V2.13.6 — Fix : ID unique sur l'overlay + pattern de fermeture plus robuste
 function openSuperviseurDossierModal(dossierId) {
+  // Si une modale est déjà ouverte, la fermer d'abord (sécurité anti double-ouverture)
+  const existing = document.getElementById('sup-dossier-modal');
+  if (existing) existing.remove();
+  
   const d = dashboardState.allDossiers.find(x => x.id === dossierId);
   if (!d) { toast('Dossier introuvable', 'error'); return; }
   
@@ -7780,12 +7790,15 @@ function openSuperviseurDossierModal(dossierId) {
   const step = !isCloture ? detectInterventionStep(d) : null;
   
   const overlay = document.createElement('div');
+  overlay.id = 'sup-dossier-modal';
   overlay.className = 'modal-overlay visible';
+  // V2.13.6 — z-index très élevé pour passer au-dessus de tout
+  overlay.style.zIndex = '99999';
   overlay.innerHTML = `
-    <div class="modal" style="max-width:680px;max-height:90vh;overflow-y:auto">
+    <div class="modal" style="max-width:680px;max-height:90vh;overflow-y:auto" data-modal-content="1">
       <div class="modal-header" style="background:rgba(59,130,246,0.1);position:sticky;top:0;z-index:2">
         <div class="modal-title" style="color:#3b82f6">📋 Détails du dossier</div>
-        <button class="modal-close" data-action="sup-close-modal">×</button>
+        <button class="modal-close" data-close-sup-modal="1" style="background:transparent;border:none;color:var(--text-tertiary);font-size:24px;cursor:pointer;padding:0 8px">×</button>
       </div>
       <div class="modal-body" style="padding:22px">
         <!-- Header établissement + statut -->
@@ -7866,18 +7879,30 @@ function openSuperviseurDossierModal(dossierId) {
         ` : ''}
       </div>
       <div class="modal-footer" style="padding:14px 22px;border-top:1px solid var(--border);text-align:center">
-        <button class="btn btn-primary" data-action="sup-close-modal" style="padding:10px 24px;font-size:14px">Fermer</button>
+        <button data-close-sup-modal="1" style="padding:10px 24px;font-size:14px;background:#3b82f6;color:white;border:none;border-radius:8px;font-weight:600;cursor:pointer">Fermer</button>
       </div>
     </div>
   `;
   
   document.body.appendChild(overlay);
   
-  // Fermeture au tap sur l'overlay ou sur les boutons fermer
+  // V2.13.6 — Fermeture robuste via délégation
+  // On utilise data-close-sup-modal sur les boutons + click sur overlay (mais PAS sur le contenu de la modale)
+  const closeModal = () => {
+    overlay.remove();
+  };
+  
   overlay.addEventListener('click', (e) => {
-    const action = e.target.dataset.action || e.target.closest('[data-action]')?.dataset.action;
-    if (action === 'sup-close-modal' || e.target === overlay) {
-      overlay.remove();
+    // Si on a cliqué sur un bouton de fermeture (peu importe la profondeur)
+    if (e.target.closest('[data-close-sup-modal]')) {
+      e.preventDefault();
+      e.stopPropagation();
+      closeModal();
+      return;
+    }
+    // Si on a cliqué directement sur l'overlay (pas sur la modale elle-même)
+    if (e.target === overlay) {
+      closeModal();
     }
   });
 }
@@ -12120,8 +12145,9 @@ async function handleAction(e) {
       break;
     }
     case 'sup-close-modal':
-      // Géré dans openSuperviseurDossierModal mais on l'ajoute aussi ici pour cohérence
-      document.querySelectorAll('.modal-overlay.visible').forEach(el => el.remove());
+      // V2.13.6 — Fermer la modale superviseur (compat ancienne version, redirige vers l'id)
+      const supModal = document.getElementById('sup-dossier-modal');
+      if (supModal) supModal.remove();
       break;
     case 'show-sync':
       showSyncModal();
