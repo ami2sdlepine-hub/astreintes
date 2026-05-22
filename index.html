@@ -2626,7 +2626,7 @@ function loadJsPDF() {
 // V2.11 — CONFIG APP (Maintenance + Version)
 // ============================================================================
 // Version actuelle de cette app (à incrémenter à chaque déploiement)
-const APP_VERSION = '2.12.3';
+const APP_VERSION = '2.13.0';
 
 // État global de la config app (récupérée depuis le cloud au démarrage)
 const appConfig = {
@@ -4856,6 +4856,16 @@ async function urgenceAcknowledge(urgenceId) {
     // Marquer aussi inactive après ack
     await setAppConfigValue('urgenceActive', false);
     
+    // V2.13.0 — Logger l'acquittement dans l'historique (non-bloquant)
+    if (urgenceId) {
+      try {
+        await cloudCall('ackUrgenceLog', {
+          id: urgenceId,
+          deviceId: getDeviceId()
+        });
+      } catch(e) { console.warn('ackUrgenceLog KO :', e.message); }
+    }
+    
     // Forcer localement appConfig pour ne pas re-trigger immédiatement
     appConfig.urgenceAck = true;
     appConfig.urgenceActive = false;
@@ -4962,6 +4972,18 @@ async function urgenceTrigger() {
       const ok3 = await setAppConfigValue('urgenceActive', true);
       
       if (ok1 && ok2 && ok3) {
+        // V2.13.0 — Logger l'urgence dans l'historique (non-bloquant en cas d'échec)
+        try {
+          await cloudCall('logUrgence', {
+            id: urgenceData.id,
+            dateDeclenchement: urgenceData.time,
+            motif: urgenceData.motif,
+            dossierId: urgenceData.dossierId || '',
+            etablissement: urgenceData.etablissement || '',
+            deviceId: urgenceData.deviceId || ''
+          });
+        } catch(e) { console.warn('logUrgence KO :', e.message); }
+        
         overlay.remove();
         // Feedback visuel + vibration locale
         try { if (navigator.vibrate) navigator.vibrate([500, 100, 500]); } catch(e) {}
@@ -5490,11 +5512,15 @@ function renderDashboardAdmin() {
       <button class="filter-tab ${dashboardState.tab === 'validation' ? 'active' : ''}" data-action="dashboard-tab" data-tab="validation">
         ✅ Validation
       </button>
+      <button class="filter-tab ${dashboardState.tab === 'urgences' ? 'active' : ''}" data-action="dashboard-tab" data-tab="urgences">
+        🚨 Urgences
+      </button>
     </div>
     
     ${dashboardState.tab === 'overview' ? renderDashboardOverview() : ''}
     ${dashboardState.tab === 'stats' ? renderDashboardStats() : ''}
     ${dashboardState.tab === 'validation' ? renderDashboardValidation() : ''}
+    ${dashboardState.tab === 'urgences' ? renderDashboardUrgences() : ''}
   `;
 }
 
@@ -6069,6 +6095,313 @@ function renderDashboardValidation() {
           </div>
         </div>
       `).join('')}
+    </div>
+  `;
+}
+
+// ── Historique urgences V2.13.0 ────────────────────────────────
+let urgencesLogState = {
+  list: [],
+  loaded: false,
+  loading: false,
+  error: null
+};
+
+async function loadUrgencesLog() {
+  if (urgencesLogState.loading) return;
+  urgencesLogState.loading = true;
+  urgencesLogState.error = null;
+  try {
+    const res = await cloudCall('getUrgencesLog', {});
+    if (res && (res.success || res.ok)) {
+      urgencesLogState.list = res.urgences || [];
+      urgencesLogState.loaded = true;
+    } else {
+      urgencesLogState.error = (res && res.error) || 'Erreur inconnue';
+    }
+  } catch(e) {
+    urgencesLogState.error = e.message;
+  } finally {
+    urgencesLogState.loading = false;
+    if (typeof render === 'function') render();
+  }
+}
+
+function formatUrgenceDelai(seconds) {
+  if (seconds === null || seconds === undefined || seconds === '' || isNaN(seconds)) return '—';
+  const s = Number(seconds);
+  if (s < 60) return s + ' sec';
+  if (s < 3600) {
+    const m = Math.floor(s / 60);
+    const rs = s % 60;
+    return rs > 0 ? (m + ' min ' + rs + ' sec') : (m + ' min');
+  }
+  const h = Math.floor(s / 3600);
+  const rm = Math.floor((s % 3600) / 60);
+  return rm > 0 ? (h + 'h ' + rm + ' min') : (h + 'h');
+}
+
+function formatUrgenceDate(iso) {
+  if (!iso) return '—';
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mn = String(d.getMinutes()).padStart(2, '0');
+    return dd + '/' + mm + '/' + yyyy + ' ' + hh + ':' + mn;
+  } catch(e) { return iso; }
+}
+
+function renderDashboardUrgences() {
+  // Chargement initial au premier affichage de l'onglet
+  if (!urgencesLogState.loaded && !urgencesLogState.loading) {
+    loadUrgencesLog();
+  }
+  
+  if (urgencesLogState.loading && !urgencesLogState.loaded) {
+    return `
+      <div style="padding:40px 20px;text-align:center;color:var(--text-tertiary)">
+        <div style="font-size:14px">⏳ Chargement de l'historique des urgences...</div>
+      </div>
+    `;
+  }
+  
+  if (urgencesLogState.error) {
+    return `
+      <div style="padding:30px 20px;text-align:center;color:#dc2626">
+        <div style="font-size:14px;margin-bottom:12px">⚠️ ${escapeHtml(urgencesLogState.error)}</div>
+        <button class="btn btn-secondary" data-action="urgences-log-reload">🔄 Réessayer</button>
+        <div style="margin-top:16px;font-size:11px;color:var(--text-tertiary);line-height:1.5">
+          💡 Si c'est le premier lancement après la MAJ V2.13.0, exécute manuellement la fonction <code>initUrgencesLogSheet()</code> dans l'éditeur Apps Script.
+        </div>
+      </div>
+    `;
+  }
+  
+  const list = urgencesLogState.list || [];
+  
+  // Stats : nb total sur l'année en cours + délai moyen d'acquittement
+  const nowYear = new Date().getFullYear();
+  const thisYearList = list.filter(u => {
+    try { return new Date(u.dateDeclenchement).getFullYear() === nowYear; } catch(e) { return false; }
+  });
+  const totalAnnee = thisYearList.length;
+  
+  const delaisValides = list
+    .map(u => u.delaiAckSeconds)
+    .filter(s => s !== null && s !== undefined && s !== '' && !isNaN(s));
+  const delaiMoyen = delaisValides.length > 0
+    ? Math.round(delaisValides.reduce((a, b) => a + Number(b), 0) / delaisValides.length)
+    : null;
+  
+  const nbNonAck = list.filter(u => !u.dateAcquittement).length;
+  
+  // Bloc stats
+  const statsHtml = `
+    <div style="padding:0 10px;margin-bottom:16px">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px">
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px">
+          <div style="font-size:10px;text-transform:uppercase;color:var(--text-tertiary);letter-spacing:0.5px;margin-bottom:4px">Total ${nowYear}</div>
+          <div style="font-size:24px;font-weight:700;color:var(--text)">${totalAnnee}</div>
+          <div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">urgence${totalAnnee > 1 ? 's' : ''} déclenchée${totalAnnee > 1 ? 's' : ''}</div>
+        </div>
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px">
+          <div style="font-size:10px;text-transform:uppercase;color:var(--text-tertiary);letter-spacing:0.5px;margin-bottom:4px">Délai moyen d'ack</div>
+          <div style="font-size:24px;font-weight:700;color:var(--text)">${delaiMoyen !== null ? formatUrgenceDelai(delaiMoyen) : '—'}</div>
+          <div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">sur ${delaisValides.length} acquittée${delaisValides.length > 1 ? 's' : ''}</div>
+        </div>
+        ${nbNonAck > 0 ? `
+        <div style="background:rgba(220,38,38,0.08);border:1px solid rgba(220,38,38,0.3);border-radius:10px;padding:14px">
+          <div style="font-size:10px;text-transform:uppercase;color:#dc2626;letter-spacing:0.5px;margin-bottom:4px">⚠️ Non acquittées</div>
+          <div style="font-size:24px;font-weight:700;color:#dc2626">${nbNonAck}</div>
+          <div style="font-size:11px;color:#dc2626;margin-top:2px">en historique</div>
+        </div>` : ''}
+      </div>
+    </div>
+  `;
+  
+  // Liste des urgences
+  if (list.length === 0) {
+    return statsHtml + `
+      <div style="padding:30px 20px;text-align:center;color:var(--text-tertiary)">
+        <div style="font-size:32px;margin-bottom:8px">📭</div>
+        <div style="font-size:13px">Aucune urgence enregistrée pour l'instant.</div>
+        <button class="btn btn-secondary" data-action="urgences-log-reload" style="margin-top:14px">🔄 Rafraîchir</button>
+      </div>
+    `;
+  }
+  
+  const itemsHtml = list.map(u => {
+    const acked = !!u.dateAcquittement;
+    const statusColor = acked ? '#10b981' : '#dc2626';
+    const statusLabel = acked ? '✓ Acquittée' : '⏳ Non acquittée';
+    return `
+      <div style="background:var(--card);border:1px solid var(--border);border-left:3px solid ${statusColor};border-radius:8px;padding:12px 14px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px;flex-wrap:wrap">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">
+              🚨 ${escapeHtml(u.usernameDeclencheur || 'Inconnu')}
+              <span style="font-size:10px;color:var(--text-tertiary);font-weight:400;text-transform:uppercase;margin-left:6px">${escapeHtml(u.roleDeclencheur || '')}</span>
+            </div>
+            <div style="font-size:11px;color:var(--text-tertiary)">${formatUrgenceDate(u.dateDeclenchement)}</div>
+          </div>
+          <div style="font-size:11px;font-weight:600;color:${statusColor};white-space:nowrap">${statusLabel}</div>
+        </div>
+        
+        ${u.motif ? `
+          <div style="background:var(--bg);border-radius:6px;padding:8px 10px;margin-bottom:8px;font-size:12px;color:var(--text);line-height:1.4">
+            <span style="font-size:10px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.3px">Motif :</span><br>
+            ${escapeHtml(u.motif)}
+          </div>
+        ` : ''}
+        
+        ${u.etablissement ? `
+          <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:6px">
+            📍 Dossier lié : <span style="color:var(--text)">${escapeHtml(u.etablissement)}</span>
+          </div>
+        ` : ''}
+        
+        ${acked ? `
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding-top:8px;border-top:1px dashed var(--border);font-size:11px;flex-wrap:wrap">
+            <div style="color:var(--text-tertiary)">
+              Acquittée par <span style="color:var(--text);font-weight:600">${escapeHtml(u.usernameAck || '—')}</span>
+              <span style="color:var(--text-tertiary)"> • ${formatUrgenceDate(u.dateAcquittement)}</span>
+            </div>
+            <div style="color:#10b981;font-weight:600">⏱ ${formatUrgenceDelai(u.delaiAckSeconds)}</div>
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }).join('');
+  
+  return `
+    ${statsHtml}
+    <div style="padding:0 10px 10px 10px;display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div style="font-size:12px;color:var(--text-tertiary);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">📜 Historique (${list.length})</div>
+      <button class="btn btn-secondary" data-action="urgences-log-reload" style="padding:6px 12px;font-size:12px">🔄 Rafraîchir</button>
+    </div>
+    <div style="padding:0 10px 20px 10px">
+      ${itemsHtml}
+    </div>
+  `;
+}
+
+// V2.13.0 — Vue tech : ses propres urgences déclenchées
+// Le backend filtre déjà par user_id côté serveur pour les non-admins.
+function renderMesUrgences() {
+  // Chargement initial
+  if (!urgencesLogState.loaded && !urgencesLogState.loading) {
+    loadUrgencesLog();
+  }
+  
+  const isLoading = urgencesLogState.loading && !urgencesLogState.loaded;
+  const list = urgencesLogState.list || [];
+  
+  // Stats : nb total sur l'année + délai moyen d'acquittement
+  const nowYear = new Date().getFullYear();
+  const thisYearList = list.filter(u => {
+    try { return new Date(u.dateDeclenchement).getFullYear() === nowYear; } catch(e) { return false; }
+  });
+  const totalAnnee = thisYearList.length;
+  const delaisValides = list
+    .map(u => u.delaiAckSeconds)
+    .filter(s => s !== null && s !== undefined && s !== '' && !isNaN(s));
+  const delaiMoyen = delaisValides.length > 0
+    ? Math.round(delaisValides.reduce((a, b) => a + Number(b), 0) / delaisValides.length)
+    : null;
+  
+  let contentHtml = '';
+  
+  if (isLoading) {
+    contentHtml = `
+      <div style="padding:40px 20px;text-align:center;color:var(--text-tertiary)">
+        <div style="font-size:14px">⏳ Chargement...</div>
+      </div>
+    `;
+  } else if (urgencesLogState.error) {
+    contentHtml = `
+      <div style="padding:30px 20px;text-align:center;color:#dc2626">
+        <div style="font-size:14px;margin-bottom:12px">⚠️ ${escapeHtml(urgencesLogState.error)}</div>
+        <button class="btn btn-secondary" data-action="urgences-log-reload">🔄 Réessayer</button>
+      </div>
+    `;
+  } else if (list.length === 0) {
+    contentHtml = `
+      <div style="padding:30px 20px;text-align:center;color:var(--text-tertiary)">
+        <div style="font-size:32px;margin-bottom:8px">📭</div>
+        <div style="font-size:13px">Tu n'as encore déclenché aucune urgence.</div>
+        <div style="font-size:11px;margin-top:6px">C'est plutôt une bonne nouvelle 😊</div>
+      </div>
+    `;
+  } else {
+    const itemsHtml = list.map(u => {
+      const acked = !!u.dateAcquittement;
+      const statusColor = acked ? '#10b981' : '#dc2626';
+      const statusLabel = acked ? '✓ Acquittée' : '⏳ Non acquittée';
+      return `
+        <div style="background:var(--card);border:1px solid var(--border);border-left:3px solid ${statusColor};border-radius:8px;padding:12px 14px;margin-bottom:8px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px;flex-wrap:wrap">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">🚨 ${formatUrgenceDate(u.dateDeclenchement)}</div>
+              ${u.etablissement ? `<div style="font-size:11px;color:var(--text-tertiary)">📍 ${escapeHtml(u.etablissement)}</div>` : ''}
+            </div>
+            <div style="font-size:11px;font-weight:600;color:${statusColor};white-space:nowrap">${statusLabel}</div>
+          </div>
+          ${u.motif ? `
+            <div style="background:var(--bg);border-radius:6px;padding:8px 10px;margin-bottom:8px;font-size:12px;color:var(--text);line-height:1.4">
+              <span style="font-size:10px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.3px">Motif :</span><br>
+              ${escapeHtml(u.motif)}
+            </div>
+          ` : ''}
+          ${acked ? `
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding-top:8px;border-top:1px dashed var(--border);font-size:11px;flex-wrap:wrap">
+              <div style="color:var(--text-tertiary)">
+                Acquittée par <span style="color:var(--text);font-weight:600">${escapeHtml(u.usernameAck || '—')}</span>
+                <span style="color:var(--text-tertiary)"> • ${formatUrgenceDate(u.dateAcquittement)}</span>
+              </div>
+              <div style="color:#10b981;font-weight:600">⏱ ${formatUrgenceDelai(u.delaiAckSeconds)}</div>
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }).join('');
+    contentHtml = `
+      <div style="padding:0 12px 10px 12px;display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:12px;color:var(--text-tertiary);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">📜 Historique (${list.length})</div>
+        <button class="btn btn-secondary" data-action="urgences-log-reload" style="padding:6px 12px;font-size:12px">🔄</button>
+      </div>
+      <div style="padding:0 12px 20px 12px">${itemsHtml}</div>
+    `;
+  }
+  
+  return `
+    <header class="app-header">
+      <div class="header-top">
+        <button class="header-back-btn" data-action="back-to-settings">←</button>
+        <div>
+          <div class="header-title">🚨 Mes urgences</div>
+          <div class="header-subtitle">Historique de mes déclenchements</div>
+        </div>
+      </div>
+    </header>
+    
+    <div class="form-screen">
+      <div style="padding:0 12px;margin-bottom:14px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px">
+            <div style="font-size:10px;text-transform:uppercase;color:var(--text-tertiary);letter-spacing:0.5px;margin-bottom:4px">Total ${nowYear}</div>
+            <div style="font-size:22px;font-weight:700;color:var(--text)">${totalAnnee}</div>
+          </div>
+          <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px">
+            <div style="font-size:10px;text-transform:uppercase;color:var(--text-tertiary);letter-spacing:0.5px;margin-bottom:4px">Délai moyen ack</div>
+            <div style="font-size:22px;font-weight:700;color:var(--text)">${delaiMoyen !== null ? formatUrgenceDelai(delaiMoyen) : '—'}</div>
+          </div>
+        </div>
+      </div>
+      ${contentHtml}
     </div>
   `;
 }
@@ -8030,6 +8363,8 @@ function render() {
     case 'manager-view': app.innerHTML = renderManagerView(); break;
     // V2.12.1 — Vue Superviseur (tablette 24/7)
     case 'superviseur': app.innerHTML = renderSuperviseurDashboard(); break;
+    // V2.13.0 — Mes urgences (tech/admin/manager : voit ses propres déclenchements)
+    case 'mes-urgences': app.innerHTML = renderMesUrgences(); break;
   }
   attachListeners();
   
@@ -9135,6 +9470,23 @@ function renderSettings() {
       </div>
       ` : ''}
       
+      <!-- V2.13.0 — Mes urgences (visible pour tous sauf superviseur) -->
+      ${user.role && user.role !== 'superviseur' ? `
+      <div class="settings-section">
+        <div class="settings-section-title">🚨 Mes urgences</div>
+        <div class="settings-group">
+          <div class="settings-row" data-action="goto-mes-urgences">
+            <div class="settings-row-icon">📜</div>
+            <div class="settings-row-content">
+              <div class="settings-row-title">Historique de mes déclenchements</div>
+              <div class="settings-row-value">Voir mes urgences passées et leur acquittement</div>
+            </div>
+            <span class="settings-row-chevron">›</span>
+          </div>
+        </div>
+      </div>
+      ` : ''}
+      
       <!-- V2.10.2 — Administration (visible uniquement pour les admins) -->
       ${isAdmin() ? `
       <div class="settings-section">
@@ -10009,6 +10361,14 @@ async function handleAction(e) {
       render();
       adminLoadLogs();
       break;
+    // V2.13.0 — Vue tech : ses propres urgences
+    case 'goto-mes-urgences':
+      view.current = 'mes-urgences';
+      // Forcer un rechargement pour avoir les données fraîches à chaque entrée
+      urgencesLogState.loaded = false;
+      render();
+      loadUrgencesLog();
+      break;
     case 'back-to-settings':
       view.current = 'settings';
       adminState.editingUser = null;
@@ -10048,10 +10408,20 @@ async function handleAction(e) {
       break;
     case 'dashboard-tab':
       dashboardState.tab = t.dataset.tab;
+      // V2.13.0 — Si on passe sur l'onglet urgences, forcer un rechargement frais
+      if (t.dataset.tab === 'urgences') {
+        urgencesLogState.loaded = false;
+        loadUrgencesLog();
+      }
       render();
       break;
     case 'dashboard-reload':
       await dashboardLoadData();
+      break;
+    // V2.13.0 — Rafraîchir l'historique des urgences
+    case 'urgences-log-reload':
+      urgencesLogState.loaded = false;
+      await loadUrgencesLog();
       break;
     // V2.12.0 — Rafraichir uniquement la supervision temps reel
     case 'dashboard-refresh-realtime':
