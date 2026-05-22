@@ -2768,7 +2768,7 @@ function registerChart(canvasId, instance) {
 // V2.11 — CONFIG APP (Maintenance + Version)
 // ============================================================================
 // Version actuelle de cette app (à incrémenter à chaque déploiement)
-const APP_VERSION = '2.14.4';
+const APP_VERSION = '2.14.5';
 
 // État global de la config app (récupérée depuis le cloud au démarrage)
 const appConfig = {
@@ -5715,9 +5715,14 @@ function detectInterventionStep(d) {
   
   if (d.type !== 'deplacement') return null;
   
+  // V2.14.5 — Fix : gérer les 2 noms de champs (cloud=finIntervention, local=departSite)
+  // Le bug : sur la modale superviseur, les dossiers viennent direct du cloud
+  // sans passer par adaptCloudToLocal, donc 'departSite' n'existait pas → l'étape n'était pas détectée
+  const departSiteValue = d.finIntervention || d.departSite;
+  
   const hasDepart = d.departDomicile && d.departDomicile !== 'X';
   const hasArrivee = d.arriveeSite && d.arriveeSite !== 'X';
-  const hasDepartSite = d.departSite && d.departSite !== 'X';
+  const hasDepartSite = departSiteValue && departSiteValue !== 'X';
   const hasRetour = d.retourDomicile && d.retourDomicile !== 'X';
   
   if (hasRetour) return null;
@@ -5761,7 +5766,8 @@ function detectInterventionStep(d) {
   }
   
   if (hasDepartSite && !hasRetour) {
-    const sinceMs = now - new Date(d.departSite).getTime();
+    // V2.14.5 — utilise la valeur unifiée (departSiteValue)
+    const sinceMs = now - new Date(departSiteValue).getTime();
     return {
       step: 'returning',
       label: 'Retour domicile',
@@ -5774,7 +5780,7 @@ function detectInterventionStep(d) {
   
   // Cas etape manquante (depart + departSite sans arrivee)
   if (hasDepart && !hasArrivee && hasDepartSite) {
-    const sinceMs = now - new Date(d.departSite).getTime();
+    const sinceMs = now - new Date(departSiteValue).getTime();
     return {
       step: 'missing_step',
       label: 'Etape manquante',
