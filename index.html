@@ -2768,7 +2768,7 @@ function registerChart(canvasId, instance) {
 // V2.11 — CONFIG APP (Maintenance + Version)
 // ============================================================================
 // Version actuelle de cette app (à incrémenter à chaque déploiement)
-const APP_VERSION = '2.14.5';
+const APP_VERSION = '2.14.6';
 
 // État global de la config app (récupérée depuis le cloud au démarrage)
 const appConfig = {
@@ -5725,33 +5725,32 @@ function detectInterventionStep(d) {
   const hasDepartSite = departSiteValue && departSiteValue !== 'X';
   const hasRetour = d.retourDomicile && d.retourDomicile !== 'X';
   
+  // V2.14.6 — Cas du chaînage entrant : departDomicile === 'X' signifie que le tech
+  // vient d'une intervention précédente (pas qu'il n'est jamais parti).
+  // L'étape "Départ domicile" est implicitement franchie.
+  const isChainageEntrant = d.departDomicile === 'X';
+  const departStarted = hasDepart || isChainageEntrant;
+  
   if (hasRetour) return null;
   
-  if (!hasDepart) {
-    const sinceMs = now - new Date(d.dateAppel).getTime();
+  // V2.14.6 — Vérifier les étapes du PLUS AVANCÉ au moins avancé,
+  // pour qu'un dossier "arrivé sur site" ne soit pas catégorisé "Appel reçu"
+  // juste parce qu'il est en chaînage entrant.
+  
+  // Étape la plus avancée : Retour en cours (départ site fait, retour pas encore)
+  if (hasDepartSite && !hasRetour) {
+    const sinceMs = now - new Date(departSiteValue).getTime();
     return {
-      step: 'received',
-      label: 'Appel recu',
+      step: 'returning',
+      label: 'Retour domicile',
       sinceMin: Math.round(sinceMs / 60000),
-      color: '#eab308',
-      emoji: '⏳',
-      nextExpected: 'Depart du domicile',
-      alertIfOver: 30
+      color: '#06b6d4',
+      emoji: '🏠',
+      nextExpected: 'Arrivee a domicile (cloture)'
     };
   }
   
-  if (hasDepart && !hasArrivee && !hasDepartSite) {
-    const sinceMs = now - new Date(d.departDomicile).getTime();
-    return {
-      step: 'en_route',
-      label: 'En route',
-      sinceMin: Math.round(sinceMs / 60000),
-      color: '#f97316',
-      emoji: '🚗',
-      nextExpected: 'Arrivee sur site'
-    };
-  }
-  
+  // Sur site : arrivée cochée, départ site pas encore
   if (hasArrivee && !hasDepartSite) {
     const sinceMs = now - new Date(d.arriveeSite).getTime();
     return {
@@ -5765,21 +5764,38 @@ function detectInterventionStep(d) {
     };
   }
   
-  if (hasDepartSite && !hasRetour) {
-    // V2.14.5 — utilise la valeur unifiée (departSiteValue)
-    const sinceMs = now - new Date(departSiteValue).getTime();
+  // En route : départ fait (ou chaînage entrant), arrivée pas encore, départ site pas encore
+  if (departStarted && !hasArrivee && !hasDepartSite) {
+    // Si chaînage entrant, on n'a pas d'heure de départ domicile pour calculer depuis quand
+    // → on utilise la dateAppel comme fallback (= "depuis l'appel")
+    const refTime = hasDepart ? new Date(d.departDomicile).getTime() : new Date(d.dateAppel).getTime();
+    const sinceMs = now - refTime;
     return {
-      step: 'returning',
-      label: 'Retour domicile',
+      step: 'en_route',
+      label: isChainageEntrant ? 'En route (chaînage)' : 'En route',
       sinceMin: Math.round(sinceMs / 60000),
-      color: '#06b6d4',
-      emoji: '🏠',
-      nextExpected: 'Arrivee a domicile (cloture)'
+      color: '#f97316',
+      emoji: '🚗',
+      nextExpected: 'Arrivee sur site'
     };
   }
   
-  // Cas etape manquante (depart + departSite sans arrivee)
-  if (hasDepart && !hasArrivee && hasDepartSite) {
+  // Appel reçu : aucune étape démarrée (et pas de chaînage entrant)
+  if (!departStarted) {
+    const sinceMs = now - new Date(d.dateAppel).getTime();
+    return {
+      step: 'received',
+      label: 'Appel recu',
+      sinceMin: Math.round(sinceMs / 60000),
+      color: '#eab308',
+      emoji: '⏳',
+      nextExpected: 'Depart du domicile',
+      alertIfOver: 30
+    };
+  }
+  
+  // Cas étape manquante (départ + departSite sans arrivée)
+  if (departStarted && !hasArrivee && hasDepartSite) {
     const sinceMs = now - new Date(departSiteValue).getTime();
     return {
       step: 'missing_step',
