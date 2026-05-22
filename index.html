@@ -2768,7 +2768,7 @@ function registerChart(canvasId, instance) {
 // V2.11 — CONFIG APP (Maintenance + Version)
 // ============================================================================
 // Version actuelle de cette app (à incrémenter à chaque déploiement)
-const APP_VERSION = '2.14.7';
+const APP_VERSION = '2.14.8';
 
 // État global de la config app (récupérée depuis le cloud au démarrage)
 const appConfig = {
@@ -5773,7 +5773,33 @@ function detectInterventionStep(d) {
     };
   }
   
-  // En route : départ fait (ou chaînage entrant), arrivée pas encore, départ site pas encore
+  // V2.14.8 — Distinction "Enchaîné en attente" vs "En route (chaînage)"
+  // Quand un dossier est en chaînage entrant (departDom=X), il faut savoir si le tech
+  // a effectivement pris la route ou s'il est encore sur le site précédent.
+  // Signal "tech en route" = pointDepart ≠ 'domicile' ET km > 0
+  // (le tech a sélectionné un point de départ et cliqué "Calculer")
+  const hasRouteSignal = (
+    d.pointDepart && 
+    d.pointDepart !== 'domicile' && 
+    d.pointDepart !== '' &&
+    safeKm(d.km) > 0
+  );
+  
+  // Cas spécial : chaînage entrant SANS signal de mise en route
+  // = le tech a créé le dossier mais n'a pas encore quitté le site précédent
+  if (isChainageEntrant && !hasArrivee && !hasDepartSite && !hasRouteSignal) {
+    const sinceMs = now - new Date(d.dateAppel).getTime();
+    return {
+      step: 'chained_waiting',
+      label: 'Enchaîné en attente',
+      sinceMin: Math.round(sinceMs / 60000),
+      color: '#a855f7',
+      emoji: '📋',
+      nextExpected: 'Depart vers le site (calculer km)'
+    };
+  }
+  
+  // En route : départ fait (ou chaînage entrant avec signal de route), arrivée pas encore
   if (departStarted && !hasArrivee && !hasDepartSite) {
     // Si chaînage entrant, on n'a pas d'heure de départ domicile pour calculer depuis quand
     // → on utilise la dateAppel comme fallback (= "depuis l'appel")
