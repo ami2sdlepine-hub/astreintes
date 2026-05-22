@@ -2768,7 +2768,7 @@ function registerChart(canvasId, instance) {
 // V2.11 — CONFIG APP (Maintenance + Version)
 // ============================================================================
 // Version actuelle de cette app (à incrémenter à chaque déploiement)
-const APP_VERSION = '2.14.3';
+const APP_VERSION = '2.14.4';
 
 // État global de la config app (récupérée depuis le cloud au démarrage)
 const appConfig = {
@@ -10648,7 +10648,7 @@ function renderDetail() {
         <button class="btn btn-secondary" data-action="save-cr">Sauvegarder</button>
         <button class="btn btn-success" data-action="cloture" ${!d.departSite ? 'disabled' : ''}>✓ Clôturer</button>
       </div>
-    ` : d.statut === 'pending' && d.type === 'telephone' ? `
+    ` : d.statut !== 'cloture' && d.type === 'telephone' ? `
       <div class="form-actions">
         <button class="btn btn-success btn-block" data-action="cloture-tel">✓ Marquer comme résolu</button>
       </div>
@@ -12045,6 +12045,14 @@ async function handleAction(e) {
         break;
       }
       dossier.type = newType;
+      // V2.14.3 — Normaliser le statut selon le type cible
+      // (un téléphone n'a pas la notion "intervention en cours")
+      if (newType === 'telephone' && dossier.statut !== 'cloture') {
+        dossier.statut = 'pending';
+        dossier.cloture = false;
+      } else if (newType === 'deplacement' && dossier.statut !== 'cloture') {
+        dossier.statut = 'intervention';
+      }
       dossier.updated_at = new Date().toISOString();
       await saveDossier(dossier);
       toast(`✅ Dossier réparé : type défini sur ${newType === 'telephone' ? '📞 téléphone' : '🚗 déplacement'}`, 'success');
@@ -13136,6 +13144,11 @@ async function convertDossierToTelephone() {
   d.finIntervention = '';
   d.retourDomicile = '';
   d.pointDepart = '';
+  // V2.14.3 — Normaliser le statut pour téléphone (pas la notion "intervention en cours")
+  if (d.statut !== 'cloture') {
+    d.statut = 'pending';
+    d.cloture = false;
+  }
   d.updated_at = new Date().toISOString();
   
   // Sauvegarder en local + cloud
