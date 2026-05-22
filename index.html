@@ -2768,7 +2768,7 @@ function registerChart(canvasId, instance) {
 // V2.11 — CONFIG APP (Maintenance + Version)
 // ============================================================================
 // Version actuelle de cette app (à incrémenter à chaque déploiement)
-const APP_VERSION = '2.14.2';
+const APP_VERSION = '2.14.3';
 
 // État global de la config app (récupérée depuis le cloud au démarrage)
 const appConfig = {
@@ -10513,8 +10513,20 @@ function renderDetail() {
         </div>
         <div class="detail-row">
           <span class="detail-label">Type</span>
-          <span class="detail-value">${d.type === 'telephone' ? '☎ Téléphone' : '🚗 Déplacement'}</span>
+          <span class="detail-value">${d.type === 'telephone' ? '☎ Téléphone' : d.type === 'deplacement' ? '🚗 Déplacement' : `<span style="color:#ef4444">⚠️ Type invalide (${escapeHtml(String(d.type || 'vide'))})</span>`}</span>
         </div>
+        ${(d.type !== 'telephone' && d.type !== 'deplacement') ? `
+          <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:12px;margin:8px 0">
+            <div style="font-size:12px;font-weight:600;color:#ef4444;margin-bottom:8px">⚠️ Ce dossier n'a pas de type valide</div>
+            <div style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;line-height:1.4">
+              Le champ <strong>type</strong> est manquant ou corrompu. Choisis le bon type pour réparer ce dossier :
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-secondary" style="flex:1;font-size:12px" data-action="repair-type" data-new-type="telephone">📞 C'est un appel téléphonique</button>
+              <button class="btn btn-secondary" style="flex:1;font-size:12px" data-action="repair-type" data-new-type="deplacement">🚗 C'est un déplacement</button>
+            </div>
+          </div>
+        ` : ''}
         <div class="detail-block">
           <div class="detail-block-label">Motif</div>
           <textarea class="form-textarea" data-bind-edit="motif" placeholder="Décrire la nature de l'appel" style="min-height:60px">${escapeHtml(d.motif || '')}</textarea>
@@ -12023,6 +12035,22 @@ async function handleAction(e) {
     case 'convert-to-tel':
       await convertDossierToTelephone();
       break;
+    // V2.14.2 — Réparer un dossier dont le type est corrompu (null, undefined, vide)
+    case 'repair-type': {
+      const dossier = state.dossiers.find(x => x.id === view.dossierId);
+      if (!dossier) break;
+      const newType = t.dataset.newType;
+      if (newType !== 'telephone' && newType !== 'deplacement') {
+        toast('Type invalide', 'error');
+        break;
+      }
+      dossier.type = newType;
+      dossier.updated_at = new Date().toISOString();
+      await saveDossier(dossier);
+      toast(`✅ Dossier réparé : type défini sur ${newType === 'telephone' ? '📞 téléphone' : '🚗 déplacement'}`, 'success');
+      render();
+      break;
+    }
     case 'edit-dossier':
       editDossier();
       break;
