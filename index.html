@@ -2093,6 +2093,52 @@ body { font-size: 15px; line-height: 1.5; }
   font-size: 18px;
 }
 
+/* V2.13.1 — Bouton SOS désactivé (visuel grisé) */
+.urgence-btn.disabled {
+  background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+  border-color: #9ca3af;
+  box-shadow: 0 2px 8px rgba(107, 114, 128, 0.3);
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+.urgence-btn.disabled:active {
+  transform: none;
+}
+
+/* V2.13.1 — Bandeau global "Bouton d'urgence désactivé" */
+.urgence-disabled-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(107, 114, 128, 0.08);
+  border: 1px solid rgba(107, 114, 128, 0.3);
+  border-left: 3px solid #6b7280;
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin: 0 12px 12px 12px;
+  font-size: 12px;
+  color: var(--text);
+  line-height: 1.4;
+}
+.urgence-disabled-banner .udb-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.urgence-disabled-banner .udb-text {
+  flex: 1;
+  min-width: 0;
+}
+.urgence-disabled-banner .udb-title {
+  font-weight: 600;
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 2px;
+}
+.urgence-disabled-banner .udb-msg {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
 /* Ecran d'alerte plein écran clignotant pour l'admin */
 #urgence-alert-screen {
   position: fixed;
@@ -2626,7 +2672,7 @@ function loadJsPDF() {
 // V2.11 — CONFIG APP (Maintenance + Version)
 // ============================================================================
 // Version actuelle de cette app (à incrémenter à chaque déploiement)
-const APP_VERSION = '2.13.0';
+const APP_VERSION = '2.13.1';
 
 // État global de la config app (récupérée depuis le cloud au démarrage)
 const appConfig = {
@@ -2644,7 +2690,10 @@ const appConfig = {
   // V2.12.0 — Système d'urgence
   urgenceActive: false,
   urgenceDetails: '',  // JSON string : { id, userId, username, time, motif, dossierId, etablissement }
-  urgenceAck: false
+  urgenceAck: false,
+  // V2.13.1 — Toggle du bouton d'urgence (true par défaut = bouton actif)
+  urgenceButtonEnabled: true,
+  urgenceButtonDisabledMessage: 'Bouton d\'urgence temporairement désactivé par l\'administrateur.'
 };
 
 // Appel public à getAppConfig (pas besoin de token)
@@ -2692,6 +2741,13 @@ async function fetchAppConfig() {
       appConfig.urgenceActive = res.config.urgenceActive === true || res.config.urgenceActive === 'true';
       appConfig.urgenceDetails = res.config.urgenceDetails || '';
       appConfig.urgenceAck = res.config.urgenceAck === true || res.config.urgenceAck === 'true';
+      // V2.13.1 — Toggle bouton d'urgence (true par défaut si clé absente)
+      if (res.config.urgenceButtonEnabled === false || res.config.urgenceButtonEnabled === 'false') {
+        appConfig.urgenceButtonEnabled = false;
+      } else {
+        appConfig.urgenceButtonEnabled = true;
+      }
+      appConfig.urgenceButtonDisabledMessage = res.config.urgenceButtonDisabledMessage || appConfig.urgenceButtonDisabledMessage;
       appConfig.loaded = true;
       try { localStorage.setItem('_appConfig', JSON.stringify(appConfig)); } catch(e) {}
       return true;
@@ -2936,6 +2992,18 @@ function startAppConfigPolling() {
         appConfig.urgenceActive = res.config.urgenceActive === true || res.config.urgenceActive === 'true';
         appConfig.urgenceDetails = res.config.urgenceDetails || '';
         appConfig.urgenceAck = res.config.urgenceAck === true || res.config.urgenceAck === 'true';
+        // V2.13.1 — Toggle bouton SOS
+        const prevEnabled = appConfig.urgenceButtonEnabled;
+        if (res.config.urgenceButtonEnabled === false || res.config.urgenceButtonEnabled === 'false') {
+          appConfig.urgenceButtonEnabled = false;
+        } else {
+          appConfig.urgenceButtonEnabled = true;
+        }
+        appConfig.urgenceButtonDisabledMessage = res.config.urgenceButtonDisabledMessage || appConfig.urgenceButtonDisabledMessage;
+        // Si l'état a changé, re-render pour mettre à jour bandeau + état du bouton
+        if (prevEnabled !== appConfig.urgenceButtonEnabled && typeof render === 'function') {
+          render();
+        }
         // Mettre à jour les champs astreinte aussi (pour l'auto-update du bandeau)
         appConfig.astreinteTitulaireId = res.config.astreinteTitulaireId || '';
         appConfig.astreinteSuppleantId = res.config.astreinteSuppleantId || '';
@@ -3167,6 +3235,116 @@ function openMaintenanceModal() {
         btn.textContent = '🟢 Désactiver maintenance';
         btn.disabled = false;
         toast('Erreur lors de la désactivation', 'error');
+      }
+    }
+  });
+}
+
+// ============================================================================
+// V2.13.1 — MODALE TOGGLE BOUTON D'URGENCE
+// ============================================================================
+function openUrgenceButtonModal() {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay visible';
+  
+  const renderContent = () => {
+    const isEnabled = appConfig.urgenceButtonEnabled !== false;
+    overlay.innerHTML = `
+      <div class="modal" style="max-width:520px">
+        <div class="modal-header">
+          <div class="modal-title">🔔 Bouton d'urgence</div>
+          <button class="modal-close" data-action="urg-btn-modal-close">×</button>
+        </div>
+        <div class="modal-body" style="padding:20px">
+          <div style="background:${isEnabled ? 'rgba(34,197,94,0.1)' : 'rgba(107,114,128,0.1)'};border:1px solid ${isEnabled ? 'rgba(34,197,94,0.4)' : 'rgba(107,114,128,0.4)'};border-radius:10px;padding:14px;margin-bottom:18px;text-align:center">
+            <div style="font-size:32px;margin-bottom:8px">${isEnabled ? '🔔' : '🔕'}</div>
+            <div style="font-weight:700;font-size:15px;color:${isEnabled ? '#22c55e' : '#6b7280'};margin-bottom:4px">
+              ${isEnabled ? 'Bouton ACTIF' : 'Bouton DÉSACTIVÉ'}
+            </div>
+            <div style="font-size:12px;color:var(--text-tertiary)">
+              ${isEnabled 
+                ? 'Les techniciens et managers peuvent déclencher une urgence.' 
+                : 'Les techniciens et managers voient un bouton grisé. Toi (admin) tu peux toujours forcer une urgence.'}
+            </div>
+          </div>
+          
+          <div style="margin-bottom:18px">
+            <label style="display:block;font-size:11px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;margin-bottom:6px;letter-spacing:0.5px">Message affiché aux techs (au tap sur le bouton désactivé)</label>
+            <textarea id="urg-btn-msg" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;min-height:70px;resize:vertical;font-family:inherit" placeholder="Ex: Bouton désactivé pendant les heures de bureau (9h-18h)">${escapeHtml(appConfig.urgenceButtonDisabledMessage || '')}</textarea>
+          </div>
+          
+          <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:6px;font-size:12px;color:var(--text-tertiary);line-height:1.5">
+            💡 <strong>À savoir :</strong>
+            <ul style="margin:6px 0 0 16px;padding:0">
+              <li>Tu peux toujours déclencher une urgence en tant qu'admin, même quand c'est désactivé.</li>
+              <li>Les techs verront un bandeau d'info sur leur écran principal.</li>
+              <li>L'état est synchronisé toutes les 8 secondes sur tous les appareils.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="modal-footer" style="padding:14px 20px;display:flex;gap:8px;justify-content:flex-end;border-top:1px solid var(--border)">
+          <button class="btn btn-secondary" data-action="urg-btn-modal-close">Annuler</button>
+          ${isEnabled 
+            ? `<button class="btn btn-primary" data-action="urg-btn-disable" style="background:#6b7280">🔕 Désactiver le bouton</button>`
+            : `<button class="btn btn-primary" data-action="urg-btn-enable" style="background:#22c55e">🔔 Activer le bouton</button>`}
+        </div>
+      </div>
+    `;
+  };
+  
+  renderContent();
+  document.body.appendChild(overlay);
+  
+  overlay.addEventListener('click', async (e) => {
+    const action = e.target.dataset.action || e.target.closest('[data-action]')?.dataset.action;
+    
+    if (action === 'urg-btn-modal-close' || e.target === overlay) {
+      overlay.remove();
+      return;
+    }
+    
+    if (action === 'urg-btn-disable') {
+      const msg = (overlay.querySelector('#urg-btn-msg').value || '').trim() || 'Bouton d\'urgence temporairement désactivé par l\'administrateur.';
+      const btn = e.target;
+      btn.textContent = '⏳ Désactivation...';
+      btn.disabled = true;
+      
+      const ok1 = await setAppConfigValue('urgenceButtonDisabledMessage', msg);
+      const ok2 = await setAppConfigValue('urgenceButtonEnabled', false);
+      
+      if (ok1 && ok2) {
+        appConfig.urgenceButtonEnabled = false;
+        appConfig.urgenceButtonDisabledMessage = msg;
+        toast('🔕 Bouton d\'urgence DÉSACTIVÉ', 'success');
+        overlay.remove();
+        render();
+      } else {
+        btn.textContent = '🔕 Désactiver le bouton';
+        btn.disabled = false;
+        toast('Erreur lors de la désactivation', 'error');
+      }
+    }
+    
+    if (action === 'urg-btn-enable') {
+      // On enregistre quand même le message au cas où il a été modifié
+      const msg = (overlay.querySelector('#urg-btn-msg').value || '').trim() || 'Bouton d\'urgence temporairement désactivé par l\'administrateur.';
+      const btn = e.target;
+      btn.textContent = '⏳ Activation...';
+      btn.disabled = true;
+      
+      const ok1 = await setAppConfigValue('urgenceButtonDisabledMessage', msg);
+      const ok2 = await setAppConfigValue('urgenceButtonEnabled', true);
+      
+      if (ok2) {
+        appConfig.urgenceButtonEnabled = true;
+        appConfig.urgenceButtonDisabledMessage = msg;
+        toast('🔔 Bouton d\'urgence RÉACTIVÉ', 'success');
+        overlay.remove();
+        render();
+      } else {
+        btn.textContent = '🔔 Activer le bouton';
+        btn.disabled = false;
+        toast('Erreur lors de l\'activation', 'error');
       }
     }
   });
@@ -4884,6 +5062,14 @@ async function urgenceAcknowledge(urgenceId) {
 
 // Déclencher une urgence depuis l'app (tech)
 async function urgenceTrigger() {
+  // V2.13.1 — Bloquer si le bouton est désactivé par l'admin (sauf pour l'admin lui-même)
+  if (appConfig.urgenceButtonEnabled === false && !isAdmin()) {
+    const msg = appConfig.urgenceButtonDisabledMessage || 'Bouton d\'urgence désactivé par l\'administrateur.';
+    toast('🔕 ' + msg, 'warning');
+    try { if (navigator.vibrate) navigator.vibrate(80); } catch(e) {}
+    return;
+  }
+  
   // Modale de confirmation
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay visible';
@@ -8124,10 +8310,36 @@ function renderAstreinteSuppleantBanner(end, now) {
       <div style="margin-top:8px;font-size:12px;color:var(--text-tertiary)">
         Tu es désigné comme <strong style="color:var(--text)">suppléant</strong> pour cette semaine. Reste joignable au cas où le titulaire ne serait pas disponible.
       </div>
-      <button class="urgence-btn" data-action="urgence-trigger" style="margin-top:10px">
-        <span class="urg-icon">🚨</span>
-        <span>BOUTON URGENCE</span>
-      </button>
+      ${(() => {
+        // V2.13.1 — Bouton grisé si désactivé pour les non-admins
+        const btnDisabled = (appConfig.urgenceButtonEnabled === false) && !isAdmin();
+        return `
+          <button class="urgence-btn${btnDisabled ? ' disabled' : ''}" data-action="urgence-trigger" style="margin-top:10px">
+            <span class="urg-icon">${btnDisabled ? '🔕' : '🚨'}</span>
+            <span>${btnDisabled ? 'BOUTON URGENCE (désactivé)' : 'BOUTON URGENCE'}</span>
+          </button>
+        `;
+      })()}
+    </div>
+  `;
+}
+
+// V2.13.1 — Bandeau global affiché quand le bouton SOS est désactivé
+// Visible pour tous les utilisateurs sauf admin (qui sait déjà puisqu'il l'a coupé)
+function renderUrgenceDisabledBanner() {
+  if (appConfig.urgenceButtonEnabled !== false) return '';
+  if (isAdmin()) return '';
+  // Pour le superviseur, on ne montre rien (vue dédiée tablette)
+  if (authState.user && authState.user.role === 'superviseur') return '';
+  
+  const msg = appConfig.urgenceButtonDisabledMessage || 'Bouton d\'urgence temporairement désactivé par l\'administrateur.';
+  return `
+    <div class="urgence-disabled-banner">
+      <div class="udb-icon">🔕</div>
+      <div class="udb-text">
+        <div class="udb-title">Bouton d'urgence désactivé</div>
+        <div class="udb-msg">${escapeHtml(msg)}</div>
+      </div>
     </div>
   `;
 }
@@ -8234,10 +8446,17 @@ function renderAstreinteEnCours() {
         <span class="phone-icon">📞</span>
         <span>NOUVEL APPEL</span>
       </button>
-      <button class="urgence-btn" data-action="urgence-trigger">
-        <span class="urg-icon">🚨</span>
-        <span>${isAdminTestMode ? 'TESTER BOUTON URGENCE' : 'BOUTON URGENCE'}</span>
-      </button>
+      ${(() => {
+        // V2.13.1 — Bouton grisé si désactivé pour les non-admins (admin peut toujours forcer)
+        const btnDisabled = (appConfig.urgenceButtonEnabled === false) && !isAdmin();
+        const label = isAdminTestMode ? 'TESTER BOUTON URGENCE' : (btnDisabled ? 'BOUTON URGENCE (désactivé)' : 'BOUTON URGENCE');
+        return `
+          <button class="urgence-btn${btnDisabled ? ' disabled' : ''}" data-action="urgence-trigger">
+            <span class="urg-icon">${btnDisabled ? '🔕' : '🚨'}</span>
+            <span>${label}</span>
+          </button>
+        `;
+      })()}
       ${isAdminTestMode ? '<div style="text-align:center;font-size:10px;color:#fca5a5;margin-top:6px;font-style:italic">🔧 Mode test admin — déclenche une vraie alerte sur les autres admins/managers</div>' : ''}
     </div>
   `;
@@ -8470,6 +8689,7 @@ function renderList() {
       </div>
     </header>
     
+    ${renderUrgenceDisabledBanner()}
     ${renderAstreinteEnCours()}
     
     ${openSeq ? `
@@ -9534,6 +9754,16 @@ function renderSettings() {
             </div>
             <span class="settings-row-chevron">›</span>
           </div>
+          <div class="settings-row" data-action="toggle-urgence-button">
+            <div class="settings-row-icon">${appConfig.urgenceButtonEnabled === false ? '🔕' : '🔔'}</div>
+            <div class="settings-row-content">
+              <div class="settings-row-title">Bouton d'urgence</div>
+              <div class="settings-row-value">${appConfig.urgenceButtonEnabled === false 
+                ? '🔴 Désactivé — les techs ne peuvent pas déclencher d\'urgence' 
+                : '🟢 Actif — les techs peuvent déclencher une urgence'}</div>
+            </div>
+            <span class="settings-row-chevron">›</span>
+          </div>
           <div class="settings-row" data-action="toggle-maintenance">
             <div class="settings-row-icon">🚧</div>
             <div class="settings-row-content">
@@ -10386,6 +10616,11 @@ async function handleAction(e) {
     case 'toggle-maintenance':
       if (!isAdmin()) { toast('Accès refusé', 'error'); break; }
       openMaintenanceModal();
+      break;
+    // V2.13.1 — Toggle bouton d'urgence
+    case 'toggle-urgence-button':
+      if (!isAdmin()) { toast('Accès refusé', 'error'); break; }
+      openUrgenceButtonModal();
       break;
     // V2.11 — Gestion de version
     case 'manage-version':
