@@ -2432,6 +2432,125 @@ body { font-size: 15px; line-height: 1.5; }
   50% { opacity: 0.4; }
 }
 
+/* ============================================================ */
+/* V2.12.1 — VUE SUPERVISEUR (tablette de supervision 24/7)      */
+/* ============================================================ */
+.superviseur-view {
+  position: fixed;
+  inset: 0;
+  background: #0a0e1a;
+  z-index: 99990;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.superviseur-header {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  padding: 16px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+.superviseur-clock {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 32px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 1px;
+  font-variant-numeric: tabular-nums;
+}
+.superviseur-date {
+  font-size: 13px;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 2px;
+}
+.superviseur-status-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+.superviseur-status-badge.alert {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.3);
+  animation: pulse-red 1.2s ease-in-out infinite;
+}
+.superviseur-status-badge .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: pulse-online 2s ease-in-out infinite;
+}
+.superviseur-content {
+  flex: 1;
+  padding: 20px 24px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  max-width: 1600px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+@media (max-width: 900px) {
+  .superviseur-content { grid-template-columns: 1fr; }
+}
+.superviseur-block {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 18px;
+}
+.superviseur-block h3 {
+  margin: 0 0 14px 0;
+  font-size: 14px;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  font-weight: 700;
+}
+.superviseur-footer {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 12px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: #64748b;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+.superviseur-footer button {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #94a3b8;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.superviseur-footer button:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #ffffff;
+}
+.superviseur-snooze-active {
+  background: rgba(234, 179, 8, 0.15) !important;
+  color: #eab308 !important;
+  border-color: rgba(234, 179, 8, 0.4) !important;
+}
+
 </style>
 </head>
 <body>
@@ -2507,7 +2626,7 @@ function loadJsPDF() {
 // V2.11 — CONFIG APP (Maintenance + Version)
 // ============================================================================
 // Version actuelle de cette app (à incrémenter à chaque déploiement)
-const APP_VERSION = '2.12.0';
+const APP_VERSION = '2.12.1';
 
 // État global de la config app (récupérée depuis le cloud au démarrage)
 const appConfig = {
@@ -3545,6 +3664,12 @@ async function startMainApp() {
       render();
       // Charger les dossiers de toute l'équipe
       managerLoadDossiers();
+    } else if (authState.user && authState.user.role === 'superviseur') {
+      // V2.12.1 — Superviseur : vue dédiée temps réel
+      view.current = 'superviseur';
+      render();
+      // Démarrer le mode superviseur (Wake Lock + refresh 15s + horloge)
+      startSuperviseurMode();
     } else {
       render();
     }
@@ -4390,7 +4515,9 @@ const urgenceState = {
   loopTimer: null,
   isPlaying: false,
   isShowing: false,        // ecran alerte affiché?
-  acknowledgedIds: new Set() // ids des urgences déja acquittées localement
+  acknowledgedIds: new Set(), // ids des urgences déja acquittées localement
+  snoozeUntil: 0,          // V2.12.1 - timestamp jusqu'auquel les alertes sont ignorées
+  vibrateTimer: null
 };
 
 // Génère un son strident via Web Audio API (fonctionne sans fichier mp3)
@@ -4715,8 +4842,11 @@ function checkUrgenceActive() {
   // Ne PAS afficher l'alerte au tech qui l'a déclenchée (pour éviter qu'il s'auto-alerte)
   if (info.userId && authState.user && info.userId === authState.user.id) return;
   
-  // Seulement admin/manager voient l'alerte
-  if (!isManagerOrAdmin()) return;
+  // V2.12.1 - Admin, manager ET superviseur reçoivent les alertes
+  if (!canReceiveUrgence()) return;
+  
+  // V2.12.1 - Mode snooze : ignorer les alertes pendant la durée du snooze
+  if (urgenceState.snoozeUntil && Date.now() < urgenceState.snoozeUntil) return;
   
   // Eviter de re-trigger si déjà acquittée localement
   if (info.id && urgenceState.acknowledgedIds.has(info.id)) return;
@@ -5214,6 +5344,156 @@ function renderDashboardAdmin() {
   `;
 }
 
+// V2.12.1 — Mini graphique timeline des 24 dernières heures
+function renderTimeline24h() {
+  const now = new Date();
+  const start24h = new Date(now.getTime() - 24 * 3600 * 1000);
+  
+  // Recuperer les interventions des 24h
+  const interventions = dashboardState.allDossiers
+    .filter(d => {
+      if (!d || d.deleted) return false;
+      const dt = new Date(d.dateAppel);
+      return dt >= start24h && dt <= now;
+    })
+    .sort((a, b) => new Date(a.dateAppel) - new Date(b.dateAppel));
+  
+  if (interventions.length === 0) {
+    return `
+      <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span style="font-size:14px">📊</span>
+          <span style="font-size:13px;font-weight:700;color:var(--text)">Timeline 24h</span>
+        </div>
+        <div style="text-align:center;padding:16px;color:var(--text-tertiary);font-size:12px">
+          Aucune intervention sur les 24 dernières heures
+        </div>
+      </div>
+    `;
+  }
+  
+  // Couleurs par tech (palette)
+  const colors = ['#3b82f6', '#22c55e', '#f97316', '#a855f7', '#ec4899', '#06b6d4', '#eab308', '#14b8a6'];
+  const techColors = {};
+  let colorIdx = 0;
+  
+  // Helper : pour un dossier, calculer début et fin (en minutes depuis start24h)
+  function getTimeRange(d) {
+    const callTime = new Date(d.dateAppel);
+    let endTime;
+    
+    if (d.type === 'telephone') {
+      // Téléphone : durée fixe (dureeAppel ou 5min par défaut)
+      let durMin = 5;
+      if (d.dureeAppel) {
+        const m = String(d.dureeAppel).match(/(\d+)h(\d+)?/);
+        if (m) durMin = parseInt(m[1], 10) * 60 + (parseInt(m[2], 10) || 0);
+      }
+      endTime = new Date(callTime.getTime() + durMin * 60000);
+    } else {
+      // Déplacement : du depart au retour si dispo
+      const dep = d.departDomicile && d.departDomicile !== 'X' ? new Date(d.departDomicile) : callTime;
+      const ret = d.retourDomicile && d.retourDomicile !== 'X' ? new Date(d.retourDomicile) : now;
+      endTime = ret;
+      return {
+        start: Math.max(0, (dep - start24h) / 60000),
+        end: Math.min(24 * 60, (endTime - start24h) / 60000)
+      };
+    }
+    
+    return {
+      start: Math.max(0, (callTime - start24h) / 60000),
+      end: Math.min(24 * 60, (endTime - start24h) / 60000)
+    };
+  }
+  
+  // Grouper par tech
+  const byTech = {};
+  interventions.forEach(d => {
+    const name = dashboardGetUsername(d);
+    if (!byTech[name]) byTech[name] = [];
+    byTech[name].push(d);
+    if (!techColors[name]) {
+      techColors[name] = colors[colorIdx % colors.length];
+      colorIdx++;
+    }
+  });
+  
+  const techNames = Object.keys(byTech);
+  const totalMinutes = 24 * 60;
+  
+  // Générer les marqueurs d'heures (0h, 6h, 12h, 18h, 24h)
+  const hourMarkers = [];
+  for (let h = 0; h <= 24; h += 6) {
+    const time = new Date(start24h.getTime() + h * 60 * 60000);
+    const label = time.getHours() === 0 ? '00h' : `${time.getHours()}h`;
+    hourMarkers.push({ pct: (h / 24) * 100, label });
+  }
+  
+  return `
+    <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:14px">📊</span>
+          <span style="font-size:13px;font-weight:700;color:var(--text)">Timeline 24h</span>
+        </div>
+        <span style="font-size:10px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.4px">${interventions.length} intervention${interventions.length > 1 ? 's' : ''}</span>
+      </div>
+      
+      <!-- Marqueurs d'heures -->
+      <div style="position:relative;height:14px;margin-bottom:4px">
+        ${hourMarkers.map(m => `
+          <div style="position:absolute;left:${m.pct}%;transform:translateX(-50%);font-size:9px;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace">${m.label}</div>
+        `).join('')}
+      </div>
+      
+      <!-- Lignes par tech -->
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${techNames.map(name => {
+          const dossiers = byTech[name];
+          const color = techColors[name];
+          
+          return `
+            <div style="display:flex;align-items:center;gap:8px">
+              <div style="font-size:10px;font-weight:600;color:var(--text);min-width:60px;max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(name)}">${escapeHtml(name)}</div>
+              <div style="flex:1;position:relative;height:14px;background:rgba(0,0,0,0.15);border-radius:7px;overflow:hidden">
+                ${dossiers.map(d => {
+                  const range = getTimeRange(d);
+                  const left = (range.start / totalMinutes) * 100;
+                  const width = Math.max(1, ((range.end - range.start) / totalMinutes) * 100);
+                  const isCloture = dashboardIsCloture(d);
+                  const titleParts = [
+                    escapeHtml(d.etablissement || 'Sans nom'),
+                    new Date(d.dateAppel).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+                    d.type === 'telephone' ? '📞 Téléphone' : '🚗 Déplacement',
+                    isCloture ? '✅ Clôturé' : '🟡 En cours'
+                  ];
+                  return `
+                    <div title="${titleParts.join(' • ')}" style="position:absolute;left:${left}%;width:${width}%;height:100%;background:${color};opacity:${isCloture ? '0.9' : '0.6'};border-radius:3px;cursor:pointer;${!isCloture ? 'border:1px dashed white' : ''}" data-action="dashboard-view-dossier" data-id="${d.id}"></div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+      
+      <!-- Légende -->
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+        <div style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text-tertiary)">
+          <div style="width:10px;height:8px;background:#22c55e;opacity:0.9;border-radius:2px"></div>
+          <span>Clôturé</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text-tertiary)">
+          <div style="width:10px;height:8px;background:#22c55e;opacity:0.6;border:1px dashed white;border-radius:2px"></div>
+          <span>En cours</span>
+        </div>
+        <div style="font-size:10px;color:var(--text-tertiary);font-style:italic">Survol = détails • Clic = ouvrir</div>
+      </div>
+    </div>
+  `;
+}
+
 // V2.12.0 — Bloc supervision temps reel (admin only, dans Dashboard Overview)
 function renderRealTimeMonitoring() {
   const inProgress = getInProgressInterventions();
@@ -5392,6 +5672,9 @@ function renderDashboardOverview() {
       
       <!-- V2.12.0 — Supervision temps réel -->
       ${dashboardState.weekOffset === 0 ? renderRealTimeMonitoring() : ''}
+      
+      <!-- V2.12.1 — Timeline 24h -->
+      ${dashboardState.weekOffset === 0 ? renderTimeline24h() : ''}
       
       <!-- Alertes -->
       ${alertes.length > 0 ? `
@@ -5645,6 +5928,280 @@ function isManager() {
   return authState.isAuthenticated && authState.user && authState.user.role === 'manager';
 }
 
+// V2.12.1 - Rôle Superviseur (tablette dédiée 24/7, lecture seule)
+function isSuperviseur() {
+  return authState.isAuthenticated && authState.user && authState.user.role === 'superviseur';
+}
+
+// ============================================================================
+// V2.12.1 — VUE SUPERVISEUR (tablette de supervision 24/7)
+// ============================================================================
+const superviseurState = {
+  wakeLock: null,
+  clockTimer: null,
+  refreshTimer: null,
+  active: false
+};
+
+// Demander Wake Lock pour empêcher l'écran de s'éteindre
+async function requestWakeLock() {
+  if (!('wakeLock' in navigator)) return false;
+  try {
+    superviseurState.wakeLock = await navigator.wakeLock.request('screen');
+    superviseurState.wakeLock.addEventListener('release', () => {
+      // Si l'utilisateur réactive l'onglet, re-demander
+      if (superviseurState.active && document.visibilityState === 'visible') {
+        requestWakeLock();
+      }
+    });
+    return true;
+  } catch (e) {
+    console.warn('Wake Lock refusé:', e);
+    return false;
+  }
+}
+
+// Mettre à jour l'horloge en haut
+function updateSuperviseurClock() {
+  const clockEl = document.getElementById('sup-clock');
+  const dateEl = document.getElementById('sup-date');
+  if (!clockEl || !dateEl) return;
+  
+  const now = new Date();
+  const h = String(now.getHours()).padStart(2, '0');
+  const m = String(now.getMinutes()).padStart(2, '0');
+  const s = String(now.getSeconds()).padStart(2, '0');
+  clockEl.textContent = `${h}:${m}:${s}`;
+  
+  const days = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+  const months = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+  dateEl.textContent = `${days[now.getDay()]} ${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`;
+}
+
+// Démarrer le mode Superviseur (au login d'un user superviseur)
+async function startSuperviseurMode() {
+  superviseurState.active = true;
+  
+  // Wake Lock - empêcher écran de s'éteindre
+  await requestWakeLock();
+  
+  // Charger les données initiales
+  await dashboardLoadData();
+  
+  // Auto-refresh très fréquent (15 sec)
+  superviseurState.refreshTimer = setInterval(async () => {
+    if (!superviseurState.active) return;
+    try {
+      const resDossiers = await cloudCall('getDossiers', {});
+      if (resDossiers.success) {
+        dashboardState.allDossiers = (resDossiers.dossiers || []).filter(d => !d.deleted);
+        // Re-render uniquement si on est toujours en mode superviseur
+        if (view.current === 'superviseur') render();
+      }
+    } catch (e) { /* silent */ }
+  }, 15000);
+  
+  // Horloge mise à jour toutes les secondes
+  superviseurState.clockTimer = setInterval(updateSuperviseurClock, 1000);
+  updateSuperviseurClock();
+}
+
+// Arrêter le mode Superviseur
+function stopSuperviseurMode() {
+  superviseurState.active = false;
+  if (superviseurState.refreshTimer) {
+    clearInterval(superviseurState.refreshTimer);
+    superviseurState.refreshTimer = null;
+  }
+  if (superviseurState.clockTimer) {
+    clearInterval(superviseurState.clockTimer);
+    superviseurState.clockTimer = null;
+  }
+  if (superviseurState.wakeLock) {
+    try { superviseurState.wakeLock.release(); } catch(e) {}
+    superviseurState.wakeLock = null;
+  }
+}
+
+// Snooze 1h
+function superviseurSnooze1h() {
+  urgenceState.snoozeUntil = Date.now() + 60 * 60 * 1000;
+  toast('🔇 Mode silencieux activé pour 1 heure', 'success');
+  render();
+}
+
+// Annuler le snooze
+function superviseurUnsnooze() {
+  urgenceState.snoozeUntil = 0;
+  toast('🔔 Mode silencieux désactivé', 'success');
+  render();
+}
+
+// Rendu de la grande Vue Superviseur
+function renderSuperviseurDashboard() {
+  const inProgress = getInProgressInterventions();
+  const hasActive = inProgress.length > 0;
+  const snoozeActive = urgenceState.snoozeUntil > Date.now();
+  const snoozeRemainingMin = snoozeActive ? Math.ceil((urgenceState.snoozeUntil - Date.now()) / 60000) : 0;
+  
+  // État global
+  let statusBadge;
+  if (snoozeActive) {
+    statusBadge = `<div class="superviseur-status-badge" style="background:rgba(234,179,8,0.15);color:#eab308;border-color:rgba(234,179,8,0.4)"><span class="dot"></span>MODE SILENCIEUX (${snoozeRemainingMin}min)</div>`;
+  } else if (hasActive) {
+    statusBadge = `<div class="superviseur-status-badge alert"><span class="dot"></span>${inProgress.length} INTERVENTION${inProgress.length > 1 ? 'S' : ''} EN COURS</div>`;
+  } else {
+    statusBadge = `<div class="superviseur-status-badge"><span class="dot"></span>TOUT EST CALME</div>`;
+  }
+  
+  // Astreinte de la semaine
+  const titulaireName = getAstreinteTitulaireName();
+  const suppleantName = getAstreinteSuppleantName();
+  
+  // Derniers dossiers récupérés (5 derniers clôturés des dernières 48h)
+  const last48h = new Date(Date.now() - 48 * 3600 * 1000);
+  const recentClotures = dashboardState.allDossiers
+    .filter(d => dashboardIsCloture(d) && new Date(d.dateAppel) >= last48h)
+    .sort((a, b) => new Date(b.dateAppel) - new Date(a.dateAppel))
+    .slice(0, 5);
+  
+  // Récap semaine
+  const weekDossiers = dashboardGetWeekDossiers(0);
+  const weekClotures = weekDossiers.filter(d => dashboardIsCloture(d)).length;
+  
+  return `
+    <div class="superviseur-view">
+      <div class="superviseur-header">
+        <div>
+          <div class="superviseur-clock" id="sup-clock">00:00:00</div>
+          <div class="superviseur-date" id="sup-date">Chargement...</div>
+        </div>
+        ${statusBadge}
+      </div>
+      
+      <div class="superviseur-content">
+        <!-- COLONNE GAUCHE -->
+        <div>
+          <!-- Astreinte de la semaine -->
+          <div class="superviseur-block" style="margin-bottom:16px">
+            <h3>🚨 Astreinte de la semaine</h3>
+            ${titulaireName ? `
+              <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+                <div style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#ef4444,#dc2626);color:white;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px">
+                  ${escapeHtml(titulaireName.substring(0,1).toUpperCase())}
+                </div>
+                <div>
+                  <div style="font-size:18px;font-weight:700;color:#ffffff">${escapeHtml(titulaireName)}</div>
+                  <div style="font-size:11px;color:#ef4444;font-weight:600;text-transform:uppercase">🔴 Titulaire</div>
+                </div>
+              </div>
+              ${suppleantName ? `
+                <div style="display:flex;align-items:center;gap:12px;margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.05)">
+                  <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#eab308,#ca8a04);color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px">
+                    ${escapeHtml(suppleantName.substring(0,1).toUpperCase())}
+                  </div>
+                  <div>
+                    <div style="font-size:14px;font-weight:600;color:#ffffff">${escapeHtml(suppleantName)}</div>
+                    <div style="font-size:10px;color:#eab308;font-weight:600;text-transform:uppercase">🥈 Suppléant</div>
+                  </div>
+                </div>
+              ` : ''}
+            ` : '<div style="text-align:center;padding:20px;color:#64748b;font-size:13px">Aucune désignation cette semaine</div>'}
+          </div>
+          
+          <!-- Récap semaine -->
+          <div class="superviseur-block">
+            <h3>📊 Récap semaine</h3>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <div style="text-align:center;padding:12px;background:rgba(255,255,255,0.04);border-radius:10px">
+                <div style="font-size:28px;font-weight:800;color:#ffffff">${weekDossiers.length}</div>
+                <div style="font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;margin-top:4px">Dossiers totaux</div>
+              </div>
+              <div style="text-align:center;padding:12px;background:rgba(34,197,94,0.08);border-radius:10px">
+                <div style="font-size:28px;font-weight:800;color:#22c55e">${weekClotures}</div>
+                <div style="font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;margin-top:4px">Clôturés</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- COLONNE DROITE -->
+        <div>
+          <!-- Interventions en cours -->
+          <div class="superviseur-block" style="margin-bottom:16px">
+            <h3>🚗 Interventions en cours</h3>
+            ${inProgress.length === 0 ? `
+              <div style="text-align:center;padding:30px 20px;color:#64748b">
+                <div style="font-size:32px;margin-bottom:8px">✅</div>
+                <div style="font-size:13px">Aucune intervention en cours</div>
+              </div>
+            ` : `
+              <div style="display:flex;flex-direction:column;gap:8px">
+                ${inProgress.map(({ dossier: d, step }) => {
+                  const techName = dashboardGetUsername(d);
+                  return `
+                    <div style="padding:11px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px">
+                      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px">
+                        <div style="font-size:13px;font-weight:700;color:#ffffff">${escapeHtml(techName)}</div>
+                        <span style="background:${step.color}30;color:${step.color};padding:3px 8px;border-radius:6px;font-size:10px;font-weight:700">
+                          ${step.emoji} ${escapeHtml(step.label)}
+                        </span>
+                      </div>
+                      <div style="font-size:12px;color:#cbd5e1;margin-bottom:4px">${escapeHtml(d.etablissement || 'Sans nom')}</div>
+                      <div style="font-size:10px;color:#94a3b8">Depuis ${fmtRelativeTime(step.sinceMin)}</div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            `}
+          </div>
+          
+          <!-- Derniers dossiers récupérés -->
+          <div class="superviseur-block">
+            <h3>✅ Derniers dossiers clôturés (48h)</h3>
+            ${recentClotures.length === 0 ? `
+              <div style="text-align:center;padding:20px;color:#64748b;font-size:12px">Aucun dossier récent</div>
+            ` : `
+              <div style="display:flex;flex-direction:column;gap:6px">
+                ${recentClotures.map(d => {
+                  const techName = dashboardGetUsername(d);
+                  const dateStr = new Date(d.dateAppel).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+                  return `
+                    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:rgba(255,255,255,0.03);border-radius:8px">
+                      <div style="min-width:0;flex:1">
+                        <div style="font-size:12px;font-weight:600;color:#ffffff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(d.etablissement || 'Sans nom')}</div>
+                        <div style="font-size:10px;color:#94a3b8;margin-top:2px">${escapeHtml(techName)} • ${escapeHtml(dateStr)}</div>
+                      </div>
+                      <span style="background:rgba(34,197,94,0.15);color:#22c55e;padding:2px 7px;border-radius:6px;font-size:9px;font-weight:700">✓</span>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            `}
+          </div>
+        </div>
+      </div>
+      
+      <div class="superviseur-footer">
+        <div>
+          <span style="color:#94a3b8;font-weight:600">${escapeHtml(authState.user.full_name || authState.user.username)}</span>
+          • Mode Superviseur • Rafraîchi toutes les 15s
+        </div>
+        <div style="display:flex;gap:8px">
+          ${snoozeActive 
+            ? '<button data-action="sup-unsnooze">🔔 Réactiver les alertes</button>'
+            : '<button data-action="sup-snooze-1h">🔇 Mode silencieux 1h</button>'
+          }
+          <button data-action="sup-refresh">⟳ Rafraîchir</button>
+          <button data-action="sup-logout">🚪 Déconnexion</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+
+
 // ── Charger la liste des utilisateurs ───────────────────────────
 async function adminLoadUsers() {
   if (!isAdmin()) { toast('Accès refusé', 'error'); return; }
@@ -5871,6 +6428,7 @@ function renderUserEditModal() {
             <select id="user-role" class="form-input">
               <option value="technicien" ${u.role === 'technicien' || isNew ? 'selected' : ''}>🟢 Technicien</option>
               <option value="manager" ${u.role === 'manager' ? 'selected' : ''}>🟡 Manager (lecture seule)</option>
+              <option value="superviseur" ${u.role === 'superviseur' ? 'selected' : ''}>🔵 Superviseur (tablette 24/7 - lecture seule)</option>
               <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>🔴 Admin (accès complet)</option>
             </select>
           </div>
@@ -6010,6 +6568,12 @@ let managerState = {
 function isManagerOrAdmin() {
   return authState.isAuthenticated && authState.user &&
          (authState.user.role === 'manager' || authState.user.role === 'admin');
+}
+
+// V2.12.1 - Inclut superviseur pour la réception des alertes urgence
+function canReceiveUrgence() {
+  return authState.isAuthenticated && authState.user &&
+         (authState.user.role === 'manager' || authState.user.role === 'admin' || authState.user.role === 'superviseur');
 }
 
 // ── Charger tous les dossiers (manager voit tout, admin aussi) ──
@@ -7065,15 +7629,18 @@ function renderAstreinteEnCours() {
   // V2.12.0 — Si désignation active, n'afficher que pour le titulaire
   // Le suppléant a un bandeau orange différent (rendu plus bas)
   // Si pas de désignation : comportement V2.11 (tout le monde voit)
+  // V2.12.1 — L'admin voit aussi le bandeau (mode test)
+  const isAdminTestMode = isAdmin() && !isCurrentUserAstreinteTitulaire() && !isCurrentUserAstreinteSuppleant();
+  
   if (isAstreinteDesignationActive()) {
     if (isCurrentUserAstreinteSuppleant()) {
       // Bandeau suppléant en backup (orange, sans bouton appel)
       return renderAstreinteSuppleantBanner(end, now);
     }
-    if (!isCurrentUserAstreinteTitulaire()) {
-      return ''; // ni titulaire ni suppléant → rien
+    if (!isCurrentUserAstreinteTitulaire() && !isAdminTestMode) {
+      return ''; // ni titulaire ni suppléant ni admin → rien
     }
-    // Sinon : c'est le titulaire, on continue avec le bandeau rouge classique
+    // Sinon : c'est le titulaire (ou admin en test), on continue avec le bandeau rouge
   }
   
   // Calcul du temps restant
@@ -7153,8 +7720,9 @@ function renderAstreinteEnCours() {
       </button>
       <button class="urgence-btn" data-action="urgence-trigger">
         <span class="urg-icon">🚨</span>
-        <span>BOUTON URGENCE</span>
+        <span>${isAdminTestMode ? 'TESTER BOUTON URGENCE' : 'BOUTON URGENCE'}</span>
       </button>
+      ${isAdminTestMode ? '<div style="text-align:center;font-size:10px;color:#fca5a5;margin-top:6px;font-style:italic">🔧 Mode test admin — déclenche une vraie alerte sur les autres admins/managers</div>' : ''}
     </div>
   `;
 }
@@ -7277,6 +7845,8 @@ function render() {
     case 'dashboard-admin': app.innerHTML = renderDashboardAdmin(); break;
     // V2.11.0 — Vue manager (dépannage)
     case 'manager-view': app.innerHTML = renderManagerView(); break;
+    // V2.12.1 — Vue Superviseur (tablette 24/7)
+    case 'superviseur': app.innerHTML = renderSuperviseurDashboard(); break;
   }
   attachListeners();
   
@@ -9421,6 +9991,22 @@ async function handleAction(e) {
     // V2.12.0 — Voir les dossiers en cours (popup lecture seule)
     case 'manager-show-in-progress':
       openManagerInProgressModal();
+      break;
+    // V2.12.1 — Handlers Vue Superviseur
+    case 'sup-snooze-1h':
+      superviseurSnooze1h();
+      break;
+    case 'sup-unsnooze':
+      superviseurUnsnooze();
+      break;
+    case 'sup-refresh':
+      await dashboardLoadData();
+      toast('🔄 Données rafraîchies', 'success');
+      break;
+    case 'sup-logout':
+      if (!confirm('Te déconnecter du mode Superviseur ?')) break;
+      stopSuperviseurMode();
+      await authLogout();
       break;
     case 'show-sync':
       showSyncModal();
