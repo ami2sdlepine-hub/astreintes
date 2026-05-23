@@ -2768,7 +2768,7 @@ function registerChart(canvasId, instance) {
 // V2.11 — CONFIG APP (Maintenance + Version)
 // ============================================================================
 // Version actuelle de cette app (à incrémenter à chaque déploiement)
-const APP_VERSION = '2.14.9';
+const APP_VERSION = '2.14.10';
 
 // État global de la config app (récupérée depuis le cloud au démarrage)
 const appConfig = {
@@ -5600,7 +5600,7 @@ async function urgenceTrigger(contextDossier = null) {
         </div>
         
         <label style="display:block;font-size:11px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;margin-bottom:6px;letter-spacing:0.5px">
-          Motif ${contextDossier ? '(complète après "Ce dont j\\'ai besoin")' : '(optionnel, rapide)'}
+          Motif ${contextDossier ? "(complète après “Ce dont j'ai besoin”)" : "(optionnel, rapide)"}
         </label>
         <textarea id="urg-motif" placeholder="Ex: Besoin d'aide sur intervention, situation imprévue..." style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;min-height:${contextDossier ? '140px' : '60px'};resize:vertical;font-family:inherit">${escapeHtml(prefillMotif)}</textarea>
       </div>
