@@ -2768,7 +2768,7 @@ function registerChart(canvasId, instance) {
 // V2.11 — CONFIG APP (Maintenance + Version)
 // ============================================================================
 // Version actuelle de cette app (à incrémenter à chaque déploiement)
-const APP_VERSION = '2.14.8';
+const APP_VERSION = '2.14.9';
 
 // État global de la config app (récupérée depuis le cloud au démarrage)
 const appConfig = {
@@ -5537,13 +5537,44 @@ async function urgenceAcknowledge(urgenceId) {
 }
 
 // Déclencher une urgence depuis l'app (tech)
-async function urgenceTrigger() {
+async function urgenceTrigger(contextDossier = null) {
   // V2.13.1 — Bloquer si le bouton est désactivé par l'admin (sauf pour l'admin lui-même)
   if (appConfig.urgenceButtonEnabled === false && !isAdmin()) {
     const msg = appConfig.urgenceButtonDisabledMessage || 'Bouton d\'urgence désactivé par l\'administrateur.';
     toast('🔕 ' + msg, 'warning');
     try { if (navigator.vibrate) navigator.vibrate(80); } catch(e) {}
     return;
+  }
+  
+  // V2.14.9 — Si un dossier est fourni en contexte, on pré-remplit le motif
+  // avec toutes les infos utiles pour que l'admin comprenne en un coup d'œil
+  let prefillMotif = '';
+  let contextHeader = '';
+  if (contextDossier) {
+    const d = contextDossier;
+    const typeIcon = d.type === 'telephone' ? '📞 Appel téléphonique' : '🚗 Déplacement';
+    const lines = [];
+    lines.push(typeIcon + ' — ' + (d.etablissement || 'Établissement inconnu'));
+    if (d.codeAstreinte) lines.push('Code astreinte : ' + d.codeAstreinte);
+    if (d.adresseSite) lines.push('Adresse : ' + d.adresseSite);
+    if (d.demandeur) lines.push('Contact : ' + d.demandeur);
+    if (d.motif) {
+      // Tronquer le motif s'il est long
+      const motifShort = d.motif.length > 200 ? d.motif.substring(0, 200) + '…' : d.motif;
+      lines.push('Motif intervention : ' + motifShort);
+    }
+    lines.push('');
+    lines.push('━━━ Ce dont j\'ai besoin : ━━━');
+    lines.push('');
+    prefillMotif = lines.join('\n');
+    
+    contextHeader = `
+      <div style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.3);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--text);line-height:1.5">
+        🔗 <strong>Urgence rattachée au dossier :</strong><br>
+        <span style="color:#3b82f6;font-weight:600">${escapeHtml(d.etablissement || 'Dossier sans nom')}</span>
+        ${d.codeAstreinte ? '<span style="color:var(--text-tertiary)"> · ' + escapeHtml(d.codeAstreinte) + '</span>' : ''}
+      </div>
+    `;
   }
   
   // Modale de confirmation
@@ -5556,6 +5587,7 @@ async function urgenceTrigger() {
         <button class="modal-close" data-action="urg-trig-close">×</button>
       </div>
       <div class="modal-body" style="padding:20px">
+        ${contextHeader}
         <div style="background:rgba(220,38,38,0.08);border:1px solid rgba(220,38,38,0.3);border-radius:10px;padding:12px;margin-bottom:14px;font-size:13px;color:var(--text);line-height:1.5">
           ⚠️ <strong>Cette action enverra une alerte sonore et visuelle à ton administrateur</strong> (et aux managers).<br>
           <span style="color:var(--text-tertiary);font-size:11px">Utilise ce bouton seulement en cas de réelle difficulté nécessitant une assistance.</span>
@@ -5568,9 +5600,9 @@ async function urgenceTrigger() {
         </div>
         
         <label style="display:block;font-size:11px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;margin-bottom:6px;letter-spacing:0.5px">
-          Motif (optionnel, rapide)
+          Motif ${contextDossier ? '(complète après "Ce dont j\\'ai besoin")' : '(optionnel, rapide)'}
         </label>
-        <textarea id="urg-motif" placeholder="Ex: Besoin d'aide sur intervention, situation imprévue..." style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;min-height:60px;resize:vertical;font-family:inherit"></textarea>
+        <textarea id="urg-motif" placeholder="Ex: Besoin d'aide sur intervention, situation imprévue..." style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;min-height:${contextDossier ? '140px' : '60px'};resize:vertical;font-family:inherit">${escapeHtml(prefillMotif)}</textarea>
       </div>
       <div class="modal-footer" style="padding:14px 20px;display:flex;gap:8px;justify-content:flex-end;border-top:1px solid var(--border)">
         <button class="btn btn-secondary" data-action="urg-trig-close">Annuler</button>
@@ -5581,6 +5613,14 @@ async function urgenceTrigger() {
     </div>
   `;
   document.body.appendChild(overlay);
+  
+  // V2.14.9 — Si on a un contexte dossier, positionner le curseur à la fin pour que
+  // le tech tape directement son besoin sans avoir à scroller
+  if (contextDossier) {
+    const ta = overlay.querySelector('#urg-motif');
+    ta.focus();
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+  }
   
   overlay.addEventListener('click', async (e) => {
     const action = e.target.dataset.action || e.target.closest('[data-action]')?.dataset.action;
@@ -5593,24 +5633,33 @@ async function urgenceTrigger() {
     if (action === 'urg-trig-confirm') {
       const motif = (overlay.querySelector('#urg-motif').value || '').trim() || 'Urgence non spécifiée';
       
-      // Trouver le dossier actif (le plus récent non clôturé)
+      // V2.14.9 — Si un contexte dossier a été fourni, l'utiliser directement
+      // (priorité au contexte explicite plutôt qu'à la détection auto du dernier dossier)
       let dossierId = null;
       let etablissement = '';
       let adresse = '';
-      try {
-        const myDossiers = getMyDossiers().filter(d => {
-          if (d.cloture === true || d.statut === 'cloture') return false;
-          return true;
-        });
-        if (myDossiers.length > 0) {
-          // Le plus récent
-          const sorted = myDossiers.sort((a, b) => new Date(b.dateAppel) - new Date(a.dateAppel));
-          const active = sorted[0];
-          dossierId = active.id;
-          etablissement = active.etablissement || '';
-          adresse = active.adresseSite || '';
-        }
-      } catch(e) {}
+      
+      if (contextDossier) {
+        dossierId = contextDossier.id;
+        etablissement = contextDossier.etablissement || '';
+        adresse = contextDossier.adresseSite || '';
+      } else {
+        // Fallback : détecter le dossier actif (le plus récent non clôturé)
+        try {
+          const myDossiers = getMyDossiers().filter(d => {
+            if (d.cloture === true || d.statut === 'cloture') return false;
+            return true;
+          });
+          if (myDossiers.length > 0) {
+            // Le plus récent
+            const sorted = myDossiers.sort((a, b) => new Date(b.dateAppel) - new Date(a.dateAppel));
+            const active = sorted[0];
+            dossierId = active.id;
+            etablissement = active.etablissement || '';
+            adresse = active.adresseSite || '';
+          }
+        } catch(e) {}
+      }
       
       const urgenceData = {
         id: uid(),
@@ -7513,8 +7562,15 @@ function renderDashboardUrgences() {
         ` : ''}
         
         ${u.etablissement ? `
-          <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:6px">
-            📍 Dossier lié : <span style="color:var(--text)">${escapeHtml(u.etablissement)}</span>
+          <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <span>📍 Dossier lié :</span>
+            ${u.dossierId ? `
+              <button class="btn btn-ghost" data-action="open-dossier-from-urgence" data-dossier-id="${escapeHtml(u.dossierId)}" style="padding:3px 8px;font-size:11px;color:#3b82f6;border-color:rgba(59,130,246,0.3);border-width:1px;border-style:solid;border-radius:6px;cursor:pointer;background:rgba(59,130,246,0.05)">
+                🔗 ${escapeHtml(u.etablissement)} →
+              </button>
+            ` : `
+              <span style="color:var(--text)">${escapeHtml(u.etablissement)}</span>
+            `}
           </div>
         ` : ''}
         
@@ -10831,6 +10887,9 @@ function renderDetail() {
         ${d.type === 'deplacement' ? `
           <button class="btn btn-ghost btn-block" data-action="convert-to-tel" style="color:#3b82f6;border-color:rgba(59,130,246,0.3)">📞 Convertir en appel téléphonique</button>
         ` : ''}
+        ${!isAdmin() ? `
+          <button class="btn btn-ghost btn-block" data-action="alert-admin" style="color:#dc2626;border-color:rgba(220,38,38,0.3);background:rgba(220,38,38,0.02)">🚨 Alerter l'admin (besoin d'aide sur ce dossier)</button>
+        ` : ''}
         <button class="btn btn-ghost-danger btn-block" data-action="delete">🗑 Supprimer</button>
       </div>
     </div>
@@ -12233,6 +12292,17 @@ async function handleAction(e) {
     case 'convert-to-tel':
       await convertDossierToTelephone();
       break;
+    // V2.14.9 — Alerter l'admin avec contexte du dossier
+    case 'alert-admin': {
+      const dossier = state.dossiers.find(x => x.id === view.dossierId);
+      if (!dossier) {
+        toast('Dossier introuvable', 'error');
+        break;
+      }
+      // Ouvre la modale urgence avec le dossier en contexte (pré-remplissage automatique)
+      await urgenceTrigger(dossier);
+      break;
+    }
     // V2.14.2 — Réparer un dossier dont le type est corrompu (null, undefined, vide)
     case 'repair-type': {
       const dossier = state.dossiers.find(x => x.id === view.dossierId);
@@ -12644,6 +12714,22 @@ async function handleAction(e) {
     case 'sup-show-dossier': {
       const dossierId = t.dataset.dossierId || t.closest('[data-dossier-id]')?.dataset.dossierId;
       if (dossierId) openSuperviseurDossierModal(dossierId);
+      break;
+    }
+    // V2.14.9 — Ouvrir un dossier depuis l'historique d'urgences (admin/manager)
+    case 'open-dossier-from-urgence': {
+      const dossierId = t.dataset.dossierId || t.closest('[data-dossier-id]')?.dataset.dossierId;
+      if (!dossierId) {
+        toast('Identifiant de dossier manquant', 'error');
+        break;
+      }
+      // Vérifier que le dossier est chargé dans dashboardState (admin a la vue globale)
+      const dossier = (dashboardState.allDossiers || []).find(x => x.id === dossierId);
+      if (!dossier) {
+        toast('Dossier introuvable dans le cache. Rafraîchis le dashboard.', 'warning');
+        break;
+      }
+      openSuperviseurDossierModal(dossierId);
       break;
     }
     case 'sup-close-modal':
