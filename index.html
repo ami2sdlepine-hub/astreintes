@@ -2768,7 +2768,7 @@ function registerChart(canvasId, instance) {
 // V2.11 — CONFIG APP (Maintenance + Version)
 // ============================================================================
 // Version actuelle de cette app (à incrémenter à chaque déploiement)
-const APP_VERSION = '2.14.11';
+const APP_VERSION = '2.14.12';
 
 // État global de la config app (récupérée depuis le cloud au démarrage)
 const appConfig = {
@@ -12717,18 +12717,57 @@ async function handleAction(e) {
       break;
     }
     // V2.14.9 — Ouvrir un dossier depuis l'historique d'urgences (admin/manager)
+    // V2.14.12 — Fix : chercher dans plusieurs caches + fallback cloud
     case 'open-dossier-from-urgence': {
       const dossierId = t.dataset.dossierId || t.closest('[data-dossier-id]')?.dataset.dossierId;
       if (!dossierId) {
         toast('Identifiant de dossier manquant', 'error');
         break;
       }
-      // Vérifier que le dossier est chargé dans dashboardState (admin a la vue globale)
-      const dossier = (dashboardState.allDossiers || []).find(x => x.id === dossierId);
+      
+      console.log('[V2.14.12] Ouverture dossier urgence id=', dossierId);
+      
+      // 1. Chercher dans dashboardState.allDossiers (admin)
+      let dossier = (dashboardState.allDossiers || []).find(x => x.id === dossierId);
+      
+      // 2. Sinon chercher dans state.dossiers (cache local)
       if (!dossier) {
-        toast('Dossier introuvable dans le cache. Rafraîchis le dashboard.', 'warning');
+        dossier = (state.dossiers || []).find(x => x.id === dossierId);
+      }
+      
+      // 3. Sinon, fetch direct depuis le cloud (cas superviseur ou cache vide)
+      if (!dossier) {
+        console.log('[V2.14.12] Dossier pas en cache, fetch cloud...');
+        try {
+          const res = await cloudCall('getDossiers', {});
+          if (res && res.success && Array.isArray(res.dossiers)) {
+            dossier = res.dossiers.find(x => x.id === dossierId);
+            if (dossier) {
+              // Charger dans dashboardState pour que openSuperviseurDossierModal puisse le lire
+              if (!Array.isArray(dashboardState.allDossiers)) dashboardState.allDossiers = [];
+              const existing = dashboardState.allDossiers.findIndex(x => x.id === dossierId);
+              if (existing >= 0) dashboardState.allDossiers[existing] = dossier;
+              else dashboardState.allDossiers.push(dossier);
+            }
+          }
+        } catch(e) {
+          console.error('[V2.14.12] Erreur fetch cloud:', e);
+        }
+      } else {
+        // Le dossier vient de state.dossiers — s'assurer qu'il est aussi dans dashboardState
+        // pour que openSuperviseurDossierModal le trouve
+        if (!Array.isArray(dashboardState.allDossiers)) dashboardState.allDossiers = [];
+        const existing = dashboardState.allDossiers.findIndex(x => x.id === dossierId);
+        if (existing < 0) dashboardState.allDossiers.push(dossier);
+      }
+      
+      if (!dossier) {
+        toast('Dossier introuvable (peut-être supprimé)', 'warning');
+        console.warn('[V2.14.12] Dossier id=' + dossierId + ' introuvable nulle part');
         break;
       }
+      
+      console.log('[V2.14.12] Dossier trouvé, ouverture modale superviseur');
       openSuperviseurDossierModal(dossierId);
       break;
     }
