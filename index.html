@@ -2768,7 +2768,7 @@ function registerChart(canvasId, instance) {
 // V2.11 — CONFIG APP (Maintenance + Version)
 // ============================================================================
 // Version actuelle de cette app (à incrémenter à chaque déploiement)
-const APP_VERSION = '2.14.12';
+const APP_VERSION = '2.14.13';
 
 // État global de la config app (récupérée depuis le cloud au démarrage)
 const appConfig = {
@@ -5445,10 +5445,52 @@ function urgenceShowAlertScreen(details) {
       e.preventDefault();
       const did = e.target.dataset.id || e.target.closest('[data-action]')?.dataset.id;
       if (did) {
-        urgenceCloseAlertScreen();
-        view.current = 'detail';
-        view.dossierId = did;
-        render();
+        // V2.14.13 — Comportement adapté au rôle :
+        // - Admin/Manager/Superviseur : ouvre la modale détaillée (le dossier appartient à un autre user)
+        // - Tech : navigue vers sa propre vue dossier (comportement initial)
+        const isSupervisorView = canReceiveUrgence();
+        
+        if (isSupervisorView) {
+          // Tenter de trouver le dossier dans les caches disponibles
+          let dossier = (dashboardState.allDossiers || []).find(x => x.id === did);
+          if (!dossier) {
+            dossier = (state.dossiers || []).find(x => x.id === did);
+          }
+          
+          // Si pas trouvé en cache, fetch cloud direct
+          if (!dossier) {
+            try {
+              console.log('[V2.14.13] Fetch cloud pour urgence dossier id=', did);
+              const res = await cloudCall('getDossiers', {});
+              if (res && res.success && Array.isArray(res.dossiers)) {
+                dossier = res.dossiers.find(x => x.id === did);
+              }
+            } catch(err) {
+              console.error('[V2.14.13] Erreur fetch cloud:', err);
+            }
+          }
+          
+          if (dossier) {
+            // S'assurer que le dossier est dans dashboardState pour la modale
+            if (!Array.isArray(dashboardState.allDossiers)) dashboardState.allDossiers = [];
+            const existing = dashboardState.allDossiers.findIndex(x => x.id === did);
+            if (existing >= 0) dashboardState.allDossiers[existing] = dossier;
+            else dashboardState.allDossiers.push(dossier);
+            
+            // Fermer l'écran d'alerte et ouvrir la modale superviseur
+            urgenceCloseAlertScreen();
+            openSuperviseurDossierModal(did);
+          } else {
+            toast('Dossier introuvable (peut-être supprimé)', 'warning');
+            console.warn('[V2.14.13] Dossier id=' + did + ' introuvable nulle part');
+          }
+        } else {
+          // Tech qui voit sa propre urgence : comportement initial
+          urgenceCloseAlertScreen();
+          view.current = 'detail';
+          view.dossierId = did;
+          render();
+        }
       }
     }
   });
