@@ -2768,7 +2768,7 @@ function registerChart(canvasId, instance) {
 // V2.11 — CONFIG APP (Maintenance + Version)
 // ============================================================================
 // Version actuelle de cette app (à incrémenter à chaque déploiement)
-const APP_VERSION = '2.15.1';
+const APP_VERSION = '2.15.2';
 
 // État global de la config app (récupérée depuis le cloud au démarrage)
 const appConfig = {
@@ -14629,14 +14629,17 @@ async function generatePDF() {
     // Helper : horaire d'intervention réel
     // V2.9.12 — Tri intelligent qui détecte les arriveeSite avec dates incohérentes
     // (saisies rétroactivement avec mauvaise date) et fallback sur dateAppel
+    // V2.15.2 — Fenêtre élargie à 36h pour gérer les interventions qui débordent sur le lendemain
+    // (ex: appel à 22h, arrivée le lendemain à 0h05 → 26h diff, hors fenêtre 24h donc ignoré)
     function getInterventionTime(d) {
       // Si on a arriveeSite ET dateAppel, on vérifie la cohérence
       if (d.arriveeSite && d.dateAppel) {
         const arr = new Date(d.arriveeSite);
         const app = new Date(d.dateAppel);
         const diffHours = (arr - app) / 3600000;
-        // arriveeSite est valide si dans une fenêtre [-1h, +24h] après l'appel
-        if (diffHours >= -1 && diffHours <= 24) return arr;
+        // arriveeSite est valide si dans une fenêtre [-1h, +36h] après l'appel
+        // (élargi de 24h → 36h pour les interventions de nuit qui débordent J+1)
+        if (diffHours >= -1 && diffHours <= 36) return arr;
         // Sinon : date erronée, fallback sur dateAppel
       }
       if (d.dateAppel) return new Date(d.dateAppel);
