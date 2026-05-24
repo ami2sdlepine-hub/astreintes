@@ -2768,7 +2768,7 @@ function registerChart(canvasId, instance) {
 // V2.11 — CONFIG APP (Maintenance + Version)
 // ============================================================================
 // Version actuelle de cette app (à incrémenter à chaque déploiement)
-const APP_VERSION = '2.15.4';
+const APP_VERSION = '2.15.5';
 
 // État global de la config app (récupérée depuis le cloud au démarrage)
 const appConfig = {
@@ -5860,7 +5860,8 @@ function detectInterventionStep(d) {
       color: '#22c55e',
       emoji: '🛠',
       nextExpected: 'Depart du site',
-      alertIfOver: 180
+      warnIfOver: 90,    // V2.15.5 — Orange à partir de 1h30
+      alertIfOver: 180   // Rouge à partir de 3h00
     };
   }
   
@@ -5916,7 +5917,8 @@ function detectInterventionStep(d) {
       color: '#eab308',
       emoji: '⏳',
       nextExpected: 'Depart du domicile',
-      alertIfOver: 30
+      warnIfOver: 90,    // V2.15.5 — Orange à partir de 1h30 (au lieu de rouge direct à 30 min)
+      alertIfOver: 180   // V2.15.5 — Rouge à partir de 3h00 (SLA 4h, donc 1h de marge restante)
     };
   }
   
@@ -6558,11 +6560,31 @@ function renderRealTimeMonitoring() {
 }
 
 // V2.12.0 — Carte individuelle d'une intervention en cours
+// V2.15.5 — Ajout du niveau "warning" (orange) en plus d'"alert" (rouge)
 function renderInterventionCard(d, step) {
   const techName = dashboardGetUsername(d);
+  
+  // V2.15.5 — 3 niveaux d'alerte
+  // - isAlert  = rouge (sinceMin >= alertIfOver)
+  // - isWarn   = orange (sinceMin >= warnIfOver mais pas alertIfOver)
+  // - sinon    = normal (couleur de l'étape)
   const isAlert = step.alertIfOver && step.sinceMin >= step.alertIfOver;
-  const cardBg = isAlert ? 'rgba(239,68,68,0.15)' : 'rgba(255,255,255,0.04)';
-  const cardBorder = isAlert ? 'rgba(239,68,68,0.5)' : 'var(--border)';
+  const isWarn = !isAlert && step.warnIfOver && step.sinceMin >= step.warnIfOver;
+  
+  let cardBg, cardBorder, badge;
+  if (isAlert) {
+    cardBg = 'rgba(239,68,68,0.15)';     // Rouge
+    cardBorder = 'rgba(239,68,68,0.5)';
+    badge = '<span style="background:#ef4444;color:white;padding:2px 7px;border-radius:8px;font-size:9px;font-weight:800;letter-spacing:0.5px">⚠️ ALERTE</span>';
+  } else if (isWarn) {
+    cardBg = 'rgba(249,115,22,0.12)';    // Orange
+    cardBorder = 'rgba(249,115,22,0.5)';
+    badge = '<span style="background:#f97316;color:white;padding:2px 7px;border-radius:8px;font-size:9px;font-weight:800;letter-spacing:0.5px">⚠ ATTENTION</span>';
+  } else {
+    cardBg = 'rgba(255,255,255,0.04)';   // Normal
+    cardBorder = 'var(--border)';
+    badge = '';
+  }
   
   // Detection chainage
   const chainInfo = detectChainage(d, dashboardState.allDossiers);
@@ -6590,7 +6612,7 @@ function renderInterventionCard(d, step) {
             </div>
           </div>
         </div>
-        ${isAlert ? '<span style="background:#ef4444;color:white;padding:2px 7px;border-radius:8px;font-size:9px;font-weight:800;letter-spacing:0.5px">⚠️ ALERTE</span>' : ''}
+        ${badge}
       </div>
       
       <!-- Etablissement + motif -->
