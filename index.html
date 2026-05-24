@@ -2768,7 +2768,7 @@ function registerChart(canvasId, instance) {
 // V2.11 — CONFIG APP (Maintenance + Version)
 // ============================================================================
 // Version actuelle de cette app (à incrémenter à chaque déploiement)
-const APP_VERSION = '2.14.13';
+const APP_VERSION = '2.15.0';
 
 // État global de la config app (récupérée depuis le cloud au démarrage)
 const appConfig = {
@@ -10603,7 +10603,7 @@ function renderDeplacement(d) {
           <div class="radio-content">
             <div class="radio-title">Depuis un autre site (chaînage)</div>
             <div class="radio-subtitle">${previousSite ? 
-              'Tu enchaînes après : ' + escapeHtml(previousSite.etablissement) :
+              'Tu viens de : ' + escapeHtml(previousSite.etablissement) :
               'Tu viens d\'un autre site (sera marqué chaînage)'}</div>
           </div>
         </div>
@@ -10851,7 +10851,7 @@ function renderDetail() {
           const currentPointDepart = d.pointDepart || 'domicile';
           const previousSite = findPreviousSiteInSequence(d.id, d);
           const chainageSubtitle = previousSite 
-            ? 'Tu enchaînes après : ' + escapeHtml(previousSite.etablissement)
+            ? 'Tu viens de : ' + escapeHtml(previousSite.etablissement)
             : 'Tu viens d\'un autre site (sera marqué chaînage)';
           const domicileSubtitle = state.settings.adresseDomicile || 'Adresse à configurer dans Réglages';
           const autreLieuSubtitle = 'Si tu n\'es pas chez toi (saisie libre ou GPS)';
@@ -14704,8 +14704,10 @@ async function generatePDF() {
     
     const dossierRows = allWeekDossiers.map(d => {
       const isPhone = d.type === 'telephone';
-      let departDom = d.departDomicile === 'X' ? 'X' : (d.departDomicile ? fmtTime(d.departDomicile) : '');
-      let retourDom = d.retourDomicile === 'X' ? 'X' : (d.retourDomicile ? fmtTime(d.retourDomicile) : '');
+      // V2.15.0 — Remplacer "X" par "→ chaînage" pour les colonnes de chaînage
+      // (plus explicite pour les valideurs RH qui pourraient confondre avec autre chose)
+      let departDom = d.departDomicile === 'X' ? '→ chaînage' : (d.departDomicile ? fmtTime(d.departDomicile) : '');
+      let retourDom = d.retourDomicile === 'X' ? '→ chaînage' : (d.retourDomicile ? fmtTime(d.retourDomicile) : '');
       let totalTrajet = '';
       
       if (!isPhone) {
@@ -14713,8 +14715,10 @@ async function generatePDF() {
         if (info && !info.isSingle) {
           // Dossier dans une séquence de plusieurs
           if (!info.isLast) {
-            totalTrajet = 'X';
+            // V2.15.0 — "→ chaînage" au lieu de "X" pour les dossiers intermédiaires
+            totalTrajet = '→ chaînage';
           } else if (info.totalGroupMs > 0) {
+            // V2.15.0 — Le total de la séquence apparaît uniquement sur le dernier dossier (Q2=E1, F1)
             totalTrajet = fmtDuration(info.totalGroupMs);
           }
         } else if (d.departDomicile && d.retourDomicile && d.departDomicile !== 'X' && d.retourDomicile !== 'X') {
@@ -14723,7 +14727,8 @@ async function generatePDF() {
           totalTrajet = fmtDuration(ms);
           // Note : totalTrajetMs déjà compté via dossierGroupInfo (groupe isolé d'1 dossier)
         } else if (d.retourDomicile === 'X' || d.departDomicile === 'X') {
-          totalTrajet = 'X';
+          // V2.15.0 — "→ chaînage" au lieu de "X" (cas de dossier orphelin avec marqueur)
+          totalTrajet = '→ chaînage';
         }
       }
       
