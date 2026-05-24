@@ -2768,7 +2768,7 @@ function registerChart(canvasId, instance) {
 // V2.11 — CONFIG APP (Maintenance + Version)
 // ============================================================================
 // Version actuelle de cette app (à incrémenter à chaque déploiement)
-const APP_VERSION = '2.15.2';
+const APP_VERSION = '2.15.3';
 
 // État global de la config app (récupérée depuis le cloud au démarrage)
 const appConfig = {
@@ -14749,7 +14749,18 @@ async function generatePDF() {
         rapport: String(d.rapportN || d.rapportNum || ''),
         arrSite: d.arriveeSite ? fmtTime(d.arriveeSite) : '',
         depSite: d.departSite ? fmtTime(d.departSite) : (d.finIntervention ? fmtTime(d.finIntervention) : ''),
-        tpsSite: String(d.tempsSiteCalcule || ''),
+        // V2.15.3 — Calcul auto du temps passé sur site : departSite - arriveeSite
+        // Si > 24h ou dates incohérentes : afficher "—" (cas rétroactif sur anciens dossiers)
+        tpsSite: (() => {
+          if (isPhone) return '';
+          const depSiteVal = d.departSite || d.finIntervention;
+          if (!d.arriveeSite || !depSiteVal) return '';
+          if (d.arriveeSite === 'X' || depSiteVal === 'X') return '';
+          const ms = safeDiffMs(d.arriveeSite, depSiteVal);
+          // Garde-fou : si > 24h ou négatif, c'est une donnée incohérente
+          if (ms <= 0 || ms > 24 * 3600 * 1000) return '—';
+          return fmtDuration(ms);
+        })(),
         // V2.11.0 — Sécurité : ne garder que les valeurs numériques valides
         km: (() => { const n = safeKm(d.km); return n > 0 ? n : ''; })(),
         departDom, retourDom, totalTrajet
