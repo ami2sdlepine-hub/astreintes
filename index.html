@@ -2768,7 +2768,7 @@ function registerChart(canvasId, instance) {
 // V2.11 — CONFIG APP (Maintenance + Version)
 // ============================================================================
 // Version actuelle de cette app (à incrémenter à chaque déploiement)
-const APP_VERSION = '2.15.3';
+const APP_VERSION = '2.15.4';
 
 // État global de la config app (récupérée depuis le cloud au démarrage)
 const appConfig = {
@@ -12951,30 +12951,43 @@ async function setTimestampNow(field) {
     const realToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     
     if (dossierToday.getTime() !== realToday.getTime()) {
-      // Saisie rétroactive : utiliser la date du dossier + heure actuelle
-      timestamp = new Date(dossierDate);
-      timestamp.setHours(now.getHours(), now.getMinutes(), 0, 0);
+      // V2.15.4 — Détection du cas "intervention de nuit qui déborde sur lendemain"
+      // Ex: appel à 22h hier soir, le tech clique "Arrivée site" à 00:05 ce matin
+      //     → on est techniquement sur le lendemain de dateAppel, mais c'est juste
+      //        le passage minuit, pas une vraie saisie rétroactive
+      // Critères : différence entre dossierDate et now < 12h ET on est dans la même nuit (now avant 12h)
+      const hoursSinceAppel = (now - dossierDate) / 3600000;
+      const isNightContinuation = hoursSinceAppel >= 0 && hoursSinceAppel < 12 && now.getHours() < 12;
       
-      // Si le retourDomicile est plus tôt que le départ → passage minuit → +1 jour
-      if (field === 'retourDomicile' && d.departDomicile && d.departDomicile !== 'X') {
-        const departDate = new Date(d.departDomicile);
-        if (timestamp < departDate) {
-          timestamp.setDate(timestamp.getDate() + 1);
-        }
-      } else if (field === 'arriveeSite' && d.departDomicile && d.departDomicile !== 'X') {
-        const departDate = new Date(d.departDomicile);
-        if (timestamp < departDate) {
-          timestamp.setDate(timestamp.getDate() + 1);
-        }
-      } else if (field === 'departSite' && d.arriveeSite) {
-        const arriveeDate = new Date(d.arriveeSite);
-        if (timestamp < arriveeDate) {
-          timestamp.setDate(timestamp.getDate() + 1);
-        }
-      } else if (field === 'retourDomicile' && d.departSite) {
-        const departSiteDate = new Date(d.departSite);
-        if (timestamp < departSiteDate) {
-          timestamp.setDate(timestamp.getDate() + 1);
+      if (isNightContinuation) {
+        // Cas "passage minuit" : on utilise simplement now (le tech est en train de travailler maintenant)
+        timestamp = now;
+      } else {
+        // Saisie vraiment rétroactive (dossier d'un jour ancien) : utiliser la date du dossier + heure actuelle
+        timestamp = new Date(dossierDate);
+        timestamp.setHours(now.getHours(), now.getMinutes(), 0, 0);
+        
+        // Si le retourDomicile est plus tôt que le départ → passage minuit → +1 jour
+        if (field === 'retourDomicile' && d.departDomicile && d.departDomicile !== 'X') {
+          const departDate = new Date(d.departDomicile);
+          if (timestamp < departDate) {
+            timestamp.setDate(timestamp.getDate() + 1);
+          }
+        } else if (field === 'arriveeSite' && d.departDomicile && d.departDomicile !== 'X') {
+          const departDate = new Date(d.departDomicile);
+          if (timestamp < departDate) {
+            timestamp.setDate(timestamp.getDate() + 1);
+          }
+        } else if (field === 'departSite' && d.arriveeSite) {
+          const arriveeDate = new Date(d.arriveeSite);
+          if (timestamp < arriveeDate) {
+            timestamp.setDate(timestamp.getDate() + 1);
+          }
+        } else if (field === 'retourDomicile' && d.departSite) {
+          const departSiteDate = new Date(d.departSite);
+          if (timestamp < departSiteDate) {
+            timestamp.setDate(timestamp.getDate() + 1);
+          }
         }
       }
     } else {
@@ -12983,6 +12996,17 @@ async function setTimestampNow(field) {
     }
   } else {
     timestamp = now;
+  }
+  
+  // V2.15.4 — GARDE-FOU FINAL : si le timestamp calculé est AVANT dateAppel, c'est impossible
+  // (on ne peut pas être arrivé sur site AVANT l'appel). Forcer le lendemain.
+  if (d.dateAppel && field !== 'departDomicile') {
+    const appel = new Date(d.dateAppel);
+    if (timestamp < appel) {
+      console.warn('[V2.15.4] Timestamp avant dateAppel détecté, correction auto au lendemain :', field);
+      // Avancer d'1 jour pour que ce soit après dateAppel
+      timestamp.setDate(timestamp.getDate() + 1);
+    }
   }
   
   d[field] = roundTo5(timestamp).toISOString();
