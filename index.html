@@ -2768,7 +2768,7 @@ function registerChart(canvasId, instance) {
 // V2.11 — CONFIG APP (Maintenance + Version)
 // ============================================================================
 // Version actuelle de cette app (à incrémenter à chaque déploiement)
-const APP_VERSION = '2.15.0';
+const APP_VERSION = '2.15.1';
 
 // État global de la config app (récupérée depuis le cloud au démarrage)
 const appConfig = {
@@ -14704,10 +14704,10 @@ async function generatePDF() {
     
     const dossierRows = allWeekDossiers.map(d => {
       const isPhone = d.type === 'telephone';
-      // V2.15.0 — Remplacer "X" par "→ chaînage" pour les colonnes de chaînage
-      // (plus explicite pour les valideurs RH qui pourraient confondre avec autre chose)
-      let departDom = d.departDomicile === 'X' ? '→ chaînage' : (d.departDomicile ? fmtTime(d.departDomicile) : '');
-      let retourDom = d.retourDomicile === 'X' ? '→ chaînage' : (d.retourDomicile ? fmtTime(d.retourDomicile) : '');
+      // V2.15.1 — Remplacer le marqueur de chaînage par un tiret long propre (—)
+      // (l'ancien "→ chaînage" rendait mal dans le PDF avec la police par défaut)
+      let departDom = d.departDomicile === 'X' ? '—' : (d.departDomicile ? fmtTime(d.departDomicile) : '');
+      let retourDom = d.retourDomicile === 'X' ? '—' : (d.retourDomicile ? fmtTime(d.retourDomicile) : '');
       let totalTrajet = '';
       
       if (!isPhone) {
@@ -14715,8 +14715,8 @@ async function generatePDF() {
         if (info && !info.isSingle) {
           // Dossier dans une séquence de plusieurs
           if (!info.isLast) {
-            // V2.15.0 — "→ chaînage" au lieu de "X" pour les dossiers intermédiaires
-            totalTrajet = '→ chaînage';
+            // V2.15.1 — Tiret long pour les dossiers chaînés intermédiaires
+            totalTrajet = '—';
           } else if (info.totalGroupMs > 0) {
             // V2.15.0 — Le total de la séquence apparaît uniquement sur le dernier dossier (Q2=E1, F1)
             totalTrajet = fmtDuration(info.totalGroupMs);
@@ -14727,8 +14727,8 @@ async function generatePDF() {
           totalTrajet = fmtDuration(ms);
           // Note : totalTrajetMs déjà compté via dossierGroupInfo (groupe isolé d'1 dossier)
         } else if (d.retourDomicile === 'X' || d.departDomicile === 'X') {
-          // V2.15.0 — "→ chaînage" au lieu de "X" (cas de dossier orphelin avec marqueur)
-          totalTrajet = '→ chaînage';
+          // V2.15.1 — Tiret long pour les dossiers orphelins avec marqueur
+          totalTrajet = '—';
         }
       }
       
