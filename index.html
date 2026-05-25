@@ -2771,7 +2771,7 @@ function registerChart(canvasId, instance) {
 // V2.11 — CONFIG APP (Maintenance + Version)
 // ============================================================================
 // Version actuelle de cette app (à incrémenter à chaque déploiement)
-const APP_VERSION = '2.16.0';
+const APP_VERSION = '2.16.1';
 
 // État global de la config app (récupérée depuis le cloud au démarrage)
 const appConfig = {
@@ -10624,8 +10624,8 @@ function renderNewDossier() {
     
     <div class="form-actions no-nav">
       <button class="btn btn-secondary" data-action="cancel-new">Annuler</button>
-      <button class="btn btn-primary" data-action="save-new" ${!d.type || !d.etablissement ? 'disabled' : ''}>
-        ${d.type === 'telephone' ? '✓ Enregistrer' : 'Créer dossier →'}
+      <button class="btn btn-primary" data-action="save-new" ${!d.etablissement ? 'disabled' : ''}>
+        ${d.type === 'telephone' ? '✓ Enregistrer' : d.type === 'deplacement' ? 'Créer dossier →' : '✓ Enregistrer (qualifier après)'}
       </button>
     </div>
   `;
@@ -10862,17 +10862,17 @@ function renderDetail() {
         ` : ''}
         <div class="detail-row">
           <span class="detail-label">Type</span>
-          <span class="detail-value">${d.type === 'telephone' ? '☎ Téléphone' : d.type === 'deplacement' ? '🚗 Déplacement' : `<span style="color:#ef4444">⚠️ Type invalide (${escapeHtml(String(d.type || 'vide'))})</span>`}</span>
+          <span class="detail-value">${d.type === 'telephone' ? '☎ Téléphone' : d.type === 'deplacement' ? '🚗 Déplacement' : `<span style="color:#d97706;font-weight:700">❓ À qualifier</span>`}</span>
         </div>
         ${(d.type !== 'telephone' && d.type !== 'deplacement') ? `
-          <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:12px;margin:8px 0">
-            <div style="font-size:12px;font-weight:600;color:#ef4444;margin-bottom:8px">⚠️ Ce dossier n'a pas de type valide</div>
+          <div style="background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.4);border-radius:8px;padding:12px;margin:8px 0">
+            <div style="font-size:12px;font-weight:600;color:#d97706;margin-bottom:8px">❓ Ce dossier est à qualifier</div>
             <div style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;line-height:1.4">
-              Le champ <strong>type</strong> est manquant ou corrompu. Choisis le bon type pour réparer ce dossier :
+              Maintenant que l'appel est terminé, précise si tu as résolu par téléphone ou si tu dois te déplacer :
             </div>
             <div style="display:flex;gap:8px">
-              <button class="btn btn-secondary" style="flex:1;font-size:12px" data-action="repair-type" data-new-type="telephone">📞 C'est un appel téléphonique</button>
-              <button class="btn btn-secondary" style="flex:1;font-size:12px" data-action="repair-type" data-new-type="deplacement">🚗 C'est un déplacement</button>
+              <button class="btn btn-secondary" style="flex:1;font-size:12px" data-action="repair-type" data-new-type="telephone">📞 Résolu par téléphone</button>
+              <button class="btn btn-secondary" style="flex:1;font-size:12px" data-action="repair-type" data-new-type="deplacement">🚗 Je dois me déplacer</button>
             </div>
           </div>
         ` : ''}
@@ -12436,7 +12436,8 @@ async function handleAction(e) {
       }
       dossier.updated_at = new Date().toISOString();
       await saveDossier(dossier);
-      toast(`✅ Dossier réparé : type défini sur ${newType === 'telephone' ? '📞 téléphone' : '🚗 déplacement'}`, 'success');
+      // V2.16.1 — Toast adapté : "qualifié" au lieu de "réparé"
+      toast(`✅ Dossier qualifié en ${newType === 'telephone' ? '📞 Téléphone' : '🚗 Déplacement'}`, 'success');
       render();
       break;
     }
@@ -14081,12 +14082,12 @@ async function quickPhoneCall() {
       const dossier = {
         id: uid(),
         dateAppel: new Date(data.dateAppel).toISOString(),
-        bureau: false, // V2.15.6 — Appel direct par défaut (correction : avant c'était true à tort)
+        bureau: false,
         etablissement: data.etablissement.trim(),
         demandeur: data.demandeur.trim(),
         codeAstreinte: data.codeAstreinte.trim(),
         motif: data.motif.trim(),
-        type: 'telephone', // V2.15.7 — Fix : était 'phone' (type invalide qui faisait afficher "Type invalide (phone)")
+        type: null, // V2.16.1 — Pas de type à la création (à qualifier après l'appel)
         pointDepart: 'domicile',
         adresseSite: '',
         km: '',
@@ -14097,7 +14098,7 @@ async function quickPhoneCall() {
         retourDomicile: null,
         dureeAppel: '',
         compteRendu: '',
-        statut: 'pending',
+        statut: 'pending', // V2.16.1 — Statut "à qualifier" en attendant le choix du tech
         sequenceId: null,
         createdAt: new Date().toISOString(),
         user_id: authState.user && authState.user.id
