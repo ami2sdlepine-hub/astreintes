@@ -2771,7 +2771,7 @@ function registerChart(canvasId, instance) {
 // V2.11 — CONFIG APP (Maintenance + Version)
 // ============================================================================
 // Version actuelle de cette app (à incrémenter à chaque déploiement)
-const APP_VERSION = '2.16.1';
+const APP_VERSION = '2.16.2';
 
 // État global de la config app (récupérée depuis le cloud au démarrage)
 const appConfig = {
@@ -10624,7 +10624,7 @@ function renderNewDossier() {
     
     <div class="form-actions no-nav">
       <button class="btn btn-secondary" data-action="cancel-new">Annuler</button>
-      <button class="btn btn-primary" data-action="save-new" ${!d.etablissement ? 'disabled' : ''}>
+      <button class="btn btn-primary" data-action="save-new">
         ${d.type === 'telephone' ? '✓ Enregistrer' : d.type === 'deplacement' ? 'Créer dossier →' : '✓ Enregistrer (qualifier après)'}
       </button>
     </div>
