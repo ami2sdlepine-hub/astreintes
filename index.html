@@ -412,6 +412,9 @@ body { font-size: 15px; line-height: 1.5; }
 .badge-done { background: var(--status-done-bg); color: var(--status-done); border: 1px solid var(--status-done-border); }
 .badge-pending { background: var(--bg-muted); color: var(--text-secondary); border: 1px solid var(--border); }
 .badge-chain { background: var(--status-chain-bg); color: var(--status-chain); border: 1px solid var(--status-chain-border); }
+/* V2.16.0 — Badge À qualifier (orange/jaune) */
+.badge-to-qualify { background: rgba(245,158,11,0.15); color: #d97706; border: 1px solid rgba(245,158,11,0.4); font-weight: 700; }
+.dossier.status-to-qualify::before { background: #f59e0b; }
 
 .dossier-etablissement {
   font-size: 15px;
@@ -2768,7 +2771,7 @@ function registerChart(canvasId, instance) {
 // V2.11 — CONFIG APP (Maintenance + Version)
 // ============================================================================
 // Version actuelle de cette app (à incrémenter à chaque déploiement)
-const APP_VERSION = '2.15.8';
+const APP_VERSION = '2.16.0';
 
 // État global de la config app (récupérée depuis le cloud au démarrage)
 const appConfig = {
@@ -9017,7 +9020,7 @@ function openManagerInProgressModal() {
                   <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">
                     <div style="flex:1;min-width:0">
                       <div style="font-weight:700;font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(d.etablissement || 'Sans nom')}</div>
-                      <div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">${escapeHtml(techName)} • ${escapeHtml(dateStr)} • ${d.type === 'telephone' ? '☎️ Téléphone' : '🚗 Déplacement'}</div>
+                      <div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">${escapeHtml(techName)} • ${escapeHtml(dateStr)} • ${d.type === 'telephone' ? '☎️ Téléphone' : d.type === 'deplacement' ? '🚗 Déplacement' : '<span style="color:#d97706;font-weight:700">❓ À qualifier</span>'}</div>
                     </div>
                     ${step ? `
                       <span style="background:${step.color}20;color:${step.color};padding:3px 8px;border-radius:8px;font-size:10px;font-weight:700;white-space:nowrap">
@@ -9263,8 +9266,8 @@ function renderManagerDossierCard(d) {
     } catch (e) { return iso; }
   };
 
-  const typeIcon = d.type === 'telephone' ? '☎' : '🚗';
-  const typeLabel = d.type === 'telephone' ? 'Téléphone' : 'Déplacement';
+  const typeIcon = d.type === 'telephone' ? '☎' : d.type === 'deplacement' ? '🚗' : '❓';
+  const typeLabel = d.type === 'telephone' ? 'Téléphone' : d.type === 'deplacement' ? 'Déplacement' : 'À qualifier';
 
   const recupSinceText = d.recupereERP && d.recupereERP_at ?
     'Récupéré par ' + (d.recupereERP_by || '?') + ' le ' + fmtDateOnly(d.recupereERP_at) :
@@ -10050,6 +10053,7 @@ function getFilteredDossiers() {
   if (view.filter === 'en-cours') dossiers = dossiers.filter(d => d.statut === 'intervention');
   else if (view.filter === 'appels') dossiers = dossiers.filter(d => d.type === 'telephone');
   else if (view.filter === 'clotures') dossiers = dossiers.filter(d => d.statut === 'cloture');
+  else if (view.filter === 'a-qualifier') dossiers = dossiers.filter(d => d.type !== 'telephone' && d.type !== 'deplacement');
   
   // Filtre recherche
   if (view.searchQuery && view.searchQuery.trim()) {
@@ -10068,6 +10072,8 @@ function getFilteredDossiers() {
 }
 
 function getDossierStatus(d) {
+  // V2.16.0 — Détection "À qualifier" : type ni téléphone ni déplacement
+  if (d.type !== 'telephone' && d.type !== 'deplacement') return 'to-qualify';
   if (d.type === 'telephone') return d.statut === 'cloture' ? 'call-closed' : 'pending';
   if (d.statut === 'cloture') return 'done';
   if (d.statut === 'intervention') return 'intervention';
@@ -10080,6 +10086,8 @@ function getBadge(d) {
     case 'call-closed': return { class: 'badge-call', text: '☎ Téléphone', card: 'status-call' };
     case 'intervention': return { class: 'badge-intervention', text: '⚠ En cours', card: 'status-intervention' };
     case 'done': return { class: 'badge-done', text: '✓ Clôturé', card: 'status-done' };
+    // V2.16.0 — Badge "À qualifier" pour les dossiers sans type
+    case 'to-qualify': return { class: 'badge-to-qualify', text: '❓ À QUALIFIER', card: 'status-to-qualify' };
     default: return { class: 'badge-pending', text: '◷ En attente', card: 'status-pending' };
   }
 }
@@ -10369,8 +10377,15 @@ function renderList() {
   const filtered = getFilteredDossiers();
   const openSeq = findOpenSequence();
   
+  // V2.16.0 — Helper : un dossier est "à qualifier" s'il n'a pas de type valide
+  // (couvre les nouveaux dossiers créés sans type ET les anciens "Type invalide")
+  const isAQualifier = (d) => {
+    return d.type !== 'telephone' && d.type !== 'deplacement';
+  };
+  
   const counts = {
     all: weekDossiers.length,
+    'a-qualifier': weekDossiers.filter(isAQualifier).length,
     'en-cours': getMyDossiers().filter(d => d.statut === 'intervention').length,
     appels: weekDossiers.filter(d => d.type === 'telephone').length,
     clotures: weekDossiers.filter(d => d.statut === 'cloture').length
@@ -10407,6 +10422,19 @@ function renderList() {
     ${renderUrgenceDisabledBanner()}
     ${renderAstreinteEnCours()}
     
+    ${counts['a-qualifier'] > 0 ? `
+      <div style="margin:10px 16px 0;padding:10px 12px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.4);border-radius:10px;font-size:13px;color:var(--text);display:flex;align-items:center;gap:10px;cursor:pointer" data-action="filter" data-filter="a-qualifier">
+        <span style="font-size:18px">❓</span>
+        <div style="flex:1">
+          <strong style="color:#d97706">${counts['a-qualifier']} dossier${counts['a-qualifier'] > 1 ? 's' : ''} à qualifier</strong>
+          <div style="font-size:11px;color:var(--text-tertiary);margin-top:1px">
+            Précise si c'est un appel téléphonique ou un déplacement
+          </div>
+        </div>
+        <span style="font-size:18px">→</span>
+      </div>
+    ` : ''}
+    
     ${openSeq ? `
       <div class="sequence-indicator" data-action="show-sequence">
         <div class="sequence-pulse"></div>
@@ -10420,6 +10448,7 @@ function renderList() {
     
     <div class="filter-tabs">
       <button class="filter-tab ${view.filter === 'all' ? 'active' : ''}" data-action="filter" data-filter="all">Tous <span class="filter-tab-count">${counts.all}</span></button>
+      <button class="filter-tab ${view.filter === 'a-qualifier' ? 'active' : ''}" data-action="filter" data-filter="a-qualifier" style="${counts['a-qualifier'] > 0 ? 'color:#d97706;border-color:rgba(245,158,11,0.4)' : ''}">À qualifier <span class="filter-tab-count">${counts['a-qualifier']}</span></button>
       <button class="filter-tab ${view.filter === 'en-cours' ? 'active' : ''}" data-action="filter" data-filter="en-cours">En cours <span class="filter-tab-count">${counts['en-cours']}</span></button>
       <button class="filter-tab ${view.filter === 'appels' ? 'active' : ''}" data-action="filter" data-filter="appels">Téléphone <span class="filter-tab-count">${counts.appels}</span></button>
       <button class="filter-tab ${view.filter === 'clotures' ? 'active' : ''}" data-action="filter" data-filter="clotures">Clôturés <span class="filter-tab-count">${counts.clotures}</span></button>
@@ -12901,14 +12930,16 @@ async function handleAction(e) {
 // ACTIONS DOSSIER
 // ----------------------------------------------------------------------------
 async function saveNewDossier() {
-  if (!tempDossier || !tempDossier.etablissement || !tempDossier.type) {
-    toast('Établissement et type obligatoires', 'error');
+  // V2.16.0 — Type optionnel à la création (qualification possible plus tard)
+  if (!tempDossier || !tempDossier.etablissement) {
+    toast('Établissement obligatoire', 'error');
     return;
   }
   
+  // Si type non choisi, on laisse à null → le dossier sera "À qualifier"
   if (tempDossier.type === 'telephone') {
     tempDossier.statut = 'cloture';
-  } else {
+  } else if (tempDossier.type === 'deplacement') {
     tempDossier.statut = 'intervention';
     if (tempDossier.pointDepart === 'autre-site') {
       const openSeq = findOpenSequence();
@@ -12924,6 +12955,9 @@ async function saveNewDossier() {
     } else {
       tempDossier.sequenceId = uid();
     }
+  } else {
+    // V2.16.0 — Type non choisi : statut "pending" (à qualifier)
+    tempDossier.statut = 'pending';
   }
   
   // Ajouter aux favoris (pour auto-complétion future)
@@ -13522,6 +13556,11 @@ function showClotureModal() {
 async function clotureTel() {
   const d = state.dossiers.find(x => x.id === view.dossierId);
   if (!d) return;
+  // V2.16.0 — Empêcher clôture si type non qualifié
+  if (d.type !== 'telephone' && d.type !== 'deplacement') {
+    toast('⚠️ Qualifie d\'abord le dossier (Téléphone ou Déplacement) avant de clôturer', 'warning');
+    return;
+  }
   d.statut = 'cloture';
   await saveDossier(d);
   haptic('success');
