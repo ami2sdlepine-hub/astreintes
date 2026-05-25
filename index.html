@@ -2771,7 +2771,7 @@ function registerChart(canvasId, instance) {
 // V2.11 — CONFIG APP (Maintenance + Version)
 // ============================================================================
 // Version actuelle de cette app (à incrémenter à chaque déploiement)
-const APP_VERSION = '2.16.2';
+const APP_VERSION = '2.16.3';
 
 // État global de la config app (récupérée depuis le cloud au démarrage)
 const appConfig = {
@@ -5799,6 +5799,23 @@ function detectInterventionStep(d) {
   if (!d || dashboardIsCloture(d)) return null;
   
   const now = Date.now();
+  
+  // V2.16.3 — Dossiers "À qualifier" (type non défini : ni telephone, ni deplacement)
+  // → ils représentent un appel en cours dont l'issue n'est pas encore décidée
+  // → affichés en supervision avec un statut distinct
+  if (d.type !== 'telephone' && d.type !== 'deplacement') {
+    const sinceMs = now - new Date(d.dateAppel).getTime();
+    return {
+      step: 'to_qualify',
+      label: 'À qualifier (appel en cours)',
+      sinceMin: Math.round(sinceMs / 60000),
+      color: '#f59e0b', // Jaune/orange (cohérent avec le badge À qualifier)
+      emoji: '❓',
+      nextExpected: 'Choix téléphone ou déplacement',
+      warnIfOver: 90,    // Orange à partir de 1h30
+      alertIfOver: 180   // Rouge à partir de 3h00
+    };
+  }
   
   // TELEPHONE en attente de saisie de duree
   if (d.type === 'telephone') {
