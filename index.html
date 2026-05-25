@@ -2768,7 +2768,7 @@ function registerChart(canvasId, instance) {
 // V2.11 — CONFIG APP (Maintenance + Version)
 // ============================================================================
 // Version actuelle de cette app (à incrémenter à chaque déploiement)
-const APP_VERSION = '2.15.7';
+const APP_VERSION = '2.15.8';
 
 // État global de la config app (récupérée depuis le cloud au démarrage)
 const appConfig = {
@@ -10827,7 +10827,7 @@ function renderDetail() {
         ${d.type === 'telephone' || d.type === 'deplacement' ? `
           <div style="margin:-4px 0 8px 0">
             <button class="btn btn-ghost btn-block" data-action="toggle-bureau" style="font-size:11px;padding:6px 10px;color:var(--text-tertiary)">
-              ${d.bureau ? '🕐 Basculer en heure d\\'appel réelle' : '📞 Basculer en mode Bureau'}
+              ${d.bureau ? "🕐 Basculer en heure d'appel réelle" : "📞 Basculer en mode Bureau"}
             </button>
           </div>
         ` : ''}
