@@ -2768,7 +2768,7 @@ function registerChart(canvasId, instance) {
 // V2.11 — CONFIG APP (Maintenance + Version)
 // ============================================================================
 // Version actuelle de cette app (à incrémenter à chaque déploiement)
-const APP_VERSION = '2.15.5';
+const APP_VERSION = '2.15.6';
 
 // État global de la config app (récupérée depuis le cloud au démarrage)
 const appConfig = {
@@ -14022,7 +14022,7 @@ async function quickPhoneCall() {
       const dossier = {
         id: uid(),
         dateAppel: new Date(data.dateAppel).toISOString(),
-        bureau: true, // Téléphone → bureau (depuis chez soi)
+        bureau: false, // V2.15.6 — Appel direct par défaut (correction : avant c'était true à tort)
         etablissement: data.etablissement.trim(),
         demandeur: data.demandeur.trim(),
         codeAstreinte: data.codeAstreinte.trim(),
