@@ -2771,7 +2771,7 @@ function registerChart(canvasId, instance) {
 // V2.11 — CONFIG APP (Maintenance + Version)
 // ============================================================================
 // Version actuelle de cette app (à incrémenter à chaque déploiement)
-const APP_VERSION = '2.16.3';
+const APP_VERSION = '2.16.4';
 
 // État global de la config app (récupérée depuis le cloud au démarrage)
 const appConfig = {
@@ -9633,6 +9633,11 @@ async function saveDossier(d) {
   delete d._isEdit;
   d.updatedAt = new Date().toISOString();
   d.updated_at = d.updatedAt; // alias pour compat cloud
+  // V2.16.4 — Auto-affecter user_id si absent et utilisateur connecté
+  // (évite que les nouveaux dossiers apparaissent comme "orphelins" dans les Réglages)
+  if (!d.user_id && authState.isAuthenticated && authState.user && authState.user.id) {
+    d.user_id = authState.user.id;
+  }
   await dbPut('dossiers', d);
   // Update in memory
   const idx = state.dossiers.findIndex(x => x.id === d.id);
