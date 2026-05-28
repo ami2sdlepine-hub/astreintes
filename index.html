@@ -2771,7 +2771,7 @@ function registerChart(canvasId, instance) {
 // V2.11 — CONFIG APP (Maintenance + Version)
 // ============================================================================
 // Version actuelle de cette app (à incrémenter à chaque déploiement)
-const APP_VERSION = '2.16.4';
+const APP_VERSION = '2.16.5';
 
 // État global de la config app (récupérée depuis le cloud au démarrage)
 const appConfig = {
@@ -11146,6 +11146,75 @@ function renderTimestamp(d, field, label, icon) {
 }
 
 // ----- EXPORT -----
+// V2.16.5 — Fonction COMMUNE de calcul du total payé hebdomadaire (par groupes de chaînage)
+// Utilisée à la fois par renderStats ET renderExport pour garantir la cohérence des chiffres.
+// Avant V2.16.5, l'export calculait dossier par dossier (ignorait les chaînages) → écart énorme
+// sur les semaines avec beaucoup de séquences (ex: Redha 22h05 en stats vs 5h10 en export).
+function computeWeekTotalMs(weekDossiers) {
+  // Helper de calcul de durée tolérant aux dates incohérentes (passage minuit)
+  function safeDiffLocal(start, end) {
+    if (!start || !end) return 0;
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    let ms = endDate - startDate;
+    if (ms < 0 || ms > 24 * 3600 * 1000) {
+      const startMin = startDate.getHours() * 60 + startDate.getMinutes();
+      const endMin = endDate.getHours() * 60 + endDate.getMinutes();
+      let diffMin = endMin - startMin;
+      if (diffMin < 0) diffMin += 24 * 60;
+      ms = diffMin * 60 * 1000;
+    }
+    return ms;
+  }
+  
+  const sortedWeek = [...weekDossiers].sort((a, b) => new Date(a.dateAppel) - new Date(b.dateAppel));
+  
+  // Construction des groupes de chaînage (même logique que renderStats)
+  let currentGroup = null;
+  const groups = [];
+  
+  for (const d of sortedWeek) {
+    if (d.type !== 'deplacement') continue;
+    
+    if (d.departDomicile && d.departDomicile !== 'X') {
+      if (currentGroup) groups.push(currentGroup);
+      currentGroup = { firstDepart: d.departDomicile, lastRetour: null };
+    } else if (d.departDomicile === 'X' && currentGroup) {
+      // Continuation de séquence
+    } else if (d.departDomicile === 'X' && !currentGroup) {
+      // Chaînage entrant orphelin : ignoré
+      continue;
+    } else if (!d.departDomicile && d.retourDomicile && d.retourDomicile !== 'X') {
+      if (currentGroup) {
+        currentGroup.lastRetour = d.retourDomicile;
+        groups.push(currentGroup);
+        currentGroup = null;
+      }
+    }
+    
+    if (d.retourDomicile && d.retourDomicile !== 'X' && currentGroup) {
+      currentGroup.lastRetour = d.retourDomicile;
+      groups.push(currentGroup);
+      currentGroup = null;
+    }
+  }
+  if (currentGroup) groups.push(currentGroup);
+  
+  let totalClos = 0;
+  let totalEnCours = 0;
+  let nbOuvertes = 0;
+  for (const g of groups) {
+    if (g.firstDepart && g.lastRetour) {
+      totalClos += safeDiffLocal(g.firstDepart, g.lastRetour);
+    } else if (g.firstDepart && !g.lastRetour) {
+      totalEnCours += safeDiffLocal(g.firstDepart, new Date());
+      nbOuvertes++;
+    }
+  }
+  
+  return { totalClos, totalEnCours, total: totalClos + totalEnCours, nbOuvertes };
+}
+
 function renderExport() {
   // V2.9.9 — Navigation semaines + auto-détection
   // Si exportWeekOffset est null, on auto-détecte
@@ -11170,12 +11239,9 @@ function renderExport() {
   });
   
   const totalKm = weekDossiers.reduce((s, d) => s + safeKm(d.km), 0);
-  let totalMs = 0;
-  weekDossiers.forEach(d => {
-    if (d.departDomicile && d.retourDomicile && d.departDomicile !== 'X' && d.retourDomicile !== 'X') {
-      totalMs += diffMs(d.departDomicile, d.retourDomicile);
-    }
-  });
+  // V2.16.5 — Utilise la fonction commune (par groupes de chaînage) au lieu du calcul dossier par dossier
+  // qui ignorait les séquences chaînées
+  const totalMs = computeWeekTotalMs(weekDossiers).total;
   
   return `
     <header class="app-header">
