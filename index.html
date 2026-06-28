@@ -2771,7 +2771,7 @@ function registerChart(canvasId, instance) {
 // V2.11 — CONFIG APP (Maintenance + Version)
 // ============================================================================
 // Version actuelle de cette app (à incrémenter à chaque déploiement)
-const APP_VERSION = '2.16.5';
+const APP_VERSION = '2.16.6';
 
 // État global de la config app (récupérée depuis le cloud au démarrage)
 const appConfig = {
@@ -2786,6 +2786,8 @@ const appConfig = {
   astreinteTitulaireId: '',
   astreinteSuppleantId: '',
   astreinteWeekNumber: 0,   // numéro de semaine ISO pour expiration auto
+  // V2.16.6 — Planning d'astreinte multi-semaines (JSON string : { "2026-W26": { t: titulaireId, s: suppleantId }, ... })
+  astreintePlanning: '{}',
   // V2.12.0 — Système d'urgence
   urgenceActive: false,
   urgenceDetails: '',  // JSON string : { id, userId, username, time, motif, dossierId, etablissement }
@@ -2836,6 +2838,8 @@ async function fetchAppConfig() {
       appConfig.astreinteTitulaireId = res.config.astreinteTitulaireId || '';
       appConfig.astreinteSuppleantId = res.config.astreinteSuppleantId || '';
       appConfig.astreinteWeekNumber = parseInt(res.config.astreinteWeekNumber, 10) || 0;
+      // V2.16.6 — Planning multi-semaines
+      appConfig.astreintePlanning = (typeof res.config.astreintePlanning === 'string' && res.config.astreintePlanning.trim() !== '') ? res.config.astreintePlanning : '{}';
       // V2.12.0 — Système d'urgence
       appConfig.urgenceActive = res.config.urgenceActive === true || res.config.urgenceActive === 'true';
       appConfig.urgenceDetails = res.config.urgenceDetails || '';
@@ -4119,6 +4123,18 @@ async function cloudPull(showFeedback = false) {
         const localTime = new Date(local.updatedAt || local.updated_at || local.createdAt || 0).getTime();
         const remoteTime = new Date(adapted.updatedAt || adapted.updated_at || 0).getTime();
         if (remoteTime > localTime) {
+          // V2.16.6 GF#4 — Protection anti-écrasement : ne JAMAIS vider un retour domicile
+          // rempli (ni dé-clôturer) avec une version cloud incomplète, même plus récente.
+          // Un retour rempli ne se vide jamais sans action utilisateur explicite.
+          const localRetourFilled = local.retourDomicile && local.retourDomicile !== '';
+          const remoteRetourEmpty = !remote.retourDomicile || remote.retourDomicile === '';
+          const localCloture = local.statut === 'cloture' || local.cloture === true;
+          const remoteNotCloture = !(remote.cloture === true || remote.cloture === 'true');
+          if ((localRetourFilled && remoteRetourEmpty) || (localCloture && remoteNotCloture && remoteRetourEmpty)) {
+            console.warn('[GF4] Écrasement cloud BLOQUÉ (version cloud incomplète) pour', local.id, '— version locale préservée et re-poussée');
+            toRepair.push(local);
+            continue;
+          }
           await dbPut('dossiers', adapted);
           const idx = state.dossiers.findIndex(x => x.id === adapted.id);
           if (idx >= 0) state.dossiers[idx] = adapted;
@@ -4164,7 +4180,10 @@ async function cloudPull(showFeedback = false) {
     } catch (e) {
       console.warn('[V2.14.7] repairOrphanSequences error:', e);
     }
-    
+
+    // V2.16.6 GF#1 — Audit d'intégrité (démarrage + toutes les 15 min)
+    try { ensureIntegrityInterval(); refreshIntegrityBanner(); } catch (e) { console.warn('[GF1] audit error:', e); }
+
     if (typeof render === 'function') render();
     return { success: true, added, updated };
   } catch (err) {
@@ -4182,6 +4201,13 @@ async function cloudPushDossier(dossier, showFeedback = false) {
   if (!authState.isAuthenticated) return { success: false, error: 'Non connecté' };
 
   try {
+    // V2.16.6 GF#3 — Validation du payload : refuser l'envoi d'un dossier corrompu
+    const _vErr = validateDossierForCloud(dossier);
+    if (_vErr) {
+      console.error('[GF3] Envoi cloud REFUSÉ (' + _vErr + ') pour le dossier', dossier && dossier.id, dossier);
+      if (showFeedback) toast('⛔ Envoi annulé : ' + _vErr, 'error');
+      return { success: false, error: 'Payload invalide : ' + _vErr };
+    }
     const adapted = adaptLocalToCloud(dossier);
     const res = await cloudCall('saveDossier', { dossier: adapted });
     if (!res.success) throw new Error(res.error);
@@ -4211,6 +4237,211 @@ function scheduleCloudSync(dossier) {
     cloudSyncState.status = 'ok';
     updateSyncBadge();
   }, 3000);
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// V2.16.6 — GARDE-FOUS ANTI-CORRUPTION (séquence fantôme / sauvegarde cloud)
+// ════════════════════════════════════════════════════════════════════════
+
+// GF#3 — Validation du payload avant envoi cloud.
+// Retourne null si OK, sinon un message d'erreur.
+function validateDossierForCloud(d) {
+  if (!d || !d.id) return "id manquant";
+  if (d.statut === undefined || d.statut === null || d.statut === '') return "statut manquant";
+  return null;
+}
+
+// GF#2 — File de re-synchronisation pour les sauvegardes critiques non confirmées.
+const criticalResyncQueue = [];
+let _resyncTimer = null;
+function enqueueCriticalResync(dossier) {
+  if (!criticalResyncQueue.find(x => x.id === dossier.id)) criticalResyncQueue.push(dossier);
+  if (_resyncTimer) return;
+  let attempt = 0;
+  const tick = async () => {
+    if (!criticalResyncQueue.length) { _resyncTimer = null; return; }
+    attempt++;
+    const item = criticalResyncQueue[0];
+    const r = await cloudSaveCritical(item, true);
+    if (r.success) {
+      criticalResyncQueue.shift();
+      toast('✅ Sauvegarde confirmée (re-sync auto)', 'success');
+      attempt = 0;
+      _resyncTimer = setTimeout(tick, 1200);
+    } else {
+      const delay = Math.min(30000, 3000 * attempt);
+      _resyncTimer = setTimeout(tick, delay);
+    }
+  };
+  _resyncTimer = setTimeout(tick, 3000);
+}
+
+// GF#2 — Sauvegarde cloud AVEC vérification (refetch immédiat). Utilisée pour les
+// actions critiques qui ferment une séquence (retour domicile, clôture).
+async function cloudSaveCritical(dossier, fromQueue) {
+  if (!authState.isAuthenticated) return { success: false, error: 'Non connecté' };
+  try {
+    const push = await cloudPushDossier(dossier, false);
+    if (!push.success) throw new Error(push.error || 'push échoué');
+    // Vérification : on relit le cloud immédiatement pour confirmer
+    const res = await cloudCall('getDossiers', {});
+    if (!res.success) throw new Error(res.error || 'vérif échouée');
+    const cloud = (res.dossiers || []).find(x => x.id === dossier.id);
+    if (!cloud) throw new Error('introuvable après envoi');
+    const wantRetour = dossier.retourDomicile;
+    const okRetour = !wantRetour || (cloud.retourDomicile && cloud.retourDomicile !== '');
+    const wantCloture = (dossier.statut === 'cloture') || (dossier.cloture === true);
+    const okCloture = !wantCloture || (cloud.cloture === true || cloud.cloture === 'true');
+    if (!okRetour || !okCloture) throw new Error('non confirmé côté cloud');
+    return { success: true };
+  } catch (e) {
+    console.warn('[GF2] cloudSaveCritical échec :', e.message, dossier && dossier.id);
+    if (!fromQueue) {
+      toast('⚠️ Sauvegarde non confirmée, nouvelle tentative automatique...', 'error');
+      enqueueCriticalResync(dossier);
+    }
+    return { success: false, error: e.message };
+  }
+}
+
+// GF#1 — Audit d'intégrité : détecte les dossiers suspects/corrompus.
+function findCorruptedDossiers() {
+  const uid = authState.user && authState.user.id;
+  const now = Date.now();
+  const list = (state.dossiers || []).filter(d => d && !d.deleted && (!uid || !d.user_id || d.user_id === uid));
+  const issues = [];
+  list.forEach(d => {
+    const reasons = [];
+    const upd = d.updated_at || d.updatedAt;
+    const updT = upd ? new Date(upd).getTime() : 0;
+    const depSite = d.departSite || d.finIntervention;
+    // Signature DOMITYS : sauvegarde antérieure au départ site
+    if (depSite && depSite !== 'X' && updT && new Date(depSite).getTime() > updT + 1000) {
+      reasons.push('Sauvegarde antérieure au départ site');
+    }
+    if (d.arriveeSite && d.arriveeSite !== 'X' && updT && new Date(d.arriveeSite).getTime() > updT + 1000) {
+      reasons.push("Sauvegarde antérieure à l'arrivée site");
+    }
+    if (d.statut === undefined || d.statut === null || d.statut === '') {
+      reasons.push('Statut manquant');
+    }
+    // Intervention ouverte anormalement longue (> 18h sans retour)
+    if (d.type === 'deplacement' && d.statut === 'intervention' && !d.retourDomicile && d.dateAppel) {
+      const ageH = (now - new Date(d.dateAppel).getTime()) / 3600000;
+      if (ageH > 18) reasons.push('Intervention ouverte depuis ' + Math.round(ageH) + 'h');
+    }
+    if (reasons.length) issues.push({ d, reasons });
+  });
+  return issues;
+}
+
+let _integrityIntervalSet = false;
+function ensureIntegrityInterval() {
+  if (_integrityIntervalSet) return;
+  _integrityIntervalSet = true;
+  setInterval(() => { try { refreshIntegrityBanner(); } catch (e) {} }, 15 * 60 * 1000);
+}
+
+// GF#1 — Bandeau jaune d'alerte (créé/retiré dynamiquement)
+function refreshIntegrityBanner() {
+  if (!authState.isAuthenticated) return;
+  const issues = findCorruptedDossiers();
+  let bar = document.getElementById('integrity-banner');
+  if (!issues.length) { if (bar) bar.remove(); return; }
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'integrity-banner';
+    bar.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:9000;background:#facc15;color:#1f2937;padding:8px 14px;display:flex;align-items:center;justify-content:center;gap:12px;font-size:13px;font-weight:600;box-shadow:0 2px 10px rgba(0,0,0,0.2)';
+    document.body.appendChild(bar);
+  }
+  const n = issues.length;
+  bar.innerHTML = '<span>⚠️ ' + n + ' dossier' + (n > 1 ? 's' : '') + ' semble' + (n > 1 ? 'nt' : '') + ' corrompu' + (n > 1 ? 's' : '') + '</span>' +
+    '<button id="integrity-fix-btn" style="background:#1f2937;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer">🔧 Réparer</button>' +
+    '<button id="integrity-dismiss-btn" style="background:transparent;border:none;color:#1f2937;font-size:18px;font-weight:700;cursor:pointer;line-height:1">×</button>';
+  const fixBtn = bar.querySelector('#integrity-fix-btn');
+  if (fixBtn) fixBtn.onclick = openIntegrityRepairModal;
+  const dismissBtn = bar.querySelector('#integrity-dismiss-btn');
+  if (dismissBtn) dismissBtn.onclick = () => bar.remove();
+}
+
+// GF#1 — Modale de réparation
+function openIntegrityRepairModal() {
+  const issues = findCorruptedDossiers();
+  const existing = document.getElementById('integrity-repair-modal');
+  if (existing) existing.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'integrity-repair-modal';
+  overlay.className = 'modal-overlay visible';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:560px">
+      <div class="modal-header">
+        <div class="modal-title">🔧 Dossiers à vérifier</div>
+        <button class="modal-close" data-action="irm-close">×</button>
+      </div>
+      <div class="modal-body" style="padding:16px 20px;max-height:70vh;overflow-y:auto">
+        <div style="background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.3);border-radius:10px;padding:12px;margin-bottom:16px;font-size:12px;color:var(--text);line-height:1.5">
+          Ces dossiers présentent une anomalie (sauvegarde incomplète, statut manquant ou intervention restée ouverte). Vérifie et corrige le retour domicile si besoin.
+        </div>
+        ${issues.length === 0 ? `<div style="text-align:center;padding:24px;color:var(--text-tertiary)">✨ Plus aucune anomalie</div>` : `
+          <div style="display:flex;flex-direction:column;gap:10px">
+            ${issues.map(({ d, reasons }) => `
+              <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;padding:12px">
+                <div style="font-weight:700;font-size:13px;color:var(--text);margin-bottom:4px">${escapeHtml(d.etablissement || 'Sans nom')}</div>
+                <div style="font-size:11px;color:#d97706;font-weight:600;margin-bottom:8px">${reasons.map(r => '• ' + escapeHtml(r)).join('<br>')}</div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap">
+                  <button data-action="irm-detail" data-id="${escapeHtml(d.id)}" style="flex:1;min-width:0;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:11px;cursor:pointer;font-weight:600">📋 Détail</button>
+                  <button data-action="irm-repair" data-id="${escapeHtml(d.id)}" style="flex:1;min-width:0;background:#16a34a;border:none;color:#fff;padding:6px 10px;border-radius:6px;font-size:11px;cursor:pointer;font-weight:600">🔧 Réparer</button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        `}
+      </div>
+      <div class="modal-footer" style="padding:14px 20px;display:flex;justify-content:flex-end;border-top:1px solid var(--border)">
+        <button class="btn btn-secondary" data-action="irm-close">Fermer</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', async (e) => {
+    const action = e.target.dataset.action || e.target.closest('[data-action]')?.dataset.action;
+    if (action === 'irm-close' || e.target === overlay) { overlay.remove(); return; }
+    const el = e.target.closest('[data-id]');
+    const id = el && el.dataset.id;
+    if (action === 'irm-detail' && id) { openSuperviseurDossierModal(id); return; }
+    if (action === 'irm-repair' && id) { overlay.remove(); await repairCorruptedDossier(id); return; }
+  });
+}
+
+// GF#1 — Réparation d'un dossier corrompu
+async function repairCorruptedDossier(id) {
+  const d = (state.dossiers || []).find(x => x.id === id);
+  if (!d) { toast('Dossier introuvable', 'error'); return; }
+  // Statut manquant → inférer
+  if (d.statut === undefined || d.statut === null || d.statut === '') {
+    d.statut = (d.cloture === true || (d.retourDomicile && d.retourDomicile !== '')) ? 'cloture'
+             : (d.type === 'deplacement' ? 'intervention' : 'pending');
+  }
+  // Déplacement ouvert sans retour → demander la date + l'heure de retour
+  if (d.type === 'deplacement' && (!d.retourDomicile || d.retourDomicile === '')) {
+    const base = new Date(d.departSite || d.finIntervention || d.dateAppel || Date.now());
+    const day = await showDatePicker(base);
+    if (!day) return;
+    const dt = await showTimePicker(day, 'Heure de retour domicile');
+    if (!dt) return;
+    const finalRetour = new Date(day);
+    finalRetour.setHours(dt.getHours(), dt.getMinutes(), 0, 0);
+    d.retourDomicile = finalRetour.toISOString();
+    d.statut = 'cloture';
+    d.cloture = true;
+    if (typeof recalcDurations === 'function') recalcDurations(d);
+  }
+  d.updated_at = new Date().toISOString();
+  await saveDossier(d);
+  const res = await cloudSaveCritical(d);
+  if (res.success) toast('✅ Dossier réparé et synchronisé', 'success');
+  refreshIntegrityBanner();
+  render();
 }
 
 // ── Adaptateurs entre format local et format cloud ─────────────
@@ -4881,47 +5112,75 @@ function dashboardIsCloture(d) {
 // V2.12.0 — DÉSIGNATION DU TECH D'ASTREINTE DE LA SEMAINE
 // ============================================================================
 
+// V2.16.6 — Clé de semaine ISO "AAAA-Wnn" (gère le passage d'année)
+function getWeekKey(date) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const isoYear = d.getUTCFullYear();
+  const yearStart = new Date(Date.UTC(isoYear, 0, 1));
+  const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+  return isoYear + '-W' + String(weekNo).padStart(2, '0');
+}
+
+// V2.16.6 — Map du planning d'astreinte multi-semaines
+function getAstreintePlanning() {
+  try {
+    const m = JSON.parse(appConfig.astreintePlanning || '{}');
+    return (m && typeof m === 'object') ? m : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+// V2.16.6 — Résout la désignation d'astreinte de la semaine courante.
+// Priorité au planning multi-semaines ; repli sur les anciennes clés (rétrocompat).
+function resolveCurrentAstreinte() {
+  const wk = getWeekKey(new Date());
+  const m = getAstreintePlanning();
+  if (m[wk] && m[wk].t) {
+    return { titulaireId: m[wk].t, suppleantId: m[wk].s || '' };
+  }
+  // Repli legacy : ancienne désignation mono-semaine (clés séparées)
+  if (appConfig.astreinteTitulaireId && appConfig.astreinteWeekNumber === getWeekNumber(new Date())) {
+    return { titulaireId: appConfig.astreinteTitulaireId, suppleantId: appConfig.astreinteSuppleantId || '' };
+  }
+  return null;
+}
+
 // Vérifier si l'utilisateur courant est le tech d'astreinte titulaire
 function isCurrentUserAstreinteTitulaire() {
   if (!appConfig.loaded || !authState.user) return false;
-  if (!appConfig.astreinteTitulaireId) return false;
-  // Vérifier que la désignation est pour la semaine actuelle
-  if (appConfig.astreinteWeekNumber && appConfig.astreinteWeekNumber !== getWeekNumber(new Date())) {
-    // Désignation périmée
-    return false;
-  }
-  return authState.user.id === appConfig.astreinteTitulaireId;
+  const a = resolveCurrentAstreinte();
+  return !!(a && authState.user.id === a.titulaireId);
 }
 
 // Vérifier si l'utilisateur courant est le tech d'astreinte suppléant
 function isCurrentUserAstreinteSuppleant() {
   if (!appConfig.loaded || !authState.user) return false;
-  if (!appConfig.astreinteSuppleantId) return false;
-  if (appConfig.astreinteWeekNumber && appConfig.astreinteWeekNumber !== getWeekNumber(new Date())) {
-    return false;
-  }
-  return authState.user.id === appConfig.astreinteSuppleantId;
+  const a = resolveCurrentAstreinte();
+  return !!(a && a.suppleantId && authState.user.id === a.suppleantId);
 }
 
 // Vérifier si la désignation d'astreinte est active (pour la semaine actuelle)
 function isAstreinteDesignationActive() {
-  if (!appConfig.astreinteTitulaireId) return false;
-  if (!appConfig.astreinteWeekNumber) return true; // pas de check semaine
-  return appConfig.astreinteWeekNumber === getWeekNumber(new Date());
+  return !!resolveCurrentAstreinte();
 }
 
 // Récupérer le nom du tech titulaire/suppléant depuis dashboardState.users
 function getAstreinteTitulaireName() {
-  if (!appConfig.astreinteTitulaireId) return '';
+  const a = resolveCurrentAstreinte();
+  if (!a) return '';
   const users = dashboardState.users || adminState.users || [];
-  const u = users.find(x => x.id === appConfig.astreinteTitulaireId);
+  const u = users.find(x => x.id === a.titulaireId);
   return u ? (u.full_name || u.username) : '';
 }
 
 function getAstreinteSuppleantName() {
-  if (!appConfig.astreinteSuppleantId) return '';
+  const a = resolveCurrentAstreinte();
+  if (!a || !a.suppleantId) return '';
   const users = dashboardState.users || adminState.users || [];
-  const u = users.find(x => x.id === appConfig.astreinteSuppleantId);
+  const u = users.find(x => x.id === a.suppleantId);
   return u ? (u.full_name || u.username) : '';
 }
 
@@ -4961,11 +5220,46 @@ async function openAstreinteDesignationModal() {
   }
   
   const currentWeekNum = getWeekNumber(new Date());
-  const designationActive = isAstreinteDesignationActive();
-  
-  let selectedTitulaire = designationActive ? appConfig.astreinteTitulaireId : '';
-  let selectedSuppleant = designationActive ? appConfig.astreinteSuppleantId : '';
-  
+
+  // V2.16.6 — Planning multi-semaines : on charge toutes les désignations existantes,
+  // et on navigue par offset de semaine (0 = en cours, 1 = suivante, ...).
+  let selectedOffset = 0;
+  const weekSelections = {}; // { "AAAA-Wnn": { t: titulaireId, s: suppleantId } }
+  (function initWeekSelections() {
+    const m = getAstreintePlanning();
+    Object.keys(m).forEach(wk => {
+      if (m[wk] && m[wk].t) weekSelections[wk] = { t: m[wk].t, s: m[wk].s || '' };
+    });
+    // Import legacy (ancienne désignation mono-semaine) si pas déjà dans la map
+    const curK = getWeekKey(new Date());
+    if (!weekSelections[curK] && appConfig.astreinteTitulaireId && appConfig.astreinteWeekNumber === currentWeekNum) {
+      weekSelections[curK] = { t: appConfig.astreinteTitulaireId, s: appConfig.astreinteSuppleantId || '' };
+    }
+  })();
+
+  const selWeekDate = () => { const b = new Date(); b.setDate(b.getDate() + selectedOffset * 7); return b; };
+  const selWeekKeyFn = () => getWeekKey(selWeekDate());
+  const selWeekNumFn = () => getWeekNumber(selWeekDate());
+  const selWeekRangeLabel = () => {
+    const w = getAstreinteWeek(selWeekDate());
+    const opt = { day: '2-digit', month: '2-digit' };
+    return w.start.toLocaleDateString('fr-FR', opt) + ' 09h → ' + w.end.toLocaleDateString('fr-FR', opt) + ' 09h';
+  };
+
+  let selectedTitulaire = '';
+  let selectedSuppleant = '';
+  const syncSelFromWeek = () => {
+    const c = weekSelections[selWeekKeyFn()] || { t: '', s: '' };
+    selectedTitulaire = c.t || '';
+    selectedSuppleant = c.s || '';
+  };
+  const commitSelToWeek = () => {
+    const k = selWeekKeyFn();
+    if (selectedTitulaire) weekSelections[k] = { t: selectedTitulaire, s: selectedSuppleant || '' };
+    else delete weekSelections[k];
+  };
+  syncSelFromWeek();
+
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay visible';
   
@@ -4989,11 +5283,38 @@ async function openAstreinteDesignationModal() {
             </span>
           </div>
           
-          <div style="text-align:center;padding:12px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.3);border-radius:10px;margin-bottom:18px">
-            <div style="font-size:11px;text-transform:uppercase;color:var(--text-tertiary);letter-spacing:0.5px;margin-bottom:4px">Semaine concernée</div>
-            <div style="font-size:16px;font-weight:700;color:var(--text)">Semaine n°${currentWeekNum} (en cours)</div>
+          <div style="padding:12px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.3);border-radius:10px;margin-bottom:18px">
+            <div style="font-size:11px;text-transform:uppercase;color:var(--text-tertiary);letter-spacing:0.5px;margin-bottom:6px;text-align:center">Semaine concernée</div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+              <button data-action="ast-week-prev" ${selectedOffset <= 0 ? 'disabled style="opacity:0.3;cursor:not-allowed"' : 'style="cursor:pointer"'} style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:8px;width:36px;height:36px;font-size:18px;color:var(--text);font-weight:700;flex-shrink:0">‹</button>
+              <div style="flex:1;text-align:center">
+                <div style="font-size:16px;font-weight:700;color:var(--text)">Semaine n°${selWeekNumFn()}${selectedOffset === 0 ? ' (en cours)' : selectedOffset === 1 ? ' (suivante)' : ' (dans ' + selectedOffset + ' sem.)'}</div>
+                <div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">${selWeekRangeLabel()}</div>
+              </div>
+              <button data-action="ast-week-next" style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:8px;width:36px;height:36px;font-size:18px;color:var(--text);font-weight:700;flex-shrink:0;cursor:pointer">›</button>
+            </div>
           </div>
-          
+
+          ${(() => {
+            const planned = Object.keys(weekSelections).filter(k => weekSelections[k] && weekSelections[k].t).sort();
+            const curK = getWeekKey(new Date());
+            const future = planned.filter(k => k >= curK);
+            if (future.length <= 1) return '';
+            return `
+              <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:18px">
+                <div style="font-size:10px;text-transform:uppercase;color:var(--text-tertiary);letter-spacing:0.5px;margin-bottom:6px">📅 Semaines déjà planifiées</div>
+                <div style="display:flex;flex-direction:column;gap:4px">
+                  ${future.map(k => {
+                    const sel = weekSelections[k];
+                    const t = techs.find(x => x.id === sel.t);
+                    const wkNum = k.split('-W')[1];
+                    return `<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--text)"><span>S${wkNum}${k === curK ? ' (en cours)' : ''}</span><span style="font-weight:600">${escapeHtml(t ? (t.full_name || t.username) : '?')}</span></div>`;
+                  }).join('')}
+                </div>
+              </div>
+            `;
+          })()}
+
           <!-- Titulaire -->
           <div style="margin-bottom:18px">
             <label style="display:block;font-size:11px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;margin-bottom:8px;letter-spacing:0.5px">
@@ -5044,8 +5365,8 @@ async function openAstreinteDesignationModal() {
         </div>
         <div class="modal-footer" style="padding:14px 20px;display:flex;gap:8px;justify-content:flex-end;border-top:1px solid var(--border)">
           <button class="btn btn-secondary" data-action="ast-close">Annuler</button>
-          ${designationActive ? `<button class="btn btn-secondary" data-action="ast-clear-all" style="color:#ef4444">🗑 Supprimer la désignation</button>` : ''}
-          <button class="btn btn-primary" data-action="ast-save" ${!selectedTitulaire ? 'disabled style="opacity:0.5"' : ''}>📢 Enregistrer</button>
+          ${selectedTitulaire ? `<button class="btn btn-secondary" data-action="ast-clear-all" style="color:#ef4444">🗑 Retirer (cette semaine)</button>` : ''}
+          <button class="btn btn-primary" data-action="ast-save" ${!Object.values(weekSelections).some(e => e && e.t) ? 'disabled style="opacity:0.5"' : ''}>📢 Enregistrer</button>
         </div>
       </div>
     `;
@@ -5093,6 +5414,7 @@ async function openAstreinteDesignationModal() {
         const id = techBtn.dataset.techId;
         if (type === 'titulaire') selectedTitulaire = id;
         else selectedSuppleant = id;
+        commitSelToWeek();
         picker.remove();
         renderModal();
       }
@@ -5120,55 +5442,78 @@ async function openAstreinteDesignationModal() {
       return;
     }
     
-    if (action === 'ast-clear-titulaire') {
-      selectedTitulaire = '';
+    if (action === 'ast-week-prev') {
+      commitSelToWeek();
+      if (selectedOffset > 0) selectedOffset--;
+      syncSelFromWeek();
       renderModal();
       return;
     }
-    
+
+    if (action === 'ast-week-next') {
+      commitSelToWeek();
+      selectedOffset++;
+      syncSelFromWeek();
+      renderModal();
+      return;
+    }
+
+    if (action === 'ast-clear-titulaire') {
+      selectedTitulaire = '';
+      selectedSuppleant = '';
+      commitSelToWeek();
+      renderModal();
+      return;
+    }
+
     if (action === 'ast-clear-suppleant') {
+      selectedSuppleant = '';
+      commitSelToWeek();
+      renderModal();
+      return;
+    }
+
+    if (action === 'ast-clear-all') {
+      // V2.16.6 — Retire la désignation de la semaine actuellement affichée
+      delete weekSelections[selWeekKeyFn()];
+      selectedTitulaire = '';
       selectedSuppleant = '';
       renderModal();
       return;
     }
-    
-    if (action === 'ast-clear-all') {
-      if (!confirm('Supprimer complètement la désignation d\'astreinte de cette semaine ?')) return;
-      const btn = e.target;
-      btn.textContent = '⏳ Suppression...';
-      btn.disabled = true;
-      
-      const ok1 = await setAppConfigValue('astreinteTitulaireId', '');
-      const ok2 = await setAppConfigValue('astreinteSuppleantId', '');
-      const ok3 = await setAppConfigValue('astreinteWeekNumber', '0');
-      
-      if (ok1 && ok2 && ok3) {
-        toast('🗑 Désignation supprimée', 'success');
-        overlay.remove();
-        render();
-      } else {
-        toast('Erreur lors de la suppression', 'error');
-        btn.disabled = false;
-      }
-      return;
-    }
-    
+
     if (action === 'ast-save') {
-      if (!selectedTitulaire) {
-        toast('Le titulaire est obligatoire', 'error');
-        return;
-      }
+      commitSelToWeek();
+      const clean = {};
+      Object.keys(weekSelections).forEach(wk => {
+        const e2 = weekSelections[wk];
+        if (e2 && e2.t) clean[wk] = { t: e2.t, s: e2.s || '' };
+      });
       const btn = e.target;
       btn.textContent = '⏳ Enregistrement...';
       btn.disabled = true;
-      
-      const ok1 = await setAppConfigValue('astreinteTitulaireId', selectedTitulaire);
-      const ok2 = await setAppConfigValue('astreinteSuppleantId', selectedSuppleant || '');
-      const ok3 = await setAppConfigValue('astreinteWeekNumber', String(currentWeekNum));
-      
-      if (ok1 && ok2 && ok3) {
-        const tName = techs.find(t => t.id === selectedTitulaire);
-        toast(`✅ Astreinte semaine ${currentWeekNum} : ${tName?.full_name || tName?.username}`, 'success');
+
+      const okPlan = await setAppConfigValue('astreintePlanning', JSON.stringify(clean));
+
+      // Rétrocompat : synchroniser les anciennes clés mono-semaine sur la semaine en cours
+      const curKey = getWeekKey(new Date());
+      let okLegacy = true;
+      if (clean[curKey]) {
+        const r1 = await setAppConfigValue('astreinteTitulaireId', clean[curKey].t);
+        const r2 = await setAppConfigValue('astreinteSuppleantId', clean[curKey].s || '');
+        const r3 = await setAppConfigValue('astreinteWeekNumber', String(currentWeekNum));
+        okLegacy = r1 && r2 && r3;
+      } else {
+        // Plus de désignation pour la semaine en cours → on nettoie les anciennes clés
+        const r1 = await setAppConfigValue('astreinteTitulaireId', '');
+        const r2 = await setAppConfigValue('astreinteSuppleantId', '');
+        const r3 = await setAppConfigValue('astreinteWeekNumber', '0');
+        okLegacy = r1 && r2 && r3;
+      }
+
+      if (okPlan && okLegacy) {
+        const nbWeeks = Object.keys(clean).length;
+        toast(nbWeeks > 0 ? `✅ Planning enregistré (${nbWeeks} semaine${nbWeeks > 1 ? 's' : ''})` : '🗑 Planning vidé', 'success');
         overlay.remove();
         render();
       } else {
@@ -7961,7 +8306,10 @@ function openSuperviseurDossierModal(dossierId) {
   const existing = document.getElementById('sup-dossier-modal');
   if (existing) existing.remove();
   
-  const d = dashboardState.allDossiers.find(x => x.id === dossierId);
+  // V2.16.6 — Lookup robuste : dashboard (admin) OU manager (dépannage) OU local
+  const d = (dashboardState.allDossiers || []).find(x => x.id === dossierId)
+         || (typeof managerState !== 'undefined' && (managerState.allDossiers || []).find(x => x.id === dossierId))
+         || (state.dossiers || []).find(x => x.id === dossierId);
   if (!d) { toast('Dossier introuvable', 'error'); return; }
   
   const techName = dashboardGetUsername(d);
@@ -9033,10 +9381,10 @@ function openManagerInProgressModal() {
               const dateStr = new Date(d.dateAppel).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
               
               return `
-                <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;padding:11px 12px">
+                <div data-action="mip-view" data-id="${escapeHtml(d.id)}" style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:10px;padding:11px 12px;cursor:pointer" title="Voir le détail du dossier">
                   <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">
                     <div style="flex:1;min-width:0">
-                      <div style="font-weight:700;font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(d.etablissement || 'Sans nom')}</div>
+                      <div style="font-weight:700;font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(d.etablissement || 'Sans nom')} <span style="font-size:10px;color:var(--text-tertiary);font-weight:400">› détail</span></div>
                       <div style="font-size:11px;color:var(--text-tertiary);margin-top:2px">${escapeHtml(techName)} • ${escapeHtml(dateStr)} • ${d.type === 'telephone' ? '☎️ Téléphone' : d.type === 'deplacement' ? '🚗 Déplacement' : '<span style="color:#d97706;font-weight:700">❓ À qualifier</span>'}</div>
                     </div>
                     ${step ? `
@@ -9063,6 +9411,14 @@ function openManagerInProgressModal() {
     const action = e.target.dataset.action || e.target.closest('[data-action]')?.dataset.action;
     if (action === 'mip-close' || e.target === overlay) {
       overlay.remove();
+      return;
+    }
+    // V2.16.6 — Clic sur un dossier → ouvre la fiche détaillée (lecture seule, comme superviseur)
+    if (action === 'mip-view') {
+      const el = e.target.closest('[data-action="mip-view"]');
+      const id = el && el.dataset.id;
+      if (id) openSuperviseurDossierModal(id);
+      return;
     }
   });
 }
@@ -12765,10 +13121,10 @@ async function handleAction(e) {
       }
       break;
     case 'dashboard-view-dossier': {
+      // V2.16.6 — Ouvre la fiche détaillée en lecture seule (vue superviseur),
+      // au lieu de basculer sur le dossier perso du technicien connecté.
       const did = t.dataset.id;
-      view.current = 'detail';
-      view.dossierId = did;
-      render();
+      openSuperviseurDossierModal(did);
       break;
     }
     case 'dashboard-validate-week': {
@@ -13351,10 +13707,12 @@ async function editTimestamp(field) {
   // Auto-clôture quand on saisit/modifie le retour domicile
   if (field === 'retourDomicile' && d.statut === 'intervention') {
     d.statut = 'cloture';
+    d.cloture = true; // V2.16.6 — cohérence du flag de clôture
     await saveDossier(d);
     haptic('success');
     toast(`Clôturé • ${d.totalTrajetCalcule || '—'} payés`, 'success');
     render();
+    cloudSaveCritical(d); // V2.16.6 GF#2 — sauvegarde vérifiée (action critique)
     return;
   }
   
@@ -13607,12 +13965,14 @@ function showClotureModal() {
           // V2.9 fix : Si retour domicile DÉJÀ rempli (saisie rétroactive), on clôture direct
           if (d.retourDomicile && d.retourDomicile !== 'X') {
             d.statut = 'cloture';
+            d.cloture = true; // V2.16.6
             recalcDurations(d);
             await saveDossier(d);
             haptic('success');
             toast(`Clôturé • ${d.totalTrajetCalcule || '—'} payés`, 'success');
             view.current = 'list';
             view.dossierId = null;
+            cloudSaveCritical(d); // V2.16.6 GF#2
           } else {
             // Sinon (saisie temps réel) : on attend que l'utilisateur clique "Maintenant" sur le retour
             haptic('medium');
@@ -13625,12 +13985,14 @@ function showClotureModal() {
             d.retourDomicile = 'X';
           }
           d.statut = 'cloture';
+          d.cloture = true; // V2.16.6
           recalcDurations(d);
           await saveDossier(d);
           haptic('medium');
           toast('Clôturé • Chaînage actif', 'success');
           view.current = 'list';
           view.dossierId = null;
+          cloudSaveCritical(d); // V2.16.6 GF#2
         }
         render();
         resolve();
